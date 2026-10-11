@@ -142,8 +142,8 @@ input,button{touch-action:manipulation;}
 
 
 /* v2.0 holding detail */
-.row[data-ticker]{cursor:pointer}
-.row[data-ticker]:active{background:#f1f1ef}
+.row[data-ticker]{cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:rgba(0,0,0,.04);touch-action:manipulation}
+.row[data-ticker]:active{background:#f1f1ef}.row[data-ticker]::after{content:"›";position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#a0a0a0;font-size:20px;font-weight:500}
 .detailHero{padding:8px 20px 18px}
 .detailTicker{font-size:14px;color:var(--muted);font-weight:800;letter-spacing:.2px}
 .detailTitle{font-size:22px;font-weight:850;margin-top:4px;line-height:1.2}
@@ -723,6 +723,15 @@ function bindHoldingRows(){
     row.onclick = () => openHoldingDetail(row.dataset.ticker);
   });
 }
+
+// Delegated tap handler: reliable for dynamically-rendered rows and iOS standalone PWA.
+document.addEventListener("click", function(e){
+  const row = e.target.closest && e.target.closest(".row[data-ticker]");
+  if(row && row.dataset && row.dataset.ticker){
+    e.preventDefault();
+    openHoldingDetail(row.dataset.ticker);
+  }
+}, false);
 
 renderHome();
 bindHoldingRows();
