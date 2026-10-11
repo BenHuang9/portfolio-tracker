@@ -513,12 +513,12 @@ function saveMarketCache(){
   try{
     const compactCatalog={};
     Object.keys(catalog).forEach(k=>compactCatalog[k]=catalog[k]);
-    localStorage.setItem("marketCacheV23",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
+    localStorage.setItem("marketCacheV24",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
   }catch(e){}
 }
 function loadMarketCache(){
   try{
-    const raw=localStorage.getItem("marketCacheV23"); if(!raw)return false;
+    const raw=localStorage.getItem("marketCacheV24"); if(!raw)return false;
     const c=JSON.parse(raw); if(!c||!c.catalog)return false;
     fx=Number(c.fx)||fx;
     Object.keys(c.catalog).forEach(k=>catalog[k]=c.catalog[k]);
@@ -577,15 +577,31 @@ async function refreshLiveData(silent=false){
   if(!silent)setMarketStatus("loading","Refreshing market data…");
   try{
     const tickers=[...new Set(lots.map(l=>l.ticker))];
-    const [fxQ,...quotes]=await Promise.all([
+    const results=await Promise.allSettled([
       apiQuote("CAD=X","1y","1d"),
       ...tickers.map(t=>apiQuote(t,"5y","1wk"))
     ]);
-    if(Number(fxQ.price)>0)fx=Number(fxQ.price);
-    fxHistory=(fxQ.history||[]).slice().sort((a,b)=>a.time-b.time);
-    dividendEventsByTicker={};
-    quotes.forEach((q,i)=>{
+
+    const fxResult=results[0];
+    if(fxResult.status==="fulfilled"){
+      const fxQ=fxResult.value;
+      if(Number(fxQ.price)>0)fx=Number(fxQ.price);
+      fxHistory=(fxQ.history||[]).slice().sort((a,b)=>a.time-b.time);
+    }
+
+    const failed=[];
+    let successCount=0;
+    dividendEventsByTicker={...dividendEventsByTicker};
+
+    results.slice(1).forEach((res,i)=>{
       const ticker=tickers[i];
+      if(res.status!=="fulfilled"){
+        failed.push(ticker);
+        console.warn("Market data unavailable for",ticker,res.reason);
+        return;
+      }
+      successCount++;
+      const q=res.value;
       const events=(q.dividends||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
       dividendEventsByTicker[ticker]=events;
       catalog[ticker]={
@@ -601,14 +617,18 @@ async function refreshLiveData(silent=false){
         regularMarketTime:q.regularMarketTime||null
       };
     });
+
+    if(!successCount && fxResult.status!=="fulfilled") throw new Error("All market data requests failed");
+
     rebuildDividendPayments();
     liveMode=true;
     liveUpdatedAt=Date.now();
     chartCache.clear();
     saveMarketCache();
     const tm=new Date(liveUpdatedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-    setMarketStatus("live",`Yahoo market data · refreshed ${tm}`);
-    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · Yahoo market data`;
+    const suffix=failed.length ? ` · unavailable: ${failed.join(", ")}` : "";
+    setMarketStatus(failed.length?"error":"live",`Yahoo market data · refreshed ${tm}${suffix}`);
+    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · Yahoo market data${failed.length ? ` · unavailable: ${failed.join(", ")}` : ""}`;
     renderHome();
     renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
     if(currentDetailTicker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(currentDetailTicker);
