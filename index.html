@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.1 dividends: aggregate selected-period dividend totals by holding -->
+<!-- v3.2 UI copy: consistent capitalization across all pages -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -399,13 +399,13 @@ input,button{touch-action:manipulation;}
     </div>
 
     <div class="section">
-      <div class="sectionHead"><h2>Dividend income</h2><div class="small">Tap for details ›</div></div>
+      <div class="sectionHead"><h2>Dividend Income</h2><div class="small">Tap for details ›</div></div>
       <div class="incomeCard" id="incomeCard">
         <div class="incomeGrid">
-          <div><div class="kpiLabel">YTD received</div><div class="kpiValue" id="ytdReceived">$0</div></div>
-          <div><div class="kpiLabel">Current month</div><div class="kpiValue" id="monthReceived">$0</div></div>
-          <div><div class="kpiLabel">Annual dividend</div><div class="kpiValue" id="annualIncome">$0</div></div>
-          <div><div class="kpiLabel">Monthly income</div><div class="kpiValue" id="monthlyIncome">$0</div></div>
+          <div><div class="kpiLabel">YTD Received</div><div class="kpiValue" id="ytdReceived">$0</div></div>
+          <div><div class="kpiLabel">Current Month</div><div class="kpiValue" id="monthReceived">$0</div></div>
+          <div><div class="kpiLabel">Annual Dividend</div><div class="kpiValue" id="annualIncome">$0</div></div>
+          <div><div class="kpiLabel">Monthly Income</div><div class="kpiValue" id="monthlyIncome">$0</div></div>
         </div>
         <div class="progress"><div id="incomeProgress"></div></div>
         
@@ -431,11 +431,11 @@ input,button{touch-action:manipulation;}
     <div class="divHeader">
       <div class="divTop">
         <button class="iconbtn" id="backBtn">‹</button>
-        <h1>Dividends earned</h1>
+        <h1>Dividends Income</h1>
         <div style="width:44px"></div>
       </div>
       <div><span class="big" id="divTotal">$0.00</span><span class="currency">CAD</span></div>
-      <div class="subtitle" id="divSubtitle">Dividends received · Past 1 month</div>
+      <div class="subtitle" id="divSubtitle">Dividend distributions · Past 1 month</div>
     </div>
 
     <div class="seg" id="divRanges">
@@ -445,7 +445,7 @@ input,button{touch-action:manipulation;}
     <div class="divChartOuter"><div class="divChart" id="divChart"></div></div>
 
     <div class="payments">
-      <h2 id="payHeading">Past 1 month dividends by holding</h2>
+      <h2 id="payHeading">Past 1 Month Dividends by Holding</h2>
       <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
@@ -469,13 +469,13 @@ input,button{touch-action:manipulation;}
 
     <div class="detailGrid">
       <div class="detailCard"><div class="label">Shares</div><div class="value" id="detailShares">0</div></div>
-      <div class="detailCard"><div class="label">Average cost</div><div class="value" id="detailAvg">$0.00</div></div>
-      <div class="detailCard"><div class="label">Market value</div><div class="value" id="detailMV">$0</div></div>
-      <div class="detailCard"><div class="label">Book value</div><div class="value" id="detailBV">$0</div></div>
-      <div class="detailCard"><div class="label">Capital gain/loss</div><div class="value" id="detailCapital">$0</div></div>
-      <div class="detailCard"><div class="label">Total return incl. dividends</div><div class="value" id="detailTotal">$0</div></div>
-      <div class="detailCard"><div class="label">Monthly dividend</div><div class="value" id="detailMonthlyDiv">$0</div></div>
-      <div class="detailCard"><div class="label">Annual dividend</div><div class="value" id="detailAnnualDiv">$0</div></div>
+      <div class="detailCard"><div class="label">Average Cost</div><div class="value" id="detailAvg">$0.00</div></div>
+      <div class="detailCard"><div class="label">Market Value</div><div class="value" id="detailMV">$0</div></div>
+      <div class="detailCard"><div class="label">Book Value</div><div class="value" id="detailBV">$0</div></div>
+      <div class="detailCard"><div class="label">Capital Gain/Loss</div><div class="value" id="detailCapital">$0</div></div>
+      <div class="detailCard"><div class="label">Total Return (Incl. Dividends)</div><div class="value" id="detailTotal">$0</div></div>
+      <div class="detailCard"><div class="label">Monthly Dividend</div><div class="value" id="detailMonthlyDiv">$0</div></div>
+      <div class="detailCard"><div class="label">Annual Dividend</div><div class="value" id="detailAnnualDiv">$0</div></div>
     </div>
 
     <div class="detailSection">
@@ -484,8 +484,8 @@ input,button{touch-action:manipulation;}
     </div>
 
     <div class="detailActions">
-      <button class="secondaryBtn" id="detailAddLotBtn">+ Add lot</button>
-      <button class="secondaryBtn" id="detailHomeBtn">Back to portfolio</button>
+      <button class="secondaryBtn" id="detailAddLotBtn">+ Add Lot</button>
+      <button class="secondaryBtn" id="detailHomeBtn">Back to Portfolio</button>
     </div>
   </section>
 
@@ -494,7 +494,7 @@ input,button{touch-action:manipulation;}
   <nav class="bottom">
     <button class="navbtn active" data-nav="home"><span class="ico">⌂</span>Home</button>
     <button class="navbtn" data-nav="div"><span class="ico">▥</span>Dividends</button>
-    <button class="navbtn" id="navAdd"><span class="ico">＋</span>Add lot</button>
+    <button class="navbtn" id="navAdd"><span class="ico">＋</span>Add Lot</button>
     <button class="navbtn" id="navSettings"><span class="ico">⚙</span>Settings</button>
   </nav>
 </div>
@@ -503,7 +503,7 @@ input,button{touch-action:manipulation;}
   <div class="sheet">
     <div class="sheetHead addSheetHead">
       <button class="close" id="closeModal" aria-label="Close">×</button>
-      <h2>Add new lot</h2>
+      <h2>Add New Lot</h2>
       <div class="sheetHeadSpacer" aria-hidden="true"></div>
     </div>
     <div class="field tickerSearchWrap">
@@ -520,8 +520,8 @@ input,button{touch-action:manipulation;}
       </div>
     </div>
     <div class="field"><label>Shares</label><input id="fShares" type="number" step="0.0001" placeholder="100"/></div>
-    <div class="field"><label>Cost / share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
-    <button class="primary" id="saveLot">Add lot</button>
+    <div class="field"><label>Cost / Share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
+    <button class="primary" id="saveLot">Add Lot</button>
     <div class="note">Enter the actual trade price in the stock's trading currency. Portfolio totals are shown in CAD.</div>
   </div>
 </div>
@@ -531,13 +531,13 @@ input,button{touch-action:manipulation;}
   <div class="sheet">
     <div class="sheetHead"><h2>Settings</h2><button class="close" id="closeSettings">×</button></div>
     <div class="field">
-      <label>Market data API</label>
+      <label>Market Data API</label>
       <input id="apiBaseInput" type="url" autocapitalize="off" autocomplete="off" placeholder="https://your-worker.workers.dev"/>
     </div>
     <div class="settingsNote">The app uses your Cloudflare Worker to retrieve Yahoo Finance market data. No brokerage connection is required. Quotes for some Canadian securities may be delayed.</div>
     <div class="settingsRow">
-      <button class="primary" id="saveSettings">Save & refresh</button>
-      <button class="ghostBtn" id="refreshData">Refresh now</button>
+      <button class="primary" id="saveSettings">Save & Refresh</button>
+      <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
   </div>
@@ -1004,7 +1004,14 @@ function renderDividends(range="1M"){
   const total=filtered.reduce((s,p)=>s+p.amount,0);
   divTotal.textContent=fmt(total);
   divSubtitle.textContent="Dividend distributions · "+rangeMap[range].label;
-  payHeading.textContent=(range==="YTD"?"YTD":range==="ALL"?"All time":rangeMap[range].label)+" dividends by holding";
+  {
+    const headingPeriod = range==="YTD"
+      ? "YTD"
+      : range==="ALL"
+      ? "All Time"
+      : rangeMap[range].label.replace(/\w/g,ch=>ch.toUpperCase());
+    payHeading.textContent=headingPeriod+" Dividends by Holding";
+  }
 
   const chart=aggregateForChart(range);
   const max=Math.max(...chart.map(x=>x.amount),1);
