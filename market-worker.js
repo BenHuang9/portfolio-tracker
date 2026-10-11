@@ -6,12 +6,10 @@ const ALLOWED_RANGES = new Set(["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y"
 const ALLOWED_INTERVALS = new Set(["1m","2m","5m","15m","30m","60m","90m","1d","5d","1wk","1mo","3mo"]);
 
 function cors(origin) {
-  const allowed = !origin || origin === "https://benhuang9.github.io" || origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
   return {
-    "Access-Control-Allow-Origin": allowed && origin ? origin : "https://benhuang9.github.io",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Vary": "Origin"
+    "Access-Control-Allow-Headers": "Content-Type"
   };
 }
 function json(body,status=200,origin=""){

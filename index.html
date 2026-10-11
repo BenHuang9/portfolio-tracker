@@ -487,7 +487,7 @@ const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
 
 
 const DEFAULT_MARKET_API = "https://portfolio-market-data.benhuang011.workers.dev";
-let marketApiBase = loadTextSafe("marketApiBase", DEFAULT_MARKET_API);
+let marketApiBase = DEFAULT_MARKET_API;
 let liveMode = false;
 let dividendEventsByTicker = {};
 let fxHistory = [];
@@ -568,7 +568,7 @@ function trailingAnnualDividendPerShare(events){
   return (events||[]).filter(e=>new Date(e.date+"T00:00:00")>=cutoff).reduce((s,e)=>s+Number(e.amount||0),0);
 }
 async function refreshLiveData(silent=false){
-  marketApiBase=normalizeApiBase(loadTextSafe("marketApiBase",marketApiBase));
+  marketApiBase=DEFAULT_MARKET_API;
   if(!marketApiBase){
     liveMode=false; setMarketStatus("","Connecting market data…");
     if(fxStatus)fxStatus.textContent=`USD/CAD: demo ${fx.toFixed(4)}`;
@@ -635,7 +635,7 @@ async function refreshLiveData(silent=false){
     loadPortfolioHistory(currentPortfolioRange);
   }catch(err){
     console.error(err);
-    setMarketStatus("error", liveMode ? "Refresh failed · showing cached market data" : "Market data unavailable · showing demo data");
+    setMarketStatus("error", (liveMode ? "Refresh failed · cached data · " : "Market data unavailable · demo data · ") + String(err?.message||err));
   }
 }
 
@@ -905,7 +905,8 @@ document.getElementById("detailHomeBtn").onclick=()=>showView("home");
 document.getElementById("detailAddLotBtn").onclick=()=>{ if(currentDetailTicker) document.getElementById("fTicker").value=currentDetailTicker; openModal(); };
 
 function openSettings(){
-  apiBaseInput.value=marketApiBase||"";
+  apiBaseInput.value=DEFAULT_MARKET_API;
+  apiBaseInput.readOnly=true;
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
   settingsModal.classList.add("show");
 }
@@ -915,8 +916,8 @@ if(navSettings)navSettings.onclick=openSettings;
 if(closeSettings)closeSettings.onclick=closeSettingsFn;
 settingsModal.onclick=e=>{if(e.target===settingsModal)closeSettingsFn()};
 saveSettings.onclick=async()=>{
-  marketApiBase=normalizeApiBase(apiBaseInput.value);
-  saveTextSafe("marketApiBase",marketApiBase);
+  marketApiBase=DEFAULT_MARKET_API;
+  try{localStorage.removeItem("marketApiBase")}catch(e){}
   closeSettingsFn();
   await refreshLiveData(false);
 };
