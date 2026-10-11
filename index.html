@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Income Portfolio Tracker</title>
+<style>
+:root{
+  --bg:#f6f6f4;
+  --card:#ffffff;
+  --text:#111111;
+  --muted:#777a7f;
+  --line:#e6e6e2;
+  --green:#159447;
+  --red:#d94a4a;
+  --blue:#62aeb8;
+  --chip:#ececeb;
+  --shadow:0 8px 24px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-height:100vh}
+button,input{font:inherit}
+.app{width:min(100%,480px);margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:96px;overflow-x:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 8px;position:sticky;top:0;background:rgba(246,246,244,.94);backdrop-filter:blur(18px);z-index:20}
+.topbar h1{font-size:21px;margin:0;font-weight:800}
+.iconbtn{width:44px;height:44px;border:0;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:var(--shadow);font-size:24px}
+.hero{padding:20px 20px 8px}
+.heroRow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.big{font-size:46px;line-height:1;font-weight:850;letter-spacing:-1.8px}
+.currency{font-size:21px;font-weight:700;margin-left:4px}
+.subgain{margin-top:8px;color:var(--green);font-size:18px;font-weight:750}
+.subtitle{margin-top:8px;color:var(--muted);font-size:18px;font-weight:650}
+.seg{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;padding:4px;background:#ececeb;border-radius:24px;margin:20px 20px 10px;overflow:hidden}
+.seg button{min-width:0;border:0;background:transparent;color:#6c6f74;font-weight:750;padding:10px 2px;border-radius:20px;white-space:nowrap;font-size:12px}
+.seg button.active{background:#fff;color:#111;box-shadow:0 4px 12px rgba(0,0,0,.06)}
+.chartWrap{padding:12px 0 2px}
+.lineChart{height:230px;margin:0 20px;position:relative;overflow:hidden}
+.lineChart svg{width:100%;height:100%}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px 20px 6px}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 12px;box-shadow:var(--shadow)}
+.metric .label{font-size:12px;color:var(--muted);font-weight:700}
+.metric .value{margin-top:5px;font-size:18px;font-weight:800}
+.section{padding:10px 20px 0}
+.sectionHead{display:flex;align-items:end;justify-content:space-between;margin-bottom:10px}
+.sectionHead h2{font-size:22px;margin:0}
+.sectionHead .small{font-size:13px;color:var(--muted)}
+.incomeCard{background:#fff;border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:var(--shadow);cursor:pointer}
+.incomeGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpiLabel{font-size:13px;color:var(--muted);font-weight:700}
+.kpiValue{font-size:23px;font-weight:850;margin-top:4px}
+.progress{height:8px;border-radius:99px;background:#ececec;margin-top:14px;overflow:hidden}
+.progress > div{height:100%;background:var(--green);width:40%}
+.monthStrip{display:flex;gap:10px;overflow-x:auto;padding:14px 0 2px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none}.monthStrip::-webkit-scrollbar{display:none}
+.monthMini{min-width:68px;text-align:center;scroll-snap-align:start}
+.monthMini .barBox{height:54px;display:flex;align-items:end;justify-content:center}
+.monthMini .bar{width:28px;background:var(--blue);border-radius:8px 8px 2px 2px}
+.monthMini .m{font-size:11px;color:var(--muted);margin-top:5px}
+.monthMini .a{font-size:11px;font-weight:750;margin-top:2px}
+.holdings{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow)}
+.hdr,.row{display:grid;grid-template-columns:1.7fr .7fr .8fr .9fr;gap:8px;align-items:center;padding:12px 14px}
+.hdr{background:#fafafa;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase}
+.row{border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.stock{display:flex;gap:10px;align-items:center;min-width:0}
+.logo{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:850;flex:0 0 auto}
+.ticker{font-weight:850;font-size:15px}
+.title{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.num{font-size:14px;font-weight:750}
+.today.pos{color:var(--green)} .today.neg{color:var(--red)}
+.today .pct{display:block;font-size:11px;margin-top:2px}
+.bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(480px,100%);padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(246,246,244,.94);backdrop-filter:blur(18px);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 1fr 1fr;z-index:25}
+.navbtn{border:0;background:transparent;padding:6px 2px;color:#777;font-size:11px;font-weight:700}
+.navbtn .ico{display:block;font-size:22px;line-height:1;margin-bottom:5px}
+.navbtn.active{color:#111}
+.addFab{display:none}
+.view{display:none}.view.active{display:block}
+.divHeader{padding:20px}
+.divTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}
+.divTop h1{font-size:22px;margin:0}
+.rangeTitle{padding:0 20px}
+.divChartOuter{overflow-x:auto;padding:16px 20px 0;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none}.divChartOuter::-webkit-scrollbar{display:none}
+.divChart{display:flex;align-items:flex-end;gap:14px;min-width:max-content;height:300px;border-bottom:1px solid #d9d9d6;padding:0 4px}
+.barItem{width:78px;display:flex;flex-direction:column;justify-content:end;align-items:center;height:100%}
+.bar{width:60px;background:linear-gradient(180deg,#6db5be,#559ca8);border-radius:12px 12px 0 0;min-height:2px}
+.barLabel{margin-top:10px;color:var(--muted);font-weight:650;font-size:14px}
+.barAmt{margin-top:2px;font-size:13px;font-weight:800}
+.payments{padding:26px 20px 10px}
+.payments h2{font-size:24px;margin:0 0 12px}
+.payRow{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:15px 0;border-bottom:1px solid var(--line)}
+.payLogo{width:44px;height:44px;border-radius:14px;color:#fff;display:grid;place-items:center;font-weight:900}
+.payTicker{font-size:18px;font-weight:850}
+.payTitle{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:290px}
+.payDate{font-size:13px;color:var(--muted);margin-top:3px}
+.payAmt{text-align:right;font-size:18px;font-weight:850}
+.payAmt span{display:block;color:var(--muted);font-size:13px;font-weight:650;margin-top:2px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;justify-content:center;z-index:50}
+.modal.show{display:flex}
+.sheet{width:min(560px,100%);background:#fff;border-radius:28px 28px 0 0;padding:18px 20px 28px;max-height:88vh;overflow:auto}
+.sheetHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.sheetHead h2{margin:0;font-size:23px}
+.close{border:0;background:#f1f1ef;width:40px;height:40px;border-radius:50%;font-size:24px}
+.field{margin:14px 0}
+.field label{display:block;font-size:13px;font-weight:800;margin-bottom:7px}
+.field input{width:100%;padding:14px;border:1px solid #cfd1d4;border-radius:14px;font-size:17px;background:#fff}
+.primary{width:100%;border:0;border-radius:16px;background:#111;color:#fff;padding:15px;font-size:17px;font-weight:800;margin-top:8px}
+.note{font-size:12px;color:var(--muted);line-height:1.4;margin-top:10px}
+@media(max-width:430px){
+ .lineChart{height:205px}
+ .chartWrap{padding-top:4px}
+
+ .big{font-size:40px;letter-spacing:-1.2px}
+ .currency{font-size:18px}
+ .metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding-left:14px;padding-right:14px}
+ .metric{padding:12px 9px}
+ .metric .label{font-size:10px}
+ .metric .value{font-size:15px}
+ .hdr,.row{grid-template-columns:1.55fr .62fr .72fr .92fr;gap:5px;padding-left:10px;padding-right:10px}
+ .title{max-width:105px}
+ .num{font-size:12px}
+ .today .pct{font-size:10px}
+ .hero,.section,.divHeader,.payments{padding-left:16px;padding-right:16px}
+ .seg{margin-left:16px;margin-right:16px}
+ .lineChart{margin-left:16px;margin-right:16px;height:210px}
+ .kpiValue{font-size:20px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <section id="homeView" class="view active">
+    <div class="topbar">
+      <button class="iconbtn" aria-label="menu">‹</button>
+      <h1>Portfolio</h1>
+      <button class="iconbtn" id="settingsBtn" aria-label="settings">⚙</button>
+    </div>
+
+    <div class="hero">
+      <div class="heroRow">
+        <div>
+          <div><span class="big" id="portfolioValue">$80,596.52</span><span class="currency">CAD</span></div>
+          <div class="subgain" id="portfolioGain">+$11,352.71 all time (+14.07%)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="seg" id="portfolioRanges">
+      <button>1D</button><button>1W</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button class="active">ALL</button>
+    </div>
+
+    <div class="chartWrap">
+<div class="lineChart" id="lineChart">
+  <svg viewBox="0 0 520 220" preserveAspectRatio="none" aria-label="Portfolio value chart">
+    <defs>
+      <linearGradient id="staticPortfolioFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#5fa467" stop-opacity=".26"/>
+        <stop offset="100%" stop-color="#5fa467" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="M8 204 L41.6 191.3 L75.2 178.6 L108.8 182.8 L142.4 170.1 L176 165.8 L209.6 153.1 L243.2 136.2 L276.8 119.3 L310.4 102.4 L344 85.5 L377.6 68.6 L411.2 51.7 L444.8 34.8 L478.4 22.1 L512 8 L512 212 L8 212 Z"
+          fill="url(#staticPortfolioFill)"/>
+    <path d="M8 204 L41.6 191.3 L75.2 178.6 L108.8 182.8 L142.4 170.1 L176 165.8 L209.6 153.1 L243.2 136.2 L276.8 119.3 L310.4 102.4 L344 85.5 L377.6 68.6 L411.2 51.7 L444.8 34.8 L478.4 22.1 L512 8"
+          fill="none" stroke="#5fa467" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</div></div>
+
+    <div class="metrics">
+      <div class="metric"><div class="label">Market Value</div><div class="value" id="mvMetric">$80,596</div></div>
+      <div class="metric"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$11,353</div></div>
+      <div class="metric"><div class="label">Yield</div><div class="value" id="yieldMetric">35.36%</div></div>
+    </div>
+
+    <div class="section">
+      <div class="sectionHead"><h2>Dividend income</h2><div class="small">Tap for details ›</div></div>
+      <div class="incomeCard" id="incomeCard">
+        <div class="incomeGrid">
+          <div><div class="kpiLabel">YTD received</div><div class="kpiValue" id="ytdReceived">$11,495</div></div>
+          <div><div class="kpiLabel">Current month</div><div class="kpiValue" id="monthReceived">$1,273</div></div>
+          <div><div class="kpiLabel">Annual dividend</div><div class="kpiValue" id="annualIncome">$28,539</div></div>
+          <div><div class="kpiLabel">Monthly income</div><div class="kpiValue" id="monthlyIncome">$2,378</div></div>
+        </div>
+        <div class="progress"><div id="incomeProgress"></div></div>
+        
+<div class="monthStrip" id="homeMonthStrip">
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:44px"></div></div><div class="m">Jan</div><div class="a">$1,120</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:38px"></div></div><div class="m">Feb</div><div class="a">$980</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:41px"></div></div><div class="m">Mar</div><div class="a">$1,045</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:36px"></div></div><div class="m">Apr</div><div class="a">$930</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:43px"></div></div><div class="m">May</div><div class="a">$1,110</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:41px"></div></div><div class="m">Jun</div><div class="a">$1,060</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:45px"></div></div><div class="m">Jul</div><div class="a">$1,155</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:42px"></div></div><div class="m">Aug</div><div class="a">$1,082</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:44px"></div></div><div class="m">Sep</div><div class="a">$1,140</div></div>
+  <div class="monthMini"><div class="barBox"><div class="bar" style="height:50px"></div></div><div class="m">Oct</div><div class="a">$1,273</div></div>
+</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sectionHead"><h2>Holdings</h2><div class="small" id="holdingCount">5 holdings</div></div>
+      <div class="holdings">
+        <div class="hdr"><div>Stock</div><div>Shares</div><div>Price</div><div>Today</div></div>
+        
+<div id="holdingsRows">
+  <div class="row">
+    <div class="stock"><div class="logo" style="background:#141414">M</div><div style="min-width:0"><div class="ticker">MSTE.TO</div><div class="title">Purpose MSTR Yield Shares ETF</div></div></div>
+    <div class="num">22,000</div><div class="num">$2.87</div><div class="num today neg">-$979.00<span class="pct">-1.53%</span></div>
+  </div>
+  <div class="row">
+    <div class="stock"><div class="logo" style="background:#173a86">H</div><div style="min-width:0"><div class="ticker">HHIS.TO</div><div class="title">Harvest Diversified High Income Shares ETF</div></div></div>
+    <div class="num">488</div><div class="num">$11.99</div><div class="num today neg">-$13.66<span class="pct">-0.23%</span></div>
+  </div>
+  <div class="row">
+    <div class="stock"><div class="logo" style="background:#6f2ac6">S</div><div style="min-width:0"><div class="ticker">SHPE.TO</div><div class="title">Purpose S&amp;P 500 Yield Shares ETF</div></div></div>
+    <div class="num">472</div><div class="num">$8.85</div><div class="num today neg">-$92.04<span class="pct">-2.16%</span></div>
+  </div>
+  <div class="row">
+    <div class="stock"><div class="logo" style="background:#19a66c">B</div><div style="min-width:0"><div class="ticker">BGY.TO</div><div class="title">Brompton Global Dividend Growth ETF</div></div></div>
+    <div class="num">223</div><div class="num">$16.96</div><div class="num today pos">+$6.69<span class="pct">+0.18%</span></div>
+  </div>
+  <div class="row">
+    <div class="stock"><div class="logo" style="background:#d22d38">H</div><div style="min-width:0"><div class="ticker">HBTE.NE</div><div class="title">Harvest Bitcoin Enhanced High Income ETF</div></div></div>
+    <div class="num">219</div><div class="num">$16.50</div><div class="num today neg">-$129.21<span class="pct">-3.45%</span></div>
+  </div>
+</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="divView" class="view">
+    <div class="divHeader">
+      <div class="divTop">
+        <button class="iconbtn" id="backBtn">‹</button>
+        <h1>Dividends earned</h1>
+        <div style="width:44px"></div>
+      </div>
+      <div><span class="big" id="divTotal">$318.09</span><span class="currency">CAD</span></div>
+      <div class="subtitle" id="divSubtitle">Dividends received · Past 1 month</div>
+    </div>
+
+    <div class="seg" id="divRanges">
+      <button>1D</button><button>1W</button><button class="active">1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button>ALL</button>
+    </div>
+
+    <div class="divChartOuter"><div class="divChart" id="divChart"></div></div>
+
+    <div class="payments">
+      <h2 id="payHeading">Past 1 month dividends</h2>
+      <div id="paymentRows"></div>
+    </div>
+  </section>
+
+  <button class="addFab" id="addBtn">+</button>
+
+  <nav class="bottom">
+    <button class="navbtn active" data-nav="home"><span class="ico">⌂</span>Home</button>
+    <button class="navbtn" data-nav="div"><span class="ico">▥</span>Dividends</button>
+    <button class="navbtn" id="navAdd"><span class="ico">＋</span>Add lot</button>
+    <button class="navbtn"><span class="ico">⚙</span>Settings</button>
+  </nav>
+</div>
+
+<div class="modal" id="addModal">
+  <div class="sheet">
+    <div class="sheetHead"><h2>Add new lot</h2><button class="close" id="closeModal">×</button></div>
+    <div class="field"><label>Ticker</label><input id="fTicker" placeholder="e.g. AAPL or MSTE.TO"/></div>
+    <div class="field"><label>Date</label><input id="fDate" type="date"/></div>
+    <div class="field"><label>Shares</label><input id="fShares" type="number" step="0.0001" placeholder="100"/></div>
+    <div class="field"><label>Cost / share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
+    <button class="primary" id="saveLot">Add lot</button>
+    <div class="note">CAD-only display. Canadian listings (.TO/.NE) are treated as CAD; U.S. listings are treated as USD internally and converted to CAD for portfolio totals. This demo uses sample market/dividend data until a live market-data API is connected.</div>
+  </div>
+</div>
+
+<script>
+const fx = 1.39; // demo USD/CAD
+// Explicit DOM bindings for iOS Safari / in-app webviews.
+var portfolioValue=document.getElementById("portfolioValue");
+var portfolioGain=document.getElementById("portfolioGain");
+var mvMetric=document.getElementById("mvMetric");
+var retMetric=document.getElementById("retMetric");
+var yieldMetric=document.getElementById("yieldMetric");
+var ytdReceived=document.getElementById("ytdReceived");
+var monthReceived=document.getElementById("monthReceived");
+var annualIncome=document.getElementById("annualIncome");
+var monthlyIncome=document.getElementById("monthlyIncome");
+var incomeProgress=document.getElementById("incomeProgress");
+var holdingCount=document.getElementById("holdingCount");
+var holdingsRows=document.getElementById("holdingsRows");
+var homeMonthStrip=document.getElementById("homeMonthStrip");
+var lineChart=document.getElementById("lineChart");
+var divTotal=document.getElementById("divTotal");
+var divSubtitle=document.getElementById("divSubtitle");
+var payHeading=document.getElementById("payHeading");
+var divChart=document.getElementById("divChart");
+var paymentRows=document.getElementById("paymentRows");
+var incomeCard=document.getElementById("incomeCard");
+var backBtn=document.getElementById("backBtn");
+var addModal=document.getElementById("addModal");
+var addBtn=document.getElementById("addBtn");
+var navAdd=document.getElementById("navAdd");
+var closeModal=document.getElementById("closeModal");
+var saveLot=document.getElementById("saveLot");
+var fTicker=document.getElementById("fTicker");
+var fDate=document.getElementById("fDate");
+var fShares=document.getElementById("fShares");
+var fCost=document.getElementById("fCost");
+var homeView=document.getElementById("homeView");
+var divView=document.getElementById("divView");
+function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
+function saveLotsSafe(){try{localStorage.setItem("incomeTrackerLots",JSON.stringify(lots))}catch(e){}}
+
+const catalog = {
+  "MSTE.TO": {title:"Purpose MSTR Yield Shares ETF", currency:"CAD", price:2.87, prev:2.9145, annualDiv:1.08, color:"#141414"},
+  "HHIS.TO": {title:"Harvest Diversified High Income Shares ETF", currency:"CAD", price:11.99, prev:12.018, annualDiv:3.24, color:"#173a86"},
+  "SHPE.TO": {title:"Purpose S&P 500 Yield Shares ETF", currency:"CAD", price:8.85, prev:9.045, annualDiv:2.28, color:"#6f2ac6"},
+  "BGY.TO": {title:"Brompton Global Dividend Growth ETF", currency:"CAD", price:16.96, prev:16.93, annualDiv:4.80, color:"#19a66c"},
+  "HBTE.NE": {title:"Harvest Bitcoin Enhanced High Income ETF", currency:"CAD", price:16.50, prev:17.09, annualDiv:4.80, color:"#d22d38"},
+  "AAPL": {title:"Apple Inc.", currency:"USD", price:271.25, prev:269.40, annualDiv:1.04, color:"#222"},
+  "NVDA": {title:"NVIDIA Corporation", currency:"USD", price:187.60, prev:185.70, annualDiv:0.04, color:"#4a7f34"},
+  "MSTY": {title:"YieldMax MSTR Option Income Strategy ETF", currency:"USD", price:21.34, prev:21.05, annualDiv:15.20, color:"#555"}
+};
+const defaultLots = [
+  {ticker:"MSTE.TO",date:"2026-01-10",shares:22000,cost:2.9361},
+  {ticker:"HHIS.TO",date:"2026-02-01",shares:488,cost:11.1062},
+  {ticker:"SHPE.TO",date:"2026-03-01",shares:472,cost:7.1854},
+  {ticker:"BGY.TO",date:"2026-04-01",shares:223,cost:18.4910},
+  {ticker:"HBTE.NE",date:"2026-05-01",shares:219,cost:14.5076}
+];
+const divPayments = [
+  {date:"2026-10-06",ticker:"MSTE.TO",amount:146.77},
+  {date:"2026-10-06",ticker:"HHIS.TO",amount:34.67},
+  {date:"2026-10-07",ticker:"SHPE.TO",amount:39.27},
+  {date:"2026-10-20",ticker:"BGY.TO",amount:28.56},
+  {date:"2026-10-31",ticker:"HBTE.NE",amount:22.34},
+  {date:"2026-09-18",ticker:"MSTE.TO",amount:980.00},
+  {date:"2026-09-26",ticker:"HHIS.TO",amount:160.00},
+  {date:"2026-08-21",ticker:"MSTE.TO",amount:1082.00},
+  {date:"2026-07-24",ticker:"MSTE.TO",amount:1155.00},
+  {date:"2026-06-26",ticker:"MSTE.TO",amount:1060.00},
+  {date:"2026-05-29",ticker:"MSTE.TO",amount:1110.00},
+  {date:"2026-04-24",ticker:"MSTE.TO",amount:930.00},
+  {date:"2026-03-27",ticker:"MSTE.TO",amount:1045.00},
+  {date:"2026-02-27",ticker:"MSTE.TO",amount:980.00},
+  {date:"2026-01-30",ticker:"MSTE.TO",amount:1120.00},
+  {date:"2025-12-27",ticker:"MSTE.TO",amount:920.00},
+  {date:"2025-11-28",ticker:"MSTE.TO",amount:890.00},
+  {date:"2025-10-25",ticker:"MSTE.TO",amount:860.00}
+];
+
+let lots = loadLotsSafe() || defaultLots;
+fDate.value = "2026-10-11";
+
+const fmt = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2}).format(n);
+const fmt0 = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(n);
+const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
+
+function market(t){
+  if(!catalog[t]){
+    catalog[t]={title:"Custom security",currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:10,prev:10,annualDiv:0,color:"#555"};
+  }
+  return catalog[t];
+}
+function toCAD(value,currency){return currency==="USD"?value*fx:value}
+
+function positions(){
+  const m={};
+  lots.forEach(l=>{
+    if(!m[l.ticker])m[l.ticker]={ticker:l.ticker,shares:0,costTotal:0};
+    m[l.ticker].shares+=Number(l.shares);
+    m[l.ticker].costTotal+=Number(l.shares)*Number(l.cost);
+  });
+  return Object.values(m).map(p=>{
+    const q=market(p.ticker);
+    const avg=p.costTotal/p.shares;
+    const mv=toCAD(p.shares*q.price,q.currency);
+    const bv=toCAD(p.costTotal,q.currency);
+    const today=toCAD(p.shares*(q.price-q.prev),q.currency);
+    const todayPct=(q.price/q.prev-1)*100;
+    const annual=toCAD(p.shares*q.annualDiv,q.currency);
+    return {...p,avg,mv,bv,today,todayPct,annual,...q};
+  });
+}
+
+function renderHome(){
+  const ps=positions();
+  const mv=ps.reduce((s,p)=>s+p.mv,0);
+  const bv=ps.reduce((s,p)=>s+p.bv,0);
+  const capital=mv-bv;
+  const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
+  const total=capital+divAll;
+  const totalPct=bv?total/bv*100:0;
+  const annual=ps.reduce((s,p)=>s+p.annual,0);
+  const monthly=annual/12;
+  const yieldPct=mv?annual/mv*100:0;
+  const ytd=divPayments.filter(x=>x.date.startsWith("2026-")).reduce((s,p)=>s+p.amount,0);
+  const october=divPayments.filter(x=>x.date.startsWith("2026-10")).reduce((s,p)=>s+p.amount,0);
+
+  portfolioValue.textContent=fmt(mv);
+  portfolioGain.textContent=(total>=0?"+":"")+fmt(Math.abs(total))+" all time ("+pct(totalPct)+")";
+  portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+  mvMetric.textContent=fmt0(mv);
+  retMetric.textContent=(total>=0?"+":"-")+fmt0(Math.abs(total));
+  retMetric.style.color=total>=0?"var(--green)":"var(--red)";
+  yieldMetric.textContent=yieldPct.toFixed(2)+"%";
+  ytdReceived.textContent=fmt0(ytd);
+  monthReceived.textContent=fmt0(october);
+  annualIncome.textContent=fmt0(annual);
+  monthlyIncome.textContent=fmt0(monthly);
+  incomeProgress.style.width=Math.min(100,annual?ytd/annual*100:0)+"%";
+  holdingCount.textContent=ps.length+" holdings";
+
+  holdingsRows.innerHTML=ps.map(p=>`
+    <div class="row">
+      <div class="stock">
+        <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
+        <div style="min-width:0">
+          <div class="ticker">${p.ticker}</div>
+          <div class="title">${p.title}</div>
+        </div>
+      </div>
+      <div class="num">${p.shares.toLocaleString()}</div>
+      <div class="num">${p.currency==="USD"?"US$":"$"}${p.price.toFixed(2)}</div>
+      <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
+    </div>
+  `).join("");
+
+  const monthVals = monthlySeries("YTD");
+  const max=Math.max(...monthVals.map(x=>x.amount),1);
+  homeMonthStrip.innerHTML=monthVals.map(x=>`
+    <div class="monthMini">
+      <div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div>
+      <div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div>
+    </div>`).join("");
+
+  renderLineChart(mv,total);
+}
+
+function renderLineChart(mv,total){
+  const pts=[0.52,0.55,0.58,0.57,0.60,0.61,0.64,0.68,0.72,0.76,0.80,0.84,0.88,0.92,0.95,1];
+  const w=520,h=220,pad=8;
+  const d=pts.map((v,i)=>{
+    const x=pad+i*(w-pad*2)/(pts.length-1);
+    const y=h-pad-(v-0.48)/(1-0.48)*(h-pad*2);
+    return `${i?"L":"M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5fa467" stop-opacity=".25"/><stop offset="100%" stop-color="#5fa467" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>
+    <path d="${d}" fill="none" stroke="#5fa467" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function monthlySeries(range){
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const m=Array.from({length:12},(_,i)=>({label:months[i],amount:0,key:`2026-${String(i+1).padStart(2,"0")}`}));
+  divPayments.forEach(p=>{
+    if(p.date.startsWith("2026-")){
+      const ix=Number(p.date.slice(5,7))-1;
+      if(ix>=0&&ix<12)m[ix].amount+=p.amount;
+    }
+  });
+  if(range==="YTD") return m.slice(0,10);
+  return m;
+}
+
+const rangeMap={
+  "1D":{days:1,label:"Past 1 day"},
+  "1W":{days:7,label:"Past 1 week"},
+  "1M":{days:31,label:"Past 1 month"},
+  "3M":{days:93,label:"Past 3 months"},
+  "6M":{days:186,label:"Past 6 months"},
+  "YTD":{ytd:true,label:"YTD"},
+  "1Y":{days:365,label:"Past 1 year"},
+  "ALL":{all:true,label:"All time"}
+};
+
+function inRange(dateStr,range){
+  const d=new Date(dateStr+"T00:00:00");
+  const now=new Date("2026-10-11T12:00:00");
+  if(range==="ALL")return true;
+  if(range==="YTD")return d>=new Date("2026-01-01");
+  const days=rangeMap[range].days;
+  return d>=new Date(now.getTime()-days*86400000);
+}
+function aggregateForChart(range){
+  const filtered=divPayments.filter(p=>inRange(p.date,range)).sort((a,b)=>a.date.localeCompare(b.date));
+  if(["1D","1W","1M"].includes(range)){
+    const map={};
+    filtered.forEach(p=>map[p.date]=(map[p.date]||0)+p.amount);
+    let keys=Object.keys(map).sort();
+    if(range==="1M"){
+      const start=new Date("2026-10-04"), out=[];
+      for(let i=0;i<28;i++){
+        const d=new Date(start.getTime()+i*86400000);
+        const key=d.toISOString().slice(0,10);
+        out.push({label:d.toLocaleDateString("en-CA",{month:"short",day:"numeric"}),amount:map[key]||0});
+      }
+      return out;
+    }
+    return keys.map(k=>({label:new Date(k+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"}),amount:map[k]}));
+  }
+  const map={};
+  filtered.forEach(p=>{
+    const k=p.date.slice(0,7);
+    map[k]=(map[k]||0)+p.amount;
+  });
+  return Object.keys(map).sort().map(k=>({label:new Date(k+"-01T00:00:00").toLocaleDateString("en-CA",{month:"short",year:range==="ALL"?"2-digit":undefined}),amount:map[k]}));
+}
+
+function renderDividends(range="1M"){
+  const filtered=divPayments.filter(p=>inRange(p.date,range)).sort((a,b)=>b.date.localeCompare(a.date));
+  const total=filtered.reduce((s,p)=>s+p.amount,0);
+  divTotal.textContent=fmt(total);
+  divSubtitle.textContent="Dividends received · "+rangeMap[range].label;
+  payHeading.textContent=(range==="YTD"?"YTD":range==="ALL"?"All time":rangeMap[range].label)+" dividends";
+
+  const chart=aggregateForChart(range);
+  const max=Math.max(...chart.map(x=>x.amount),1);
+  divChart.innerHTML=chart.map(x=>`
+    <div class="barItem">
+      <div class="bar" style="height:${Math.max(2,x.amount/max*220)}px"></div>
+      <div class="barLabel">${x.label}</div>
+      <div class="barAmt">${fmt(x.amount)}</div>
+    </div>`).join("");
+
+  paymentRows.innerHTML=filtered.map(p=>{
+    const q=market(p.ticker);
+    return `<div class="payRow">
+      <div class="payLogo" style="background:${q.color}">${p.ticker[0]}</div>
+      <div style="min-width:0">
+        <div class="payTicker">${p.ticker}</div>
+        <div class="payTitle">${q.title}</div>
+        <div class="payDate">${new Date(p.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
+      </div>
+      <div class="payAmt">${fmt(p.amount)}<span>CAD</span></div>
+    </div>`;
+  }).join("") || `<div style="padding:24px 0;color:var(--muted)">No dividends in this period.</div>`;
+
+  requestAnimationFrame(()=>{document.querySelector(".divChartOuter").scrollLeft=99999});
+}
+
+function showView(name){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
+  if(name==="div"){divView.classList.add("active");document.querySelector('[data-nav="div"]').classList.add("active");renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");}
+  else{homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");}
+  window.scrollTo(0,0);
+}
+
+document.querySelectorAll("#portfolioRanges button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+});
+document.querySelectorAll("#divRanges button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#divRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderDividends(b.textContent);
+});
+document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showView(b.dataset.nav));
+incomeCard.onclick=()=>showView("div");
+backBtn.onclick=()=>showView("home");
+function openModal(){addModal.classList.add("show")}
+function closeModalFn(){addModal.classList.remove("show")}
+if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
+addModal.onclick=e=>{if(e.target===addModal)closeModalFn()};
+saveLot.onclick=()=>{
+  const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
+  if(!ticker||!date||!(shares>0)||!(cost>=0)){alert("Enter ticker, date, shares and cost/share.");return}
+  lots.push({ticker,date,shares,cost}); saveLotsSafe();
+  closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome();
+};
+
+renderHome();
+renderDividends("1M");
+</script>
+
+<noscript>
+<style>
+#addBtn,#navAdd{display:none!important}
+</style>
+<div style="max-width:560px;margin:0 auto;padding:10px 20px 110px;color:#777;font:13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  Preview mode: charts and holdings are visible, but interactive controls require opening this file in Safari/Chrome or hosting it as a web app.
+</div>
+</noscript>
+
+</body>
+</html>
