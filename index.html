@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v2.9 compact date: date always displays as YYYY-MM-DD on iPhone -->
+<!-- v3.1 dividends: aggregate selected-period dividend totals by holding -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -345,6 +345,15 @@ input,button{touch-action:manipulation;}
   height:56px;
 }
 
+
+/* v3.1 dividend totals by holding */
+.payments .sectionSub{
+  margin:-4px 0 10px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:650;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -384,7 +393,7 @@ input,button{touch-action:manipulation;}
     </div></div>
 
     <div class="metrics">
-      <div class="metric"><div class="label">Market Value</div><div class="value" id="mvMetric">$0</div></div>
+      <div class="metric"><div class="label">Book Value</div><div class="value" id="mvMetric">$0</div></div>
       <div class="metric"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$0</div></div>
       <div class="metric"><div class="label">Yield</div><div class="value" id="yieldMetric">0.00%</div></div>
     </div>
@@ -436,7 +445,8 @@ input,button{touch-action:manipulation;}
     <div class="divChartOuter"><div class="divChart" id="divChart"></div></div>
 
     <div class="payments">
-      <h2 id="payHeading">Past 1 month dividends</h2>
+      <h2 id="payHeading">Past 1 month dividends by holding</h2>
+      <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
     <div class="dataFootnote">Dividend dates from this free market-data source are ex-dividend dates. Actual broker payment dates can be later.</div>
@@ -870,7 +880,7 @@ function renderHome(){
   portfolioValue.textContent=fmt(mv);
   portfolioGain.textContent=(total>=0?"+":"")+fmt(Math.abs(total))+" all time ("+pct(totalPct)+")";
   portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
-  mvMetric.textContent=fmt0(mv);
+  mvMetric.textContent=fmt0(bv);
   retMetric.textContent=(total>=0?"+":"-")+fmt0(Math.abs(total));
   retMetric.style.color=total>=0?"var(--green)":"var(--red)";
   yieldMetric.textContent=yieldPct.toFixed(2)+"%";
@@ -994,7 +1004,7 @@ function renderDividends(range="1M"){
   const total=filtered.reduce((s,p)=>s+p.amount,0);
   divTotal.textContent=fmt(total);
   divSubtitle.textContent="Dividend distributions · "+rangeMap[range].label;
-  payHeading.textContent=(range==="YTD"?"YTD":range==="ALL"?"All time":rangeMap[range].label)+" dividends";
+  payHeading.textContent=(range==="YTD"?"YTD":range==="ALL"?"All time":rangeMap[range].label)+" dividends by holding";
 
   const chart=aggregateForChart(range);
   const max=Math.max(...chart.map(x=>x.amount),1);
@@ -1005,16 +1015,41 @@ function renderDividends(range="1M"){
       <div class="barAmt">${fmt(x.amount)}</div>
     </div>`).join("");
 
-  paymentRows.innerHTML=filtered.map(p=>{
-    const q=market(p.ticker);
+  const byTicker={};
+  filtered.forEach(p=>{
+    if(!byTicker[p.ticker]){
+      byTicker[p.ticker]={
+        ticker:p.ticker,
+        amount:0,
+        payments:0,
+        firstDate:p.date,
+        lastDate:p.date
+      };
+    }
+    byTicker[p.ticker].amount+=Number(p.amount||0);
+    byTicker[p.ticker].payments+=1;
+    if(p.date<byTicker[p.ticker].firstDate)byTicker[p.ticker].firstDate=p.date;
+    if(p.date>byTicker[p.ticker].lastDate)byTicker[p.ticker].lastDate=p.date;
+  });
+
+  const grouped=Object.values(byTicker).sort((a,b)=>b.amount-a.amount);
+
+  paymentRows.innerHTML=grouped.map(g=>{
+    const q=market(g.ticker);
+    const periodText = range==="ALL"
+      ? "All-time dividends"
+      : range==="YTD"
+      ? "YTD dividends"
+      : `${rangeMap[range].label} dividends`;
+
     return `<div class="payRow">
-      <div class="payLogo" style="background:${q.color}">${p.ticker[0]}</div>
+      <div class="payLogo" style="background:${q.color}">${g.ticker[0]}</div>
       <div style="min-width:0">
-        <div class="payTicker">${p.ticker}</div>
+        <div class="payTicker">${g.ticker}</div>
         <div class="payTitle">${q.title}</div>
-        <div class="payDate">${new Date(p.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
+        <div class="payDate">${periodText} · ${g.payments} payment${g.payments===1?"":"s"}</div>
       </div>
-      <div class="payAmt">${fmt(p.amount)}<span>CAD</span></div>
+      <div class="payAmt">${fmt(g.amount)}<span>CAD</span></div>
     </div>`;
   }).join("") || `<div style="padding:24px 0;color:var(--muted)">No dividends in this period.</div>`;
 
