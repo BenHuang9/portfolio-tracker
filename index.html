@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v2.6 clean start: no demo holdings or demo dividends -->
+<!-- v2.7 UI cleanup: no home back button; full-height Add Lot sheet -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -192,6 +192,78 @@ input,button{touch-action:manipulation;}
   width:100%;padding:18px 6px 8px;color:var(--muted);font-size:13px;font-weight:700;text-align:center;
 }
 
+
+/* v2.7 UI cleanup */
+.topbarSpacer{width:44px;height:44px;flex:0 0 44px}
+.homeTopbar h1{position:absolute;left:50%;transform:translateX(-50%)}
+.homeTopbar{position:sticky}
+
+/* Add Lot behaves like an app screen rather than a short bottom popover. */
+#addModal{
+  align-items:flex-end;
+  background:rgba(0,0,0,.30);
+}
+#addModal .sheet{
+  width:min(560px,100%);
+  height:calc(100dvh - 72px);
+  max-height:calc(100dvh - 72px);
+  min-height:0;
+  border-radius:30px 30px 0 0;
+  padding:16px 20px calc(18px + env(safe-area-inset-bottom));
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.addSheetHead{
+  display:grid;
+  grid-template-columns:44px 1fr 44px;
+  align-items:center;
+  gap:8px;
+  margin-bottom:18px;
+  position:sticky;
+  top:-16px;
+  z-index:3;
+  padding:14px 0 8px;
+  background:#fff;
+}
+.addSheetHead h2{
+  text-align:center;
+  font-size:22px;
+  margin:0;
+}
+.sheetHeadSpacer{width:44px;height:44px}
+#addModal .field{margin:12px 0}
+#addModal .field label{font-size:13px;margin-bottom:6px}
+#addModal .field input{
+  min-height:58px;
+  padding:13px 14px;
+  font-size:17px;
+}
+#addModal .primary{
+  min-height:54px;
+  margin-top:18px;
+}
+#addModal .note{
+  margin:12px 2px 4px;
+  font-size:11px;
+  line-height:1.35;
+}
+
+/* Keep the normal settings sheet compact. */
+#settingsModal .sheet{
+  height:auto;
+  max-height:82dvh;
+}
+
+@media(max-width:430px){
+  #addModal .sheet{
+    height:calc(100dvh - 62px);
+    max-height:calc(100dvh - 62px);
+    padding-left:16px;
+    padding-right:16px;
+  }
+  #addModal .field input{min-height:56px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -205,8 +277,8 @@ input,button{touch-action:manipulation;}
 <body>
 <div class="app">
   <section id="homeView" class="view active">
-    <div class="topbar">
-      <button class="iconbtn" aria-label="menu">‹</button>
+    <div class="topbar homeTopbar">
+      <div class="topbarSpacer" aria-hidden="true"></div>
       <h1>Portfolio</h1>
       <button class="iconbtn" id="settingsBtn" aria-label="settings">⚙</button>
     </div>
@@ -338,13 +410,17 @@ input,button{touch-action:manipulation;}
 
 <div class="modal" id="addModal">
   <div class="sheet">
-    <div class="sheetHead"><h2>Add new lot</h2><button class="close" id="closeModal">×</button></div>
+    <div class="sheetHead addSheetHead">
+      <button class="close" id="closeModal" aria-label="Close">×</button>
+      <h2>Add new lot</h2>
+      <div class="sheetHeadSpacer" aria-hidden="true"></div>
+    </div>
     <div class="field"><label>Ticker</label><input id="fTicker" placeholder="e.g. AAPL or MSTE.TO"/></div>
     <div class="field"><label>Date</label><input id="fDate" type="date"/></div>
     <div class="field"><label>Shares</label><input id="fShares" type="number" step="0.0001" placeholder="100"/></div>
     <div class="field"><label>Cost / share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
     <button class="primary" id="saveLot">Add lot</button>
-    <div class="note">Enter the actual trade price in the security's trading currency. The app displays portfolio values in CAD. Canadian listings (.TO/.NE) are CAD; U.S. listings are converted to CAD automatically once market data is connected.</div>
+    <div class="note">Enter the actual trade price in the stock's trading currency. Portfolio totals are shown in CAD.</div>
   </div>
 </div>
 
