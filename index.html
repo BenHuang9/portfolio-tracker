@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v2.7 UI cleanup: no home back button; full-height Add Lot sheet -->
+<!-- v2.8 ticker autocomplete: search and select stocks/ETFs before adding a lot -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -264,6 +264,44 @@ input,button{touch-action:manipulation;}
   #addModal .field input{min-height:56px}
 }
 
+
+/* v2.8 ticker autocomplete */
+.tickerSearchWrap{position:relative}
+.tickerResults{
+  display:none;
+  position:absolute;
+  left:0;right:0;
+  top:calc(100% + 6px);
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  box-shadow:0 14px 32px rgba(0,0,0,.14);
+  overflow:hidden;
+  z-index:20;
+  max-height:280px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.tickerResults.show{display:block}
+.tickerResult{
+  width:100%;
+  border:0;
+  background:#fff;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;
+  padding:12px 14px;
+  text-align:left;
+  border-bottom:1px solid var(--line);
+}
+.tickerResult:last-child{border-bottom:0}
+.tickerResult:active{background:#f3f3f1}
+.tickerResultMain{min-width:0}
+.tickerResultSymbol{font-size:16px;font-weight:850;color:var(--text)}
+.tickerResultName{font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tickerResultMeta{font-size:11px;color:var(--muted);font-weight:750;text-align:right;white-space:nowrap;padding-top:2px}
+.tickerSearchState{padding:13px 14px;color:var(--muted);font-size:13px;font-weight:700}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -415,7 +453,11 @@ input,button{touch-action:manipulation;}
       <h2>Add new lot</h2>
       <div class="sheetHeadSpacer" aria-hidden="true"></div>
     </div>
-    <div class="field"><label>Ticker</label><input id="fTicker" placeholder="e.g. AAPL or MSTE.TO"/></div>
+    <div class="field tickerSearchWrap">
+      <label>Ticker</label>
+      <input id="fTicker" placeholder="Search ticker or company" autocomplete="off" autocapitalize="characters" spellcheck="false"/>
+      <div id="tickerResults" class="tickerResults" role="listbox" aria-label="Stock search results"></div>
+    </div>
     <div class="field"><label>Date</label><input id="fDate" type="date"/></div>
     <div class="field"><label>Shares</label><input id="fShares" type="number" step="0.0001" placeholder="100"/></div>
     <div class="field"><label>Cost / share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
@@ -471,6 +513,7 @@ var navAdd=document.getElementById("navAdd");
 var closeModal=document.getElementById("closeModal");
 var saveLot=document.getElementById("saveLot");
 var fTicker=document.getElementById("fTicker");
+var tickerResults=document.getElementById("tickerResults");
 var fDate=document.getElementById("fDate");
 var fShares=document.getElementById("fShares");
 var fCost=document.getElementById("fCost");
@@ -962,14 +1005,110 @@ saveSettings.onclick=async()=>{
 };
 refreshData.onclick=async()=>{await refreshLiveData(false)};
 
+
+let tickerSearchTimer=null;
+let tickerSearchSeq=0;
+let selectedTickerResult=null;
+
+function hideTickerResults(){
+  if(!tickerResults)return;
+  tickerResults.classList.remove("show");
+  tickerResults.innerHTML="";
+}
+function showTickerMessage(text){
+  if(!tickerResults)return;
+  tickerResults.innerHTML=`<div class="tickerSearchState">${text}</div>`;
+  tickerResults.classList.add("show");
+}
+function normalizeSearchSymbol(s){
+  return String(s||"").trim().toUpperCase();
+}
+async function searchSecurities(query){
+  const q=String(query||"").trim();
+  if(q.length<1)return [];
+  const u=new URL(normalizeApiBase(DEFAULT_MARKET_API)+"/search");
+  u.searchParams.set("q",q);
+  const r=await fetch(u.toString(),{cache:"no-store"});
+  if(!r.ok)throw new Error("Search unavailable");
+  const j=await r.json();
+  return Array.isArray(j.results)?j.results:[];
+}
+function renderTickerResults(results){
+  if(!tickerResults)return;
+  if(!results.length){
+    showTickerMessage("No matching stocks or ETFs found.");
+    return;
+  }
+  tickerResults.innerHTML=results.slice(0,8).map((r,i)=>`
+    <button class="tickerResult" type="button" data-i="${i}" role="option">
+      <div class="tickerResultMain">
+        <div class="tickerResultSymbol">${r.symbol||""}</div>
+        <div class="tickerResultName">${r.name||r.symbol||""}</div>
+      </div>
+      <div class="tickerResultMeta">${[r.exchange,r.currency].filter(Boolean).join(" · ")}</div>
+    </button>
+  `).join("");
+  tickerResults.classList.add("show");
+  tickerResults.querySelectorAll(".tickerResult").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const r=results[Number(btn.dataset.i)];
+      if(!r)return;
+      selectedTickerResult=r;
+      fTicker.value=r.symbol||"";
+      hideTickerResults();
+      fShares.focus();
+    });
+  });
+}
+
+if(fTicker){
+  fTicker.addEventListener("input",()=>{
+    selectedTickerResult=null;
+    clearTimeout(tickerSearchTimer);
+    const q=fTicker.value.trim();
+    if(!q){hideTickerResults();return;}
+    showTickerMessage("Searching…");
+    const seq=++tickerSearchSeq;
+    tickerSearchTimer=setTimeout(async()=>{
+      try{
+        const results=await searchSecurities(q);
+        if(seq!==tickerSearchSeq)return;
+        renderTickerResults(results);
+      }catch(e){
+        if(seq!==tickerSearchSeq)return;
+        showTickerMessage("Search unavailable. You can still enter the ticker manually.");
+      }
+    },250);
+  });
+  fTicker.addEventListener("focus",()=>{
+    if(fTicker.value.trim().length)fTicker.dispatchEvent(new Event("input"));
+  });
+}
+document.addEventListener("click",(e)=>{
+  if(!e.target.closest(".tickerSearchWrap"))hideTickerResults();
+});
+
 function openModal(){addModal.classList.add("show")}
-function closeModalFn(){addModal.classList.remove("show")}
+function closeModalFn(){addModal.classList.remove("show");hideTickerResults()}
 if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
 addModal.onclick=e=>{if(e.target===addModal)closeModalFn()};
 saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
   if(!ticker||!date||!(shares>0)||!(cost>=0)){alert("Enter ticker, date, shares and cost/share.");return}
-  lots.push({ticker,date,shares,cost}); saveLotsSafe();
+  lots.push({ticker,date,shares,cost});
+  if(selectedTickerResult){
+    catalog[ticker]={
+      ...(catalog[ticker]||{}),
+      title:selectedTickerResult.name||ticker,
+      currency:selectedTickerResult.currency||((ticker.endsWith(".TO")||ticker.endsWith(".NE"))?"CAD":"USD"),
+      price:(catalog[ticker]&&catalog[ticker].price)||0,
+      prev:(catalog[ticker]&&catalog[ticker].prev)||0,
+      annualDiv:(catalog[ticker]&&catalog[ticker].annualDiv)||0,
+      color:colorForTicker(ticker),
+      exchange:selectedTickerResult.exchange||""
+    };
+  }
+  saveLotsSafe();
   closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome(); if(marketApiBase)refreshLiveData(true);
 };
 

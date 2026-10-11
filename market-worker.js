@@ -24,6 +24,42 @@ export default {
     if(request.method!=="GET")return json({error:"GET only"},405,origin);
     const url=new URL(request.url);
     if(url.pathname==="/health")return json({ok:true,source:"Yahoo Finance chart proxy"},200,origin);
+    
+    if(url.pathname==="/search"){
+      const q=(url.searchParams.get("q")||"").trim();
+      if(!q)return json({results:[]},200,origin);
+      if(q.length>80)return json({error:"Query too long"},400,origin);
+
+      const searchUrl=new URL("https://query1.finance.yahoo.com/v1/finance/search");
+      searchUrl.searchParams.set("q",q);
+      searchUrl.searchParams.set("quotesCount","12");
+      searchUrl.searchParams.set("newsCount","0");
+      searchUrl.searchParams.set("listsCount","0");
+      searchUrl.searchParams.set("enableFuzzyQuery","true");
+
+      const sr=await fetch(searchUrl.toString(),{
+        headers:{
+          "User-Agent":"Mozilla/5.0",
+          "Accept":"application/json,text/plain,*/*"
+        }
+      });
+      if(!sr.ok)return json({error:`Yahoo search ${sr.status}`},502,origin);
+      const sj=await sr.json();
+      const allowedTypes=new Set(["EQUITY","ETF","MUTUALFUND"]);
+      const rows=(sj.quotes||[])
+        .filter(x=>x && x.symbol && allowedTypes.has(String(x.quoteType||"").toUpperCase()))
+        .map(x=>({
+          symbol:String(x.symbol||"").toUpperCase(),
+          name:x.longname||x.shortname||x.symbol,
+          exchange:x.exchDisp||x.exchange||"",
+          currency:x.currency||"",
+          type:x.quoteType||""
+        }))
+        .filter((x,i,a)=>a.findIndex(y=>y.symbol===x.symbol)===i)
+        .slice(0,10);
+      return json({results:rows},200,origin);
+    }
+
     if(url.pathname!=="/quote")return json({error:"Use /quote?symbol=AAPL"},404,origin);
 
     const symbol=(url.searchParams.get("symbol")||"").trim().toUpperCase();
