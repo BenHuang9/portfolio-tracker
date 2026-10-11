@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
+<!-- v2.6 clean start: no demo holdings or demo dividends -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -179,6 +180,18 @@ input,button{touch-action:manipulation;}
 .ghostBtn{width:100%;border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;font-size:16px;font-weight:800}
 .dataFootnote{font-size:11px;color:var(--muted);line-height:1.4;padding:10px 20px 2px}
 
+
+.emptyChart{
+  height:100%;display:flex;align-items:center;justify-content:center;text-align:center;
+  color:var(--muted);font-size:15px;font-weight:700;padding:24px;
+}
+.emptyHolding{
+  padding:28px 18px;color:var(--muted);font-size:14px;font-weight:700;text-align:center;
+}
+.emptyIncome{
+  width:100%;padding:18px 6px 8px;color:var(--muted);font-size:13px;font-weight:700;text-align:center;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -201,8 +214,8 @@ input,button{touch-action:manipulation;}
     <div class="hero">
       <div class="heroRow">
         <div>
-          <div><span class="big" id="portfolioValue">$80,596.52</span><span class="currency">CAD</span></div>
-          <div class="subgain" id="portfolioGain">+$11,352.71 all time (+14.07%)</div>
+          <div><span class="big" id="portfolioValue">$0.00</span><span class="currency">CAD</span></div>
+          <div class="subgain" id="portfolioGain">+$0.00 all time (+0.00%)</div>
           <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Connecting market data…</span></div>
         </div>
       </div>
@@ -214,79 +227,40 @@ input,button{touch-action:manipulation;}
 
     <div class="chartWrap">
 <div class="lineChart" id="lineChart">
-  <svg viewBox="0 0 520 220" preserveAspectRatio="none" aria-label="Portfolio value chart">
-    <defs>
-      <linearGradient id="staticPortfolioFill" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#5fa467" stop-opacity=".26"/>
-        <stop offset="100%" stop-color="#5fa467" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <path d="M8 204 L41.6 191.3 L75.2 178.6 L108.8 182.8 L142.4 170.1 L176 165.8 L209.6 153.1 L243.2 136.2 L276.8 119.3 L310.4 102.4 L344 85.5 L377.6 68.6 L411.2 51.7 L444.8 34.8 L478.4 22.1 L512 8 L512 212 L8 212 Z"
-          fill="url(#staticPortfolioFill)"/>
-    <path d="M8 204 L41.6 191.3 L75.2 178.6 L108.8 182.8 L142.4 170.1 L176 165.8 L209.6 153.1 L243.2 136.2 L276.8 119.3 L310.4 102.4 L344 85.5 L377.6 68.6 L411.2 51.7 L444.8 34.8 L478.4 22.1 L512 8"
-          fill="none" stroke="#5fa467" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-</div></div>
+      <div class="emptyChart">Add your first holding to start tracking your portfolio.</div>
+    </div></div>
 
     <div class="metrics">
-      <div class="metric"><div class="label">Market Value</div><div class="value" id="mvMetric">$80,596</div></div>
-      <div class="metric"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$11,353</div></div>
-      <div class="metric"><div class="label">Yield</div><div class="value" id="yieldMetric">35.36%</div></div>
+      <div class="metric"><div class="label">Market Value</div><div class="value" id="mvMetric">$0</div></div>
+      <div class="metric"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$0</div></div>
+      <div class="metric"><div class="label">Yield</div><div class="value" id="yieldMetric">0.00%</div></div>
     </div>
 
     <div class="section">
       <div class="sectionHead"><h2>Dividend income</h2><div class="small">Tap for details ›</div></div>
       <div class="incomeCard" id="incomeCard">
         <div class="incomeGrid">
-          <div><div class="kpiLabel">YTD received</div><div class="kpiValue" id="ytdReceived">$11,495</div></div>
-          <div><div class="kpiLabel">Current month</div><div class="kpiValue" id="monthReceived">$1,273</div></div>
-          <div><div class="kpiLabel">Annual dividend</div><div class="kpiValue" id="annualIncome">$28,539</div></div>
-          <div><div class="kpiLabel">Monthly income</div><div class="kpiValue" id="monthlyIncome">$2,378</div></div>
+          <div><div class="kpiLabel">YTD received</div><div class="kpiValue" id="ytdReceived">$0</div></div>
+          <div><div class="kpiLabel">Current month</div><div class="kpiValue" id="monthReceived">$0</div></div>
+          <div><div class="kpiLabel">Annual dividend</div><div class="kpiValue" id="annualIncome">$0</div></div>
+          <div><div class="kpiLabel">Monthly income</div><div class="kpiValue" id="monthlyIncome">$0</div></div>
         </div>
         <div class="progress"><div id="incomeProgress"></div></div>
         
 <div class="monthStrip" id="homeMonthStrip">
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:44px"></div></div><div class="m">Jan</div><div class="a">$1,120</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:38px"></div></div><div class="m">Feb</div><div class="a">$980</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:41px"></div></div><div class="m">Mar</div><div class="a">$1,045</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:36px"></div></div><div class="m">Apr</div><div class="a">$930</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:43px"></div></div><div class="m">May</div><div class="a">$1,110</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:41px"></div></div><div class="m">Jun</div><div class="a">$1,060</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:45px"></div></div><div class="m">Jul</div><div class="a">$1,155</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:42px"></div></div><div class="m">Aug</div><div class="a">$1,082</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:44px"></div></div><div class="m">Sep</div><div class="a">$1,140</div></div>
-  <div class="monthMini"><div class="barBox"><div class="bar" style="height:50px"></div></div><div class="m">Oct</div><div class="a">$1,273</div></div>
-</div>
+          <div class="emptyIncome">No dividend income yet.</div>
+        </div>
       </div>
     </div>
 
     <div class="section">
-      <div class="sectionHead"><h2>Holdings</h2><div class="small" id="holdingCount">5 holdings</div></div>
+      <div class="sectionHead"><h2>Holdings</h2><div class="small" id="holdingCount">0 holdings</div></div>
       <div class="holdings">
         <div class="hdr"><div>Stock</div><div>Shares</div><div>Price</div><div>Today</div></div>
         
 <div id="holdingsRows">
-  <div class="row" data-ticker="MSTE.TO">
-    <div class="stock"><div class="logo" style="background:#141414">M</div><div style="min-width:0"><div class="ticker">MSTE.TO</div><div class="title">Purpose MSTR Yield Shares ETF</div></div></div>
-    <div class="num">22,000</div><div class="num">$2.87</div><div class="num today neg">-$979.00<span class="pct">-1.53%</span></div>
-  </div>
-  <div class="row" data-ticker="HHIS.TO">
-    <div class="stock"><div class="logo" style="background:#173a86">H</div><div style="min-width:0"><div class="ticker">HHIS.TO</div><div class="title">Harvest Diversified High Income Shares ETF</div></div></div>
-    <div class="num">488</div><div class="num">$11.99</div><div class="num today neg">-$13.66<span class="pct">-0.23%</span></div>
-  </div>
-  <div class="row" data-ticker="SHPE.TO">
-    <div class="stock"><div class="logo" style="background:#6f2ac6">S</div><div style="min-width:0"><div class="ticker">SHPE.TO</div><div class="title">Purpose S&amp;P 500 Yield Shares ETF</div></div></div>
-    <div class="num">472</div><div class="num">$8.85</div><div class="num today neg">-$92.04<span class="pct">-2.16%</span></div>
-  </div>
-  <div class="row" data-ticker="BGY.TO">
-    <div class="stock"><div class="logo" style="background:#19a66c">B</div><div style="min-width:0"><div class="ticker">BGY.TO</div><div class="title">Brompton Global Dividend Growth ETF</div></div></div>
-    <div class="num">223</div><div class="num">$16.96</div><div class="num today pos">+$6.69<span class="pct">+0.18%</span></div>
-  </div>
-  <div class="row" data-ticker="HBTE.NE">
-    <div class="stock"><div class="logo" style="background:#d22d38">H</div><div style="min-width:0"><div class="ticker">HBTE.NE</div><div class="title">Harvest Bitcoin Enhanced High Income ETF</div></div></div>
-    <div class="num">219</div><div class="num">$16.50</div><div class="num today neg">-$129.21<span class="pct">-3.45%</span></div>
-  </div>
-</div>
+          <div class="emptyHolding">No holdings yet. Tap “Add lot” to add your first position.</div>
+        </div>
       </div>
     </div>
   </section>
@@ -298,7 +272,7 @@ input,button{touch-action:manipulation;}
         <h1>Dividends earned</h1>
         <div style="width:44px"></div>
       </div>
-      <div><span class="big" id="divTotal">$318.09</span><span class="currency">CAD</span></div>
+      <div><span class="big" id="divTotal">$0.00</span><span class="currency">CAD</span></div>
       <div class="subtitle" id="divSubtitle">Dividends received · Past 1 month</div>
     </div>
 
@@ -324,9 +298,9 @@ input,button{touch-action:manipulation;}
     </div>
 
     <div class="detailHero">
-      <div class="detailTicker" id="detailTicker">MSTE.TO</div>
-      <div class="detailTitle" id="detailTitle">Purpose MSTR Yield Shares ETF</div>
-      <div class="detailPrice" id="detailPrice">$2.87</div>
+      <div class="detailTicker" id="detailTicker">—</div>
+      <div class="detailTitle" id="detailTitle">Holding</div>
+      <div class="detailPrice" id="detailPrice">$0.00</div>
       <div class="detailToday pos" id="detailToday">+$0.00 today (+0.00%)</div>
     </div>
 
@@ -436,49 +410,34 @@ var refreshData=document.getElementById("refreshData");
 var marketStatus=document.getElementById("marketStatus");
 var marketStatusText=document.getElementById("marketStatusText");
 var fxStatus=document.getElementById("fxStatus");
+
+const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
+(function resetOldPortfolioDataOnce(){
+  try{
+    if(localStorage.getItem("portfolioDataResetVersion") !== PORTFOLIO_DATA_RESET_VERSION){
+      [
+        "incomeTrackerLots",
+        "marketCacheV22",
+        "marketCacheV23",
+        "marketCacheV26",
+        "marketCacheV25",
+        "marketCacheV26",
+        "marketApiBase"
+      ].forEach(k=>localStorage.removeItem(k));
+      localStorage.setItem("portfolioDataResetVersion", PORTFOLIO_DATA_RESET_VERSION);
+    }
+  }catch(e){}
+})();
+
 function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
 function saveLotsSafe(){try{localStorage.setItem("incomeTrackerLots",JSON.stringify(lots))}catch(e){}}
 
-const catalog = {
-  "MSTE.TO": {title:"Purpose MSTR Yield Shares ETF", currency:"CAD", price:2.87, prev:2.9145, annualDiv:1.08, color:"#141414"},
-  "HHIS.TO": {title:"Harvest Diversified High Income Shares ETF", currency:"CAD", price:11.99, prev:12.018, annualDiv:3.24, color:"#173a86"},
-  "SHPE.TO": {title:"Purpose S&P 500 Yield Shares ETF", currency:"CAD", price:8.85, prev:9.045, annualDiv:2.28, color:"#6f2ac6"},
-  "BGY.TO": {title:"Brompton Global Dividend Growth ETF", currency:"CAD", price:16.96, prev:16.93, annualDiv:4.80, color:"#19a66c"},
-  "HBTE.NE": {title:"Harvest Bitcoin Enhanced High Income ETF", currency:"CAD", price:16.50, prev:17.09, annualDiv:4.80, color:"#d22d38"},
-  "AAPL": {title:"Apple Inc.", currency:"USD", price:271.25, prev:269.40, annualDiv:1.04, color:"#222"},
-  "NVDA": {title:"NVIDIA Corporation", currency:"USD", price:187.60, prev:185.70, annualDiv:0.04, color:"#4a7f34"},
-  "MSTY": {title:"YieldMax MSTR Option Income Strategy ETF", currency:"USD", price:21.34, prev:21.05, annualDiv:15.20, color:"#555"}
-};
-const defaultLots = [
-  {ticker:"MSTE.TO",date:"2026-01-10",shares:22000,cost:2.9361},
-  {ticker:"HHIS.TO",date:"2026-02-01",shares:488,cost:11.1062},
-  {ticker:"SHPE.TO",date:"2026-03-01",shares:472,cost:7.1854},
-  {ticker:"BGY.TO",date:"2026-04-01",shares:223,cost:18.4910},
-  {ticker:"HBTE.NE",date:"2026-05-01",shares:219,cost:14.5076}
-];
-const demoDivPayments = [
-  {date:"2026-10-06",ticker:"MSTE.TO",amount:146.77},
-  {date:"2026-10-06",ticker:"HHIS.TO",amount:34.67},
-  {date:"2026-10-07",ticker:"SHPE.TO",amount:39.27},
-  {date:"2026-10-20",ticker:"BGY.TO",amount:28.56},
-  {date:"2026-10-31",ticker:"HBTE.NE",amount:22.34},
-  {date:"2026-09-18",ticker:"MSTE.TO",amount:980.00},
-  {date:"2026-09-26",ticker:"HHIS.TO",amount:160.00},
-  {date:"2026-08-21",ticker:"MSTE.TO",amount:1082.00},
-  {date:"2026-07-24",ticker:"MSTE.TO",amount:1155.00},
-  {date:"2026-06-26",ticker:"MSTE.TO",amount:1060.00},
-  {date:"2026-05-29",ticker:"MSTE.TO",amount:1110.00},
-  {date:"2026-04-24",ticker:"MSTE.TO",amount:930.00},
-  {date:"2026-03-27",ticker:"MSTE.TO",amount:1045.00},
-  {date:"2026-02-27",ticker:"MSTE.TO",amount:980.00},
-  {date:"2026-01-30",ticker:"MSTE.TO",amount:1120.00},
-  {date:"2025-12-27",ticker:"MSTE.TO",amount:920.00},
-  {date:"2025-11-28",ticker:"MSTE.TO",amount:890.00},
-  {date:"2025-10-25",ticker:"MSTE.TO",amount:860.00}
-];
-let divPayments = [...demoDivPayments];
+const catalog = {};
+const defaultLots = [];
+const demoDivPayments = [];
+let divPayments = [];
 
-let lots = loadLotsSafe() || defaultLots;
+let lots = loadLotsSafe() || [];
 fDate.value = new Date().toISOString().slice(0,10);
 
 const fmt = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2}).format(n);
@@ -513,12 +472,12 @@ function saveMarketCache(){
   try{
     const compactCatalog={};
     Object.keys(catalog).forEach(k=>compactCatalog[k]=catalog[k]);
-    localStorage.setItem("marketCacheV24",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
+    localStorage.setItem("marketCacheV26",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
   }catch(e){}
 }
 function loadMarketCache(){
   try{
-    const raw=localStorage.getItem("marketCacheV24"); if(!raw)return false;
+    const raw=localStorage.getItem("marketCacheV26"); if(!raw)return false;
     const c=JSON.parse(raw); if(!c||!c.catalog)return false;
     fx=Number(c.fx)||fx;
     Object.keys(c.catalog).forEach(k=>catalog[k]=c.catalog[k]);
@@ -571,7 +530,7 @@ async function refreshLiveData(silent=false){
   marketApiBase=DEFAULT_MARKET_API;
   if(!marketApiBase){
     liveMode=false; setMarketStatus("","Connecting market data…");
-    if(fxStatus)fxStatus.textContent=`USD/CAD: demo ${fx.toFixed(4)}`;
+    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}`;
     return;
   }
   if(!silent)setMarketStatus("loading","Refreshing market data…");
@@ -692,7 +651,7 @@ async function loadPortfolioHistory(label){
 
 function market(t){
   if(!catalog[t]){
-    catalog[t]={title:"Custom security",currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:10,prev:10,annualDiv:0,color:"#555"};
+    catalog[t]={title:t,currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:0,prev:0,annualDiv:0,color:colorForTicker(t)};
   }
   return catalog[t];
 }
@@ -711,7 +670,7 @@ function positions(){
     const mv=toCAD(p.shares*q.price,q.currency);
     const bv=toCAD(p.costTotal,q.currency);
     const today=toCAD(p.shares*(q.price-q.prev),q.currency);
-    const todayPct=(q.price/q.prev-1)*100;
+    const todayPct=q.prev>0?(q.price/q.prev-1)*100:0;
     const annual=toCAD(p.shares*q.annualDiv,q.currency);
     return {...p,avg,mv,bv,today,todayPct,annual,...q};
   });
@@ -746,7 +705,7 @@ function renderHome(){
   incomeProgress.style.width=Math.min(100,annual?ytd/annual*100:0)+"%";
   holdingCount.textContent=ps.length+" holdings";
 
-  holdingsRows.innerHTML=ps.map(p=>`
+  holdingsRows.innerHTML=ps.length ? ps.map(p=>`
     <div class="row" data-ticker="${p.ticker}">
       <div class="stock">
         <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
@@ -759,15 +718,16 @@ function renderHome(){
       <div class="num">${fmt(toCAD(p.price,p.currency))}</div>
       <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
     </div>
-  `).join("");
+  `).join("") : `<div class="emptyHolding">No holdings yet. Tap “Add lot” to add your first position.</div>`;
 
   const monthVals = monthlySeries("YTD");
   const max=Math.max(...monthVals.map(x=>x.amount),1);
-  homeMonthStrip.innerHTML=monthVals.map(x=>`
+  const hasIncome=monthVals.some(x=>x.amount>0);
+  homeMonthStrip.innerHTML=hasIncome ? monthVals.map(x=>`
     <div class="monthMini">
       <div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div>
       <div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div>
-    </div>`).join("");
+    </div>`).join("") : `<div class="emptyIncome">No dividend income yet.</div>`;
 
   renderLineChart(mv,total);
   bindHoldingRows();
@@ -776,8 +736,11 @@ function renderHome(){
 function renderLineChart(data,total){
   const w=520,h=220,pad=8;
   let vals;
-  if(Array.isArray(data) && data.length>1){vals=data.map(x=>Number(x.value)).filter(Number.isFinite);}else{
-    vals=[0.52,0.55,0.58,0.57,0.60,0.61,0.64,0.68,0.72,0.76,0.80,0.84,0.88,0.92,0.95,1];
+  if(Array.isArray(data) && data.length>1){
+    vals=data.map(x=>Number(x.value)).filter(Number.isFinite);
+  }else{
+    lineChart.innerHTML=`<div class="emptyChart">${lots.length ? "Loading portfolio history…" : "Add your first holding to start tracking your portfolio."}</div>`;
+    return;
   }
   let min=Math.min(...vals),max=Math.max(...vals); if(max===min){max=min+1}
   const d=vals.map((v,i)=>{
