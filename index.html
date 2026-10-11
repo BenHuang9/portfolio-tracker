@@ -70,8 +70,8 @@ button,input{font:inherit}
 .today.pos{color:var(--green)} .today.neg{color:var(--red)}
 .today .pct{display:block;font-size:11px;margin-top:2px}
 .bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(480px,100%);padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(246,246,244,.94);backdrop-filter:blur(18px);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 1fr 1fr;z-index:25}
-.navbtn{border:0;background:transparent;padding:2px 2px;color:#777;font-size:10px;font-weight:700;line-height:1.05;min-height:46px}
-.navbtn .ico{display:block;font-size:18px;line-height:1;margin-bottom:3px}
+.navbtn{border:0;background:transparent;padding:2px 2px;color:#777;font-size:9px;font-weight:700;line-height:1.05;min-height:42px}
+.navbtn .ico{display:block;font-size:16px;line-height:1;margin-bottom:2px}
 .navbtn.active{color:#111}
 .addFab{display:none}
 .view{display:none}.view.active{display:block}
@@ -129,24 +129,6 @@ button,input{font:inherit}
 .hero,.section,.metrics,.chartWrap,.topbar,.divHeader,.payments{max-width:100%}
 .lineChart,.holdings,.incomeCard,.metric{min-width:0}
 img,svg,canvas{max-width:100%}
-
-
-/* v1.8 stronger iPhone zoom lock */
-html, body {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  touch-action: pan-y;
-  overscroll-behavior-x: none;
-}
-body, .app, .view, .lineChart, .incomeCard, .holdings, .bottom {
-  touch-action: pan-y;
-}
-button, a, input, select, textarea {
-  touch-action: manipulation;
-}
 
 </style>
 </head>
@@ -594,6 +576,34 @@ saveLot.onclick=()=>{
 
 renderHome();
 renderDividends("1M");
+
+/* v1.8 iOS zoom lock */
+(function () {
+  const prevent = (e) => e.preventDefault();
+
+  // Safari gesture events (pinch zoom).
+  ["gesturestart", "gesturechange", "gestureend"].forEach((name) => {
+    document.addEventListener(name, prevent, { passive: false });
+  });
+
+  // Prevent two-finger browser zoom while keeping one-finger vertical scrolling.
+  document.addEventListener("touchmove", function (e) {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Prevent double-tap zoom.
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", function (e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+})();
+
 </script>
 
 <noscript>
@@ -604,41 +614,6 @@ renderDividends("1M");
   Preview mode: charts and holdings are visible, but interactive controls require opening this file in Safari/Chrome or hosting it as a web app.
 </div>
 </noscript>
-
-
-<script>
-/* v1.8: block iOS Safari pinch and double-tap zoom */
-(function () {
-  function stopGesture(e) {
-    e.preventDefault();
-  }
-
-  document.addEventListener("gesturestart", stopGesture, { passive: false });
-  document.addEventListener("gesturechange", stopGesture, { passive: false });
-  document.addEventListener("gestureend", stopGesture, { passive: false });
-
-  document.addEventListener("touchmove", function (e) {
-    if (e.touches && e.touches.length > 1) {
-      e.preventDefault();
-    }
-  }, { passive: false });
-
-  let lastTouchEnd = 0;
-  document.addEventListener("touchend", function (e) {
-    const now = Date.now();
-    if (now - lastTouchEnd <= 300) {
-      e.preventDefault();
-    }
-    lastTouchEnd = now;
-  }, { passive: false });
-
-  // Keep accidental keyboard/text zoom from happening on form fields.
-  document.querySelectorAll("input, select, textarea").forEach(function (el) {
-    const size = parseFloat(getComputedStyle(el).fontSize || "16");
-    if (size < 16) el.style.fontSize = "16px";
-  });
-})();
-</script>
 
 </body>
 </html>
