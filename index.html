@@ -203,7 +203,7 @@ input,button{touch-action:manipulation;}
         <div>
           <div><span class="big" id="portfolioValue">$80,596.52</span><span class="currency">CAD</span></div>
           <div class="subgain" id="portfolioGain">+$11,352.71 all time (+14.07%)</div>
-          <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Demo data · connect market data in Settings</span></div>
+          <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Connecting market data…</span></div>
         </div>
       </div>
     </div>
@@ -486,7 +486,8 @@ const fmt0 = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"
 const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
 
 
-let marketApiBase = loadTextSafe("marketApiBase", "");
+const DEFAULT_MARKET_API = "https://portfolio-market-data.benhuang011.workers.dev";
+let marketApiBase = loadTextSafe("marketApiBase", DEFAULT_MARKET_API);
 let liveMode = false;
 let dividendEventsByTicker = {};
 let fxHistory = [];
@@ -512,12 +513,12 @@ function saveMarketCache(){
   try{
     const compactCatalog={};
     Object.keys(catalog).forEach(k=>compactCatalog[k]=catalog[k]);
-    localStorage.setItem("marketCacheV22",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
+    localStorage.setItem("marketCacheV23",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
   }catch(e){}
 }
 function loadMarketCache(){
   try{
-    const raw=localStorage.getItem("marketCacheV22"); if(!raw)return false;
+    const raw=localStorage.getItem("marketCacheV23"); if(!raw)return false;
     const c=JSON.parse(raw); if(!c||!c.catalog)return false;
     fx=Number(c.fx)||fx;
     Object.keys(c.catalog).forEach(k=>catalog[k]=c.catalog[k]);
@@ -569,7 +570,7 @@ function trailingAnnualDividendPerShare(events){
 async function refreshLiveData(silent=false){
   marketApiBase=normalizeApiBase(loadTextSafe("marketApiBase",marketApiBase));
   if(!marketApiBase){
-    liveMode=false; setMarketStatus("","Demo data · connect market data in Settings");
+    liveMode=false; setMarketStatus("","Connecting market data…");
     if(fxStatus)fxStatus.textContent=`USD/CAD: demo ${fx.toFixed(4)}`;
     return;
   }
@@ -994,7 +995,7 @@ if(marketApiBase && loadMarketCache()){
 renderHome();
 bindHoldingRows();
 renderDividends("1M");
-if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Demo data · connect market data in Settings");}
+if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
 setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&marketApiBase)refreshLiveData(true)});
 
