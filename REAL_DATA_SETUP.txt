@@ -1,0 +1,24 @@
+REAL MARKET DATA SETUP (V2.2)
+
+1. Keep GitHub Pages hosting the app as you do now.
+2. Create one free Cloudflare Worker.
+3. Paste the contents of market-worker.js into the Worker and deploy it.
+4. Copy the Worker URL, for example:
+   https://portfolio-market-data.your-name.workers.dev
+5. Open the Portfolio app -> Settings -> Market data API.
+6. Paste the Worker URL -> Save & refresh.
+
+The app will then refresh:
+- stock/ETF title
+- current market price
+- previous close and today's move
+- USD/CAD using Yahoo ticker CAD=X
+- historical prices for the main chart
+- dividend/distribution history available from Yahoo
+- trailing annual distribution estimate
+
+IMPORTANT
+- Yahoo Finance chart access used here is unofficial and can change or be rate-limited.
+- Some Canadian quotes are delayed.
+- Yahoo dividend event dates are ex-dividend dates, not broker payment dates. The app therefore treats historical dividend cash as an estimate based on the shares held on each ex-date.
+- The app does not connect to a brokerage. Lots remain stored locally on your device.

@@ -166,6 +166,19 @@ input,button{touch-action:manipulation;}
 .detailActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px 24px}
 .secondaryBtn{border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;font-weight:800}
 
+
+/* v2.2 live market data */
+.marketStatus{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:6px 9px;border-radius:999px;background:#ececeb;color:#65686d;font-size:11px;font-weight:800}
+.marketStatus.live{background:#e7f4ea;color:#16763b}
+.marketStatus.loading{background:#edf1f3;color:#52606a}
+.marketStatus.error{background:#f9e8e8;color:#ad3030}
+.statusDot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.settingsNote{font-size:13px;color:var(--muted);line-height:1.45;margin:6px 0 14px}
+.settingsRow{display:flex;gap:10px}
+.settingsRow .primary{margin-top:0}
+.ghostBtn{width:100%;border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;font-size:16px;font-weight:800}
+.dataFootnote{font-size:11px;color:var(--muted);line-height:1.4;padding:10px 20px 2px}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -190,6 +203,7 @@ input,button{touch-action:manipulation;}
         <div>
           <div><span class="big" id="portfolioValue">$80,596.52</span><span class="currency">CAD</span></div>
           <div class="subgain" id="portfolioGain">+$11,352.71 all time (+14.07%)</div>
+          <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Demo data · connect market data in Settings</span></div>
         </div>
       </div>
     </div>
@@ -298,6 +312,7 @@ input,button{touch-action:manipulation;}
       <h2 id="payHeading">Past 1 month dividends</h2>
       <div id="paymentRows"></div>
     </div>
+    <div class="dataFootnote">Dividend dates from this free market-data source are ex-dividend dates. Actual broker payment dates can be later.</div>
   </section>
 
 
@@ -343,7 +358,7 @@ input,button{touch-action:manipulation;}
     <button class="navbtn active" data-nav="home"><span class="ico">⌂</span>Home</button>
     <button class="navbtn" data-nav="div"><span class="ico">▥</span>Dividends</button>
     <button class="navbtn" id="navAdd"><span class="ico">＋</span>Add lot</button>
-    <button class="navbtn"><span class="ico">⚙</span>Settings</button>
+    <button class="navbtn" id="navSettings"><span class="ico">⚙</span>Settings</button>
   </nav>
 </div>
 
@@ -355,12 +370,29 @@ input,button{touch-action:manipulation;}
     <div class="field"><label>Shares</label><input id="fShares" type="number" step="0.0001" placeholder="100"/></div>
     <div class="field"><label>Cost / share</label><input id="fCost" type="number" step="0.0001" placeholder="13.74"/></div>
     <button class="primary" id="saveLot">Add lot</button>
-    <div class="note">CAD-only display. Canadian listings (.TO/.NE) are treated as CAD; U.S. listings are treated as USD internally and converted to CAD for portfolio totals. This demo uses sample market/dividend data until a live market-data API is connected.</div>
+    <div class="note">Enter the actual trade price in the security's trading currency. The app displays portfolio values in CAD. Canadian listings (.TO/.NE) are CAD; U.S. listings are converted to CAD automatically once market data is connected.</div>
+  </div>
+</div>
+
+
+<div class="modal" id="settingsModal">
+  <div class="sheet">
+    <div class="sheetHead"><h2>Settings</h2><button class="close" id="closeSettings">×</button></div>
+    <div class="field">
+      <label>Market data API</label>
+      <input id="apiBaseInput" type="url" autocapitalize="off" autocomplete="off" placeholder="https://your-worker.workers.dev"/>
+    </div>
+    <div class="settingsNote">The app uses your Cloudflare Worker to retrieve Yahoo Finance market data. No brokerage connection is required. Quotes for some Canadian securities may be delayed.</div>
+    <div class="settingsRow">
+      <button class="primary" id="saveSettings">Save & refresh</button>
+      <button class="ghostBtn" id="refreshData">Refresh now</button>
+    </div>
+    <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
   </div>
 </div>
 
 <script>
-const fx = 1.39; // demo USD/CAD
+let fx = 1.39; // replaced by live USD/CAD when connected
 // Explicit DOM bindings for iOS Safari / in-app webviews.
 var portfolioValue=document.getElementById("portfolioValue");
 var portfolioGain=document.getElementById("portfolioGain");
@@ -394,6 +426,16 @@ var fShares=document.getElementById("fShares");
 var fCost=document.getElementById("fCost");
 var homeView=document.getElementById("homeView");
 var divView=document.getElementById("divView");
+var settingsBtn=document.getElementById("settingsBtn");
+var navSettings=document.getElementById("navSettings");
+var settingsModal=document.getElementById("settingsModal");
+var closeSettings=document.getElementById("closeSettings");
+var apiBaseInput=document.getElementById("apiBaseInput");
+var saveSettings=document.getElementById("saveSettings");
+var refreshData=document.getElementById("refreshData");
+var marketStatus=document.getElementById("marketStatus");
+var marketStatusText=document.getElementById("marketStatusText");
+var fxStatus=document.getElementById("fxStatus");
 function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
 function saveLotsSafe(){try{localStorage.setItem("incomeTrackerLots",JSON.stringify(lots))}catch(e){}}
 
@@ -414,7 +456,7 @@ const defaultLots = [
   {ticker:"BGY.TO",date:"2026-04-01",shares:223,cost:18.4910},
   {ticker:"HBTE.NE",date:"2026-05-01",shares:219,cost:14.5076}
 ];
-const divPayments = [
+const demoDivPayments = [
   {date:"2026-10-06",ticker:"MSTE.TO",amount:146.77},
   {date:"2026-10-06",ticker:"HHIS.TO",amount:34.67},
   {date:"2026-10-07",ticker:"SHPE.TO",amount:39.27},
@@ -434,13 +476,198 @@ const divPayments = [
   {date:"2025-11-28",ticker:"MSTE.TO",amount:890.00},
   {date:"2025-10-25",ticker:"MSTE.TO",amount:860.00}
 ];
+let divPayments = [...demoDivPayments];
 
 let lots = loadLotsSafe() || defaultLots;
-fDate.value = "2026-10-11";
+fDate.value = new Date().toISOString().slice(0,10);
 
 const fmt = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2}).format(n);
 const fmt0 = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(n);
 const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
+
+
+let marketApiBase = loadTextSafe("marketApiBase", "");
+let liveMode = false;
+let dividendEventsByTicker = {};
+let fxHistory = [];
+let liveUpdatedAt = null;
+let currentPortfolioRange = "ALL";
+const chartCache = new Map();
+
+function loadTextSafe(key, fallback){try{return localStorage.getItem(key)||fallback}catch(e){return fallback}}
+function saveTextSafe(key, value){try{localStorage.setItem(key,value)}catch(e){}}
+function normalizeApiBase(v){return String(v||"").trim().replace(/\/+$/,"")}
+function colorForTicker(t){
+  if(catalog[t] && catalog[t].color) return catalog[t].color;
+  const palette=["#141414","#173a86","#6f2ac6","#19a66c","#d22d38","#6f6f6f","#8a5a16"];
+  let h=0; for(const c of t) h=(h*31+c.charCodeAt(0))>>>0;
+  return palette[h%palette.length];
+}
+function setMarketStatus(type,text){
+  if(!marketStatus||!marketStatusText)return;
+  marketStatus.className="marketStatus"+(type?" "+type:"");
+  marketStatusText.textContent=text;
+}
+function saveMarketCache(){
+  try{
+    const compactCatalog={};
+    Object.keys(catalog).forEach(k=>compactCatalog[k]=catalog[k]);
+    localStorage.setItem("marketCacheV22",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
+  }catch(e){}
+}
+function loadMarketCache(){
+  try{
+    const raw=localStorage.getItem("marketCacheV22"); if(!raw)return false;
+    const c=JSON.parse(raw); if(!c||!c.catalog)return false;
+    fx=Number(c.fx)||fx;
+    Object.keys(c.catalog).forEach(k=>catalog[k]=c.catalog[k]);
+    if(Array.isArray(c.divPayments))divPayments=c.divPayments;
+    dividendEventsByTicker=c.dividendEventsByTicker||{};
+    fxHistory=Array.isArray(c.fxHistory)?c.fxHistory:[];
+    liveUpdatedAt=c.updatedAt||null;
+    liveMode=true;
+    return true;
+  }catch(e){return false}
+}
+function apiUrl(path, params={}){
+  const base=normalizeApiBase(marketApiBase); if(!base)throw new Error("Market data API is not configured");
+  const u=new URL(base+path);
+  Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,String(v)));
+  return u.toString();
+}
+async function apiQuote(symbol, range="1y", interval="1d"){
+  const r=await fetch(apiUrl("/quote",{symbol,range,interval}),{cache:"no-store"});
+  if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`${symbol}: ${r.status} ${msg}`)}
+  return await r.json();
+}
+function sharesHeldOn(ticker,dateStr){
+  return lots.filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
+}
+function fxAtDate(dateStr){
+  if(!fxHistory.length)return fx;
+  let best=null;
+  for(const p of fxHistory){ if(p.date<=dateStr)best=p; else break; }
+  return best && Number(best.close)>0 ? Number(best.close) : fx;
+}
+function rebuildDividendPayments(){
+  const out=[];
+  for(const [ticker,events] of Object.entries(dividendEventsByTicker)){
+    const q=market(ticker);
+    for(const ev of (events||[])){
+      const sh=sharesHeldOn(ticker,ev.date);
+      if(!(sh>0) || !(Number(ev.amount)>0))continue;
+      const rate=q.currency==="USD"?fxAtDate(ev.date):1;
+      out.push({date:ev.date,ticker,amount:sh*Number(ev.amount)*rate,perShare:Number(ev.amount)});
+    }
+  }
+  if(out.length) divPayments=out.sort((a,b)=>a.date.localeCompare(b.date));
+}
+function trailingAnnualDividendPerShare(events){
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-365);
+  return (events||[]).filter(e=>new Date(e.date+"T00:00:00")>=cutoff).reduce((s,e)=>s+Number(e.amount||0),0);
+}
+async function refreshLiveData(silent=false){
+  marketApiBase=normalizeApiBase(loadTextSafe("marketApiBase",marketApiBase));
+  if(!marketApiBase){
+    liveMode=false; setMarketStatus("","Demo data · connect market data in Settings");
+    if(fxStatus)fxStatus.textContent=`USD/CAD: demo ${fx.toFixed(4)}`;
+    return;
+  }
+  if(!silent)setMarketStatus("loading","Refreshing market data…");
+  try{
+    const tickers=[...new Set(lots.map(l=>l.ticker))];
+    const [fxQ,...quotes]=await Promise.all([
+      apiQuote("CAD=X","1y","1d"),
+      ...tickers.map(t=>apiQuote(t,"5y","1wk"))
+    ]);
+    if(Number(fxQ.price)>0)fx=Number(fxQ.price);
+    fxHistory=(fxQ.history||[]).slice().sort((a,b)=>a.time-b.time);
+    dividendEventsByTicker={};
+    quotes.forEach((q,i)=>{
+      const ticker=tickers[i];
+      const events=(q.dividends||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+      dividendEventsByTicker[ticker]=events;
+      catalog[ticker]={
+        ...(catalog[ticker]||{}),
+        title:q.title||ticker,
+        currency:q.currency||((ticker.endsWith(".TO")||ticker.endsWith(".NE"))?"CAD":"USD"),
+        price:Number(q.price)||0,
+        prev:Number(q.previousClose)||Number(q.price)||0,
+        annualDiv:trailingAnnualDividendPerShare(events),
+        color:colorForTicker(ticker),
+        exchange:q.exchange||"",
+        marketState:q.marketState||"",
+        regularMarketTime:q.regularMarketTime||null
+      };
+    });
+    rebuildDividendPayments();
+    liveMode=true;
+    liveUpdatedAt=Date.now();
+    chartCache.clear();
+    saveMarketCache();
+    const tm=new Date(liveUpdatedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+    setMarketStatus("live",`Yahoo market data · refreshed ${tm}`);
+    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · Yahoo market data`;
+    renderHome();
+    renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+    if(currentDetailTicker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(currentDetailTicker);
+    loadPortfolioHistory(currentPortfolioRange);
+  }catch(err){
+    console.error(err);
+    setMarketStatus("error", liveMode ? "Refresh failed · showing cached market data" : "Market data unavailable · showing demo data");
+  }
+}
+
+const portfolioRangeConfig={
+  "1D":{range:"1d",interval:"5m"},
+  "1W":{range:"5d",interval:"15m"},
+  "1M":{range:"1mo",interval:"1d"},
+  "3M":{range:"3mo",interval:"1d"},
+  "6M":{range:"6mo",interval:"1d"},
+  "YTD":{range:"ytd",interval:"1d"},
+  "1Y":{range:"1y",interval:"1d"},
+  "ALL":{range:"max",interval:"1wk"}
+};
+function valueAtOrBefore(hist,t){
+  if(!hist||!hist.length)return null;
+  let lo=0,hi=hist.length-1,best=null;
+  while(lo<=hi){const mid=(lo+hi)>>1;if(hist[mid].time<=t){best=hist[mid];lo=mid+1}else hi=mid-1}
+  return best&&Number(best.close)>0?Number(best.close):null;
+}
+function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.length-1)/(max-1);return Array.from({length:max},(_,i)=>arr[Math.round(i*step)])}
+async function loadPortfolioHistory(label){
+  currentPortfolioRange=label||"ALL";
+  if(!marketApiBase||!liveMode)return;
+  const key=currentPortfolioRange+"|"+lots.map(l=>`${l.ticker}:${l.date}:${l.shares}`).join(";");
+  if(chartCache.has(key)){renderLineChart(chartCache.get(key));return;}
+  const cfg=portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL;
+  try{
+    const tickers=[...new Set(lots.map(l=>l.ticker))];
+    const needsFx=tickers.some(t=>market(t).currency==="USD");
+    const responses=await Promise.all([
+      ...tickers.map(t=>apiQuote(t,cfg.range,cfg.interval)),
+      ...(needsFx?[apiQuote("CAD=X",cfg.range,cfg.interval)]:[])
+    ]);
+    const qMap={}; tickers.forEach((t,i)=>qMap[t]=responses[i]);
+    const fxQ=needsFx?responses[responses.length-1]:null;
+    let timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
+    timeline=sampleArray(timeline,220);
+    const values=[];
+    for(const t of timeline){
+      const date=new Date(t*1000).toISOString().slice(0,10);
+      let total=0,has=false;
+      for(const ticker of tickers){
+        const sh=sharesHeldOn(ticker,date); if(!(sh>0))continue;
+        const px=valueAtOrBefore(qMap[ticker].history,t); if(!(px>0))continue;
+        let rate=1;
+        if(market(ticker).currency==="USD") rate=valueAtOrBefore(fxQ&&fxQ.history,t)||fx;
+        total+=sh*px*rate; has=true;
+      }
+      if(has)values.push({time:t,value:total});
+    }
+    if(values.length>1){chartCache.set(key,values);renderLineChart(values);}
+  }catch(e){console.warn("history",e)}
+}
 
 function market(t){
   if(!catalog[t]){
@@ -480,8 +707,9 @@ function renderHome(){
   const annual=ps.reduce((s,p)=>s+p.annual,0);
   const monthly=annual/12;
   const yieldPct=mv?annual/mv*100:0;
-  const ytd=divPayments.filter(x=>x.date.startsWith("2026-")).reduce((s,p)=>s+p.amount,0);
-  const october=divPayments.filter(x=>x.date.startsWith("2026-10")).reduce((s,p)=>s+p.amount,0);
+  const now=new Date(); const y=String(now.getFullYear()); const ym=`${y}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const ytd=divPayments.filter(x=>x.date.startsWith(y+"-")).reduce((s,p)=>s+p.amount,0);
+  const october=divPayments.filter(x=>x.date.startsWith(ym)).reduce((s,p)=>s+p.amount,0);
 
   portfolioValue.textContent=fmt(mv);
   portfolioGain.textContent=(total>=0?"+":"")+fmt(Math.abs(total))+" all time ("+pct(totalPct)+")";
@@ -507,7 +735,7 @@ function renderHome(){
         </div>
       </div>
       <div class="num">${p.shares.toLocaleString()}</div>
-      <div class="num">${p.currency==="USD"?"US$":"$"}${p.price.toFixed(2)}</div>
+      <div class="num">${fmt(toCAD(p.price,p.currency))}</div>
       <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
     </div>
   `).join("");
@@ -524,12 +752,16 @@ function renderHome(){
   bindHoldingRows();
 }
 
-function renderLineChart(mv,total){
-  const pts=[0.52,0.55,0.58,0.57,0.60,0.61,0.64,0.68,0.72,0.76,0.80,0.84,0.88,0.92,0.95,1];
+function renderLineChart(data,total){
   const w=520,h=220,pad=8;
-  const d=pts.map((v,i)=>{
-    const x=pad+i*(w-pad*2)/(pts.length-1);
-    const y=h-pad-(v-0.48)/(1-0.48)*(h-pad*2);
+  let vals;
+  if(Array.isArray(data) && data.length>1){vals=data.map(x=>Number(x.value)).filter(Number.isFinite);}else{
+    vals=[0.52,0.55,0.58,0.57,0.60,0.61,0.64,0.68,0.72,0.76,0.80,0.84,0.88,0.92,0.95,1];
+  }
+  let min=Math.min(...vals),max=Math.max(...vals); if(max===min){max=min+1}
+  const d=vals.map((v,i)=>{
+    const x=pad+i*(w-pad*2)/(vals.length-1);
+    const y=h-pad-(v-min)/(max-min)*(h-pad*2);
     return `${i?"L":"M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
   }).join(" ");
   lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
@@ -540,15 +772,16 @@ function renderLineChart(mv,total){
 }
 
 function monthlySeries(range){
+  const now=new Date(); const year=now.getFullYear();
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const m=Array.from({length:12},(_,i)=>({label:months[i],amount:0,key:`2026-${String(i+1).padStart(2,"0")}`}));
+  const m=Array.from({length:12},(_,i)=>({label:months[i],amount:0,key:`${year}-${String(i+1).padStart(2,"0")}`}));
   divPayments.forEach(p=>{
-    if(p.date.startsWith("2026-")){
+    if(p.date.startsWith(String(year)+"-")){
       const ix=Number(p.date.slice(5,7))-1;
       if(ix>=0&&ix<12)m[ix].amount+=p.amount;
     }
   });
-  if(range==="YTD") return m.slice(0,10);
+  if(range==="YTD") return m.slice(0,now.getMonth()+1);
   return m;
 }
 
@@ -565,9 +798,9 @@ const rangeMap={
 
 function inRange(dateStr,range){
   const d=new Date(dateStr+"T00:00:00");
-  const now=new Date("2026-10-11T12:00:00");
+  const now=new Date();
   if(range==="ALL")return true;
-  if(range==="YTD")return d>=new Date("2026-01-01");
+  if(range==="YTD")return d>=new Date(now.getFullYear(),0,1);
   const days=rangeMap[range].days;
   return d>=new Date(now.getTime()-days*86400000);
 }
@@ -578,7 +811,7 @@ function aggregateForChart(range){
     filtered.forEach(p=>map[p.date]=(map[p.date]||0)+p.amount);
     let keys=Object.keys(map).sort();
     if(range==="1M"){
-      const start=new Date("2026-10-04"), out=[];
+      const start=new Date(); start.setDate(start.getDate()-27); start.setHours(0,0,0,0); const out=[];
       for(let i=0;i<28;i++){
         const d=new Date(start.getTime()+i*86400000);
         const key=d.toISOString().slice(0,10);
@@ -600,7 +833,7 @@ function renderDividends(range="1M"){
   const filtered=divPayments.filter(p=>inRange(p.date,range)).sort((a,b)=>b.date.localeCompare(a.date));
   const total=filtered.reduce((s,p)=>s+p.amount,0);
   divTotal.textContent=fmt(total);
-  divSubtitle.textContent="Dividends received · "+rangeMap[range].label;
+  divSubtitle.textContent="Dividend distributions · "+rangeMap[range].label;
   payHeading.textContent=(range==="YTD"?"YTD":range==="ALL"?"All time":rangeMap[range].label)+" dividends";
 
   const chart=aggregateForChart(range);
@@ -638,6 +871,7 @@ function showView(name){
 
 document.querySelectorAll("#portfolioRanges button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+  currentPortfolioRange=b.textContent; loadPortfolioHistory(currentPortfolioRange);
 });
 document.querySelectorAll("#divRanges button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#divRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderDividends(b.textContent);
@@ -648,6 +882,25 @@ backBtn.onclick=()=>showView("home");
 document.getElementById("detailBackBtn").onclick=()=>showView("home");
 document.getElementById("detailHomeBtn").onclick=()=>showView("home");
 document.getElementById("detailAddLotBtn").onclick=()=>{ if(currentDetailTicker) document.getElementById("fTicker").value=currentDetailTicker; openModal(); };
+
+function openSettings(){
+  apiBaseInput.value=marketApiBase||"";
+  fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
+  settingsModal.classList.add("show");
+}
+function closeSettingsFn(){settingsModal.classList.remove("show")}
+if(settingsBtn)settingsBtn.onclick=openSettings;
+if(navSettings)navSettings.onclick=openSettings;
+if(closeSettings)closeSettings.onclick=closeSettingsFn;
+settingsModal.onclick=e=>{if(e.target===settingsModal)closeSettingsFn()};
+saveSettings.onclick=async()=>{
+  marketApiBase=normalizeApiBase(apiBaseInput.value);
+  saveTextSafe("marketApiBase",marketApiBase);
+  closeSettingsFn();
+  await refreshLiveData(false);
+};
+refreshData.onclick=async()=>{await refreshLiveData(false)};
+
 function openModal(){addModal.classList.add("show")}
 function closeModalFn(){addModal.classList.remove("show")}
 if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
@@ -656,7 +909,7 @@ saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
   if(!ticker||!date||!(shares>0)||!(cost>=0)){alert("Enter ticker, date, shares and cost/share.");return}
   lots.push({ticker,date,shares,cost}); saveLotsSafe();
-  closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome();
+  closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome(); if(marketApiBase)refreshLiveData(true);
 };
 
 
@@ -675,18 +928,18 @@ function openHoldingDetail(ticker){
   const received = tickerDivReceived(ticker);
   const capital = p.mv - p.bv;
   const total = capital + received;
-  const pricePrefix = p.currency==="USD" ? "US$" : "$";
+  const pricePrefix = "$";
 
   document.getElementById("detailTicker").textContent = p.ticker;
   document.getElementById("detailTitle").textContent = p.title;
-  document.getElementById("detailPrice").textContent = pricePrefix + p.price.toFixed(2);
+  document.getElementById("detailPrice").textContent = fmt(toCAD(p.price,p.currency));
 
   const todayEl = document.getElementById("detailToday");
   todayEl.textContent = (p.today>=0?"+":"-") + fmt(Math.abs(p.today)) + " today (" + pct(p.todayPct) + ")";
   todayEl.className = "detailToday " + (p.today>=0 ? "pos" : "neg");
 
   document.getElementById("detailShares").textContent = p.shares.toLocaleString();
-  document.getElementById("detailAvg").textContent = pricePrefix + p.avg.toFixed(4);
+  document.getElementById("detailAvg").textContent = fmt(toCAD(p.avg,p.currency));
   document.getElementById("detailMV").textContent = fmt(p.mv);
   document.getElementById("detailBV").textContent = fmt(p.bv);
 
@@ -706,9 +959,9 @@ function openHoldingDetail(ticker){
     <div class="lotRow">
       <div>
         <div class="lotDate">${new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
-        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${pricePrefix}${Number(l.cost).toFixed(4)}</div>
+        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}</div>
       </div>
-      <div class="lotCost">${pricePrefix}${(Number(l.shares)*Number(l.cost)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="lotCost">${fmt(toCAD(Number(l.shares)*Number(l.cost),p.currency))}</div>
     </div>
   `).join("") || `<div style="padding:18px;color:var(--muted)">No lots found.</div>`;
 
@@ -733,9 +986,17 @@ document.addEventListener("click", function(e){
   }
 }, false);
 
+if(marketApiBase && loadMarketCache()){
+  const tm=liveUpdatedAt?new Date(liveUpdatedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"cached";
+  setMarketStatus("live",`Cached market data · ${tm}`);
+  if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · cached`;
+}
 renderHome();
 bindHoldingRows();
 renderDividends("1M");
+if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Demo data · connect market data in Settings");}
+setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&marketApiBase)refreshLiveData(true)});
 
 /* v1.8 iOS zoom lock */
 (function () {
