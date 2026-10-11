@@ -140,6 +140,32 @@ body{touch-action:pan-y;}
 .divChartOuter,.monthStrip{touch-action:pan-x;}
 input,button{touch-action:manipulation;}
 
+
+/* v2.0 holding detail */
+.row[data-ticker]{cursor:pointer}
+.row[data-ticker]:active{background:#f1f1ef}
+.detailHero{padding:8px 20px 18px}
+.detailTicker{font-size:14px;color:var(--muted);font-weight:800;letter-spacing:.2px}
+.detailTitle{font-size:22px;font-weight:850;margin-top:4px;line-height:1.2}
+.detailPrice{font-size:44px;font-weight:900;letter-spacing:-1.2px;margin-top:22px}
+.detailToday{font-size:18px;font-weight:800;margin-top:6px}
+.detailToday.pos{color:var(--green)}
+.detailToday.neg{color:var(--red)}
+.detailGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px 10px}
+.detailCard{background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
+.detailCard .label{font-size:12px;color:var(--muted);font-weight:750}
+.detailCard .value{font-size:20px;font-weight:850;margin-top:5px}
+.detailSection{padding:12px 20px 0}
+.detailSection h2{margin:0 0 10px;font-size:22px}
+.lotList{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+.lotRow{display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px;border-bottom:1px solid var(--line)}
+.lotRow:last-child{border-bottom:0}
+.lotDate{font-weight:800}
+.lotMeta{font-size:13px;color:var(--muted);margin-top:4px}
+.lotCost{text-align:right;font-weight:850}
+.detailActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 20px 24px}
+.secondaryBtn{border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;font-weight:800}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -226,23 +252,23 @@ input,button{touch-action:manipulation;}
         <div class="hdr"><div>Stock</div><div>Shares</div><div>Price</div><div>Today</div></div>
         
 <div id="holdingsRows">
-  <div class="row">
+  <div class="row" data-ticker="MSTE.TO">
     <div class="stock"><div class="logo" style="background:#141414">M</div><div style="min-width:0"><div class="ticker">MSTE.TO</div><div class="title">Purpose MSTR Yield Shares ETF</div></div></div>
     <div class="num">22,000</div><div class="num">$2.87</div><div class="num today neg">-$979.00<span class="pct">-1.53%</span></div>
   </div>
-  <div class="row">
+  <div class="row" data-ticker="HHIS.TO">
     <div class="stock"><div class="logo" style="background:#173a86">H</div><div style="min-width:0"><div class="ticker">HHIS.TO</div><div class="title">Harvest Diversified High Income Shares ETF</div></div></div>
     <div class="num">488</div><div class="num">$11.99</div><div class="num today neg">-$13.66<span class="pct">-0.23%</span></div>
   </div>
-  <div class="row">
+  <div class="row" data-ticker="SHPE.TO">
     <div class="stock"><div class="logo" style="background:#6f2ac6">S</div><div style="min-width:0"><div class="ticker">SHPE.TO</div><div class="title">Purpose S&amp;P 500 Yield Shares ETF</div></div></div>
     <div class="num">472</div><div class="num">$8.85</div><div class="num today neg">-$92.04<span class="pct">-2.16%</span></div>
   </div>
-  <div class="row">
+  <div class="row" data-ticker="BGY.TO">
     <div class="stock"><div class="logo" style="background:#19a66c">B</div><div style="min-width:0"><div class="ticker">BGY.TO</div><div class="title">Brompton Global Dividend Growth ETF</div></div></div>
     <div class="num">223</div><div class="num">$16.96</div><div class="num today pos">+$6.69<span class="pct">+0.18%</span></div>
   </div>
-  <div class="row">
+  <div class="row" data-ticker="HBTE.NE">
     <div class="stock"><div class="logo" style="background:#d22d38">H</div><div style="min-width:0"><div class="ticker">HBTE.NE</div><div class="title">Harvest Bitcoin Enhanced High Income ETF</div></div></div>
     <div class="num">219</div><div class="num">$16.50</div><div class="num today neg">-$129.21<span class="pct">-3.45%</span></div>
   </div>
@@ -271,6 +297,43 @@ input,button{touch-action:manipulation;}
     <div class="payments">
       <h2 id="payHeading">Past 1 month dividends</h2>
       <div id="paymentRows"></div>
+    </div>
+  </section>
+
+
+  <section id="detailView" class="view">
+    <div class="topbar">
+      <button class="iconbtn" id="detailBackBtn" aria-label="back">‹</button>
+      <h1>Holding</h1>
+      <div style="width:44px"></div>
+    </div>
+
+    <div class="detailHero">
+      <div class="detailTicker" id="detailTicker">MSTE.TO</div>
+      <div class="detailTitle" id="detailTitle">Purpose MSTR Yield Shares ETF</div>
+      <div class="detailPrice" id="detailPrice">$2.87</div>
+      <div class="detailToday pos" id="detailToday">+$0.00 today (+0.00%)</div>
+    </div>
+
+    <div class="detailGrid">
+      <div class="detailCard"><div class="label">Shares</div><div class="value" id="detailShares">0</div></div>
+      <div class="detailCard"><div class="label">Average cost</div><div class="value" id="detailAvg">$0.00</div></div>
+      <div class="detailCard"><div class="label">Market value</div><div class="value" id="detailMV">$0</div></div>
+      <div class="detailCard"><div class="label">Book value</div><div class="value" id="detailBV">$0</div></div>
+      <div class="detailCard"><div class="label">Capital gain/loss</div><div class="value" id="detailCapital">$0</div></div>
+      <div class="detailCard"><div class="label">Total return incl. dividends</div><div class="value" id="detailTotal">$0</div></div>
+      <div class="detailCard"><div class="label">Monthly dividend</div><div class="value" id="detailMonthlyDiv">$0</div></div>
+      <div class="detailCard"><div class="label">Annual dividend</div><div class="value" id="detailAnnualDiv">$0</div></div>
+    </div>
+
+    <div class="detailSection">
+      <h2>Lots</h2>
+      <div class="lotList" id="detailLots"></div>
+    </div>
+
+    <div class="detailActions">
+      <button class="secondaryBtn" id="detailAddLotBtn">+ Add lot</button>
+      <button class="secondaryBtn" id="detailHomeBtn">Back to portfolio</button>
     </div>
   </section>
 
@@ -435,7 +498,7 @@ function renderHome(){
   holdingCount.textContent=ps.length+" holdings";
 
   holdingsRows.innerHTML=ps.map(p=>`
-    <div class="row">
+    <div class="row" data-ticker="${p.ticker}">
       <div class="stock">
         <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
         <div style="min-width:0">
@@ -458,6 +521,7 @@ function renderHome(){
     </div>`).join("");
 
   renderLineChart(mv,total);
+  bindHoldingRows();
 }
 
 function renderLineChart(mv,total){
@@ -581,6 +645,9 @@ document.querySelectorAll("#divRanges button").forEach(b=>b.onclick=()=>{
 document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showView(b.dataset.nav));
 incomeCard.onclick=()=>showView("div");
 backBtn.onclick=()=>showView("home");
+document.getElementById("detailBackBtn").onclick=()=>showView("home");
+document.getElementById("detailHomeBtn").onclick=()=>showView("home");
+document.getElementById("detailAddLotBtn").onclick=()=>{ if(currentDetailTicker) document.getElementById("fTicker").value=currentDetailTicker; openModal(); };
 function openModal(){addModal.classList.add("show")}
 function closeModalFn(){addModal.classList.remove("show")}
 if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
@@ -592,7 +659,73 @@ saveLot.onclick=()=>{
   closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome();
 };
 
+
+let currentDetailTicker = null;
+
+function tickerDivReceived(ticker){
+  return divPayments.filter(x=>x.ticker===ticker).reduce((s,x)=>s+x.amount,0);
+}
+
+function openHoldingDetail(ticker){
+  const ps = positions();
+  const p = ps.find(x=>x.ticker===ticker);
+  if(!p) return;
+
+  currentDetailTicker = ticker;
+  const received = tickerDivReceived(ticker);
+  const capital = p.mv - p.bv;
+  const total = capital + received;
+  const pricePrefix = p.currency==="USD" ? "US$" : "$";
+
+  document.getElementById("detailTicker").textContent = p.ticker;
+  document.getElementById("detailTitle").textContent = p.title;
+  document.getElementById("detailPrice").textContent = pricePrefix + p.price.toFixed(2);
+
+  const todayEl = document.getElementById("detailToday");
+  todayEl.textContent = (p.today>=0?"+":"-") + fmt(Math.abs(p.today)) + " today (" + pct(p.todayPct) + ")";
+  todayEl.className = "detailToday " + (p.today>=0 ? "pos" : "neg");
+
+  document.getElementById("detailShares").textContent = p.shares.toLocaleString();
+  document.getElementById("detailAvg").textContent = pricePrefix + p.avg.toFixed(4);
+  document.getElementById("detailMV").textContent = fmt(p.mv);
+  document.getElementById("detailBV").textContent = fmt(p.bv);
+
+  const capEl = document.getElementById("detailCapital");
+  capEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital));
+  capEl.style.color = capital>=0 ? "var(--green)" : "var(--red)";
+
+  const totalEl = document.getElementById("detailTotal");
+  totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total));
+  totalEl.style.color = total>=0 ? "var(--green)" : "var(--red)";
+
+  document.getElementById("detailMonthlyDiv").textContent = fmt(p.annual/12);
+  document.getElementById("detailAnnualDiv").textContent = fmt(p.annual);
+
+  const tickerLots = lots.filter(l=>l.ticker===ticker).sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById("detailLots").innerHTML = tickerLots.map(l=>`
+    <div class="lotRow">
+      <div>
+        <div class="lotDate">${new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
+        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${pricePrefix}${Number(l.cost).toFixed(4)}</div>
+      </div>
+      <div class="lotCost">${pricePrefix}${(Number(l.shares)*Number(l.cost)).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+    </div>
+  `).join("") || `<div style="padding:18px;color:var(--muted)">No lots found.</div>`;
+
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("detailView").classList.add("active");
+  document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
+  window.scrollTo(0,0);
+}
+
+function bindHoldingRows(){
+  document.querySelectorAll(".row[data-ticker]").forEach(row=>{
+    row.onclick = () => openHoldingDetail(row.dataset.ticker);
+  });
+}
+
 renderHome();
+bindHoldingRows();
 renderDividends("1M");
 
 /* v1.8 iOS zoom lock */
