@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <style>
 :root{
@@ -129,6 +129,24 @@ button,input{font:inherit}
 .hero,.section,.metrics,.chartWrap,.topbar,.divHeader,.payments{max-width:100%}
 .lineChart,.holdings,.incomeCard,.metric{min-width:0}
 img,svg,canvas{max-width:100%}
+
+
+/* v1.8 stronger iPhone zoom lock */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+body, .app, .view, .lineChart, .incomeCard, .holdings, .bottom {
+  touch-action: pan-y;
+}
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
 
 </style>
 </head>
@@ -586,6 +604,41 @@ renderDividends("1M");
   Preview mode: charts and holdings are visible, but interactive controls require opening this file in Safari/Chrome or hosting it as a web app.
 </div>
 </noscript>
+
+
+<script>
+/* v1.8: block iOS Safari pinch and double-tap zoom */
+(function () {
+  function stopGesture(e) {
+    e.preventDefault();
+  }
+
+  document.addEventListener("gesturestart", stopGesture, { passive: false });
+  document.addEventListener("gesturechange", stopGesture, { passive: false });
+  document.addEventListener("gestureend", stopGesture, { passive: false });
+
+  document.addEventListener("touchmove", function (e) {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", function (e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // Keep accidental keyboard/text zoom from happening on form fields.
+  document.querySelectorAll("input, select, textarea").forEach(function (el) {
+    const size = parseFloat(getComputedStyle(el).fontSize || "16");
+    if (size < 16) el.style.fontSize = "16px";
+  });
+})();
+</script>
 
 </body>
 </html>
