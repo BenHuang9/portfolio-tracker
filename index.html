@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.0 Lots can be deleted from Holding detail -->
+<!-- v4.1 Interactive chart scrub: drag across chart to inspect historical portfolio values -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -555,6 +555,41 @@ input,button{touch-action:manipulation;}
   transform:scale(.97);
 }
 
+
+/* v4.1 interactive portfolio chart */
+.lineChart{
+  touch-action:pan-y;
+  user-select:none;
+  -webkit-user-select:none;
+}
+.chartScrubInfo{
+  display:none;
+  margin:0 20px 4px;
+  min-height:38px;
+}
+.chartScrubInfo.show{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}
+.chartScrubDate{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:750;
+}
+.chartScrubValue{
+  margin-top:2px;
+  font-size:17px;
+  font-weight:900;
+}
+.chartScrubHint{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:700;
+  text-align:right;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -586,6 +621,14 @@ input,button{touch-action:manipulation;}
 
     <div class="seg" id="portfolioRanges">
       <button>1D</button><button>1W</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button class="active">ALL</button>
+    </div>
+
+    <div class="chartScrubInfo" id="chartScrubInfo">
+      <div>
+        <div class="chartScrubDate" id="chartScrubDate"></div>
+        <div class="chartScrubValue" id="chartScrubValue"></div>
+      </div>
+      <div class="chartScrubHint">Portfolio Value</div>
     </div>
 
     <div class="chartWrap">
@@ -1168,26 +1211,123 @@ function renderHome(){
 
 function renderLineChart(data,total){
   const w=520,h=220,pad=8;
-  let vals;
-  if(Array.isArray(data) && data.length>1){
-    vals=data.map(x=>Number(x.value)).filter(Number.isFinite);
-  }else{
+  if(!Array.isArray(data) || data.length<2){
     lineChart.innerHTML=`<div class="emptyChart">${lots.length ? "Loading portfolio history…" : "Add your first holding to start tracking your portfolio."}</div>`;
+    if(chartScrubInfo)chartScrubInfo.classList.remove("show");
     return;
   }
-  let min=Math.min(...vals),max=Math.max(...vals); if(max===min){max=min+1}
-  const d=vals.map((v,i)=>{
-    const x=pad+i*(w-pad*2)/(vals.length-1);
-    const y=h-pad-(v-min)/(max-min)*(h-pad*2);
-    return `${i?"L":"M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-  }).join(" ");
+
+  const cleanData=data
+    .map(x=>({time:Number(x.time),value:Number(x.value)}))
+    .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.value));
+
+  if(cleanData.length<2){
+    lineChart.innerHTML=`<div class="emptyChart">Portfolio history unavailable.</div>`;
+    return;
+  }
+
+  const vals=cleanData.map(x=>x.value);
+  let min=Math.min(...vals),max=Math.max(...vals);
+  if(max===min){max=min+1}
+
+  const pointXY=cleanData.map((p,i)=>({
+    ...p,
+    x:pad+i*(w-pad*2)/(cleanData.length-1),
+    y:h-pad-(p.value-min)/(max-min)*(h-pad*2)
+  }));
+
+  const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+
   lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5fa467" stop-opacity=".25"/><stop offset="100%" stop-color="#5fa467" stop-opacity="0"/></linearGradient></defs>
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#5fa467" stop-opacity=".25"/>
+        <stop offset="100%" stop-color="#5fa467" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     <path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>
     <path d="${d}" fill="none" stroke="#5fa467" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
 
+    <g id="chartCrosshair" style="display:none;pointer-events:none">
+      <line id="chartVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
+      <line id="chartHLine" x1="${pad}" x2="${w-pad}" y1="0" y2="0" stroke="#a7aaa8" stroke-width="1" stroke-dasharray="4 4"/>
+      <circle id="chartPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#5fa467" stroke-width="3"/>
+    </g>
+  </svg>`;
+
+  const svg=lineChart.querySelector("svg");
+  const cross=svg.querySelector("#chartCrosshair");
+  const vLine=svg.querySelector("#chartVLine");
+  const hLine=svg.querySelector("#chartHLine");
+  const dot=svg.querySelector("#chartPoint");
+
+  let scrubbing=false;
+  let lastIndex=-1;
+
+  // Save the normal header so it can be restored when the user lifts their finger.
+  const normalPortfolioValue=portfolioValue.textContent;
+  const normalPortfolioGain=portfolioGain.textContent;
+  const normalPortfolioGainColor=portfolioGain.style.color;
+
+  function formatScrubDate(sec){
+    const d=new Date(sec*1000);
+    if(currentPortfolioRange==="1D"){
+      return d.toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    }
+    return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
+  }
+
+  function selectAtClientX(clientX){
+    const rect=lineChart.getBoundingClientRect();
+    if(!rect.width)return;
+    let ratio=(clientX-rect.left)/rect.width;
+    ratio=Math.max(0,Math.min(1,ratio));
+    const idx=Math.max(0,Math.min(pointXY.length-1,Math.round(ratio*(pointXY.length-1))));
+    const p=pointXY[idx];
+
+    vLine.setAttribute("x1",p.x); vLine.setAttribute("x2",p.x);
+    hLine.setAttribute("y1",p.y); hLine.setAttribute("y2",p.y);
+    dot.setAttribute("cx",p.x); dot.setAttribute("cy",p.y);
+    cross.style.display="";
+
+    const dateText=formatScrubDate(p.time);
+    chartScrubDate.textContent=dateText;
+    chartScrubValue.textContent=fmt(p.value);
+    chartScrubInfo.classList.add("show");
+
+    // Same feel as Wealthsimple: the main portfolio value follows the selected point.
+    portfolioValue.textContent=fmt(p.value);
+    portfolioGain.textContent=dateText;
+    portfolioGain.style.color="var(--muted)";
+
+    lastIndex=idx;
+  }
+
+  function endScrub(){
+    if(!scrubbing)return;
+    scrubbing=false;
+    cross.style.display="none";
+    chartScrubInfo.classList.remove("show");
+    portfolioValue.textContent=normalPortfolioValue;
+    portfolioGain.textContent=normalPortfolioGain;
+    portfolioGain.style.color=normalPortfolioGainColor;
+    lastIndex=-1;
+  }
+
+  lineChart.onpointerdown=e=>{
+    if(e.pointerType==="mouse" && e.button!==0)return;
+    scrubbing=true;
+    try{lineChart.setPointerCapture(e.pointerId)}catch(_){}
+    selectAtClientX(e.clientX);
+  };
+  lineChart.onpointermove=e=>{
+    if(!scrubbing)return;
+    selectAtClientX(e.clientX);
+  };
+  lineChart.onpointerup=endScrub;
+  lineChart.onpointercancel=endScrub;
+  lineChart.onlostpointercapture=endScrub;
+}
 function monthlySeries(range){
   const now=new Date(); const year=now.getFullYear();
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
