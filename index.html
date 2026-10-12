@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.14 2026 accounting history import -->
+<!-- v5.15 Transaction UI polish + direct month picker -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1810,6 +1810,111 @@ body.manualDetailOpen{padding-bottom:0!important}
   .ledgerDay{min-height:49px}
 }
 
+
+/* v5.15 Transactions UI polish */
+.ledgerMonthPickerWrap{
+  position:relative;
+  min-width:0;
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  border-radius:14px;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.ledgerMonthPickerWrap:active{
+  background:#ececea;
+}
+.ledgerPeriodLabelButton{
+  display:block;
+  pointer-events:none;
+}
+.ledgerMonthChevron{
+  color:var(--muted);
+  font-size:16px;
+  font-weight:900;
+  line-height:1;
+  transform:translateY(-1px);
+  pointer-events:none;
+}
+.ledgerMonthNative{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  border:0;
+  padding:0;
+  margin:0;
+  cursor:pointer;
+  z-index:2;
+}
+.ledgerMonthNative::-webkit-calendar-picker-indicator{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+
+.ledgerRowMain{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:3px;
+}
+.ledgerRowTitle{
+  display:block;
+  width:100%;
+  font-size:14px;
+  font-weight:850;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.ledgerRowMeta{
+  display:block;
+  width:100%;
+  margin-top:0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.25;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.ledgerRow{
+  min-height:66px;
+}
+.ledgerAmount{
+  align-self:center;
+}
+.ledgerView,.statsView{
+  padding-bottom:calc(138px + env(safe-area-inset-bottom))!important;
+}
+.ledgerListHead{
+  margin-top:2px;
+}
+@media(max-width:430px){
+  .ledgerRow{
+    grid-template-columns:40px minmax(0,1fr) auto;
+    gap:9px;
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .ledgerRowTitle{font-size:13.5px}
+  .ledgerRowMeta{font-size:9.5px}
+  .ledgerAmount{font-size:13.5px}
+  .ledgerMonthPickerWrap{min-height:44px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -2044,7 +2149,11 @@ body.manualDetailOpen{padding-bottom:0!important}
 
     <div class="ledgerPeriodNav">
       <button class="ledgerPeriodBtn" id="txPrevMonth" aria-label="Previous month">‹</button>
-      <div class="ledgerPeriodLabel" id="txMonthLabel">—</div>
+      <label class="ledgerMonthPickerWrap" aria-label="Choose transaction month">
+        <span class="ledgerPeriodLabel ledgerPeriodLabelButton" id="txMonthLabel">—</span>
+        <span class="ledgerMonthChevron" aria-hidden="true">⌄</span>
+        <input class="ledgerMonthNative" id="txMonthPicker" type="month"/>
+      </label>
       <button class="ledgerPeriodBtn" id="txNextMonth" aria-label="Next month">›</button>
     </div>
 
@@ -2576,6 +2685,7 @@ var statsView=document.getElementById("statsView");
 var txPrevMonth=document.getElementById("txPrevMonth");
 var txNextMonth=document.getElementById("txNextMonth");
 var txMonthLabel=document.getElementById("txMonthLabel");
+var txMonthPicker=document.getElementById("txMonthPicker");
 var txMonthIncome=document.getElementById("txMonthIncome");
 var txMonthExpense=document.getElementById("txMonthExpense");
 var txMonthNet=document.getElementById("txMonthNet");
@@ -4725,6 +4835,10 @@ function renderLedgerCalendar(){
 function renderTransactions(){
   if(!transactionsView)return;
   txMonthLabel.textContent=monthLabel(ledgerMonth);
+  if(txMonthPicker){
+    txMonthPicker.value=ledgerMonth;
+    txMonthPicker.max=localDateISO().slice(0,7);
+  }
   const monthRows=txRowsForMonth(ledgerMonth);
   const totals=txTotals(monthRows);
   txMonthIncome.textContent=fmt(totals.income);
@@ -4739,7 +4853,7 @@ function renderTransactions(){
 
   ledgerListTitle.textContent=ledgerSelectedDay
     ? parseLocalDate(ledgerSelectedDay).toLocaleDateString("en-CA",{weekday:"long",month:"long",day:"numeric"})
-    : "This month";
+    : (ledgerMonth===localDateISO().slice(0,7)?"This month":monthLabel(ledgerMonth));
   ledgerClearDay.style.display=ledgerSelectedDay?"block":"none";
 
   if(!rows.length){
@@ -5438,6 +5552,14 @@ if(deleteTransaction)deleteTransaction.onclick=deleteCurrentTransaction;
 if(ledgerClearDay)ledgerClearDay.onclick=()=>{ledgerSelectedDay=null;renderTransactions()};
 if(txPrevMonth)txPrevMonth.onclick=()=>{ledgerMonth=shiftMonth(ledgerMonth,-1);ledgerSelectedDay=null;renderTransactions()};
 if(txNextMonth)txNextMonth.onclick=()=>{ledgerMonth=shiftMonth(ledgerMonth,1);ledgerSelectedDay=null;renderTransactions()};
+if(txMonthPicker)txMonthPicker.onchange=()=>{
+  const ym=String(txMonthPicker.value||"");
+  if(/^\d{4}-\d{2}$/.test(ym)){
+    ledgerMonth=ym;
+    ledgerSelectedDay=null;
+    renderTransactions();
+  }
+};
 if(statsMode)statsMode.querySelectorAll("[data-stats-mode]").forEach(b=>b.onclick=()=>{
   statsCurrentMode=b.dataset.statsMode;
   renderStats();
