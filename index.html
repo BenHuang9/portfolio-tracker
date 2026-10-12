@@ -785,6 +785,216 @@ body.chartScrubbing{
   .metric .value{font-size:16px}
 }
 
+
+/* v5.6 unified visual system */
+:root{
+  --accent:#159447;
+  --accent-soft:#e7f4ea;
+  --accent-strong:#11783a;
+  --bg:#f6f6f4;
+  --card:#ffffff;
+  --text:#111111;
+  --muted:#777a7f;
+  --line:#e6e6e2;
+  --green:var(--accent);
+  --blue:var(--accent);
+}
+
+/* Positive/income/accent states use one green across every view. */
+.subgain,
+.holdingMetric .value.income,
+.holdingMetric .value.received,
+.holdingReturnValue.pos,
+.holdingReturnPct.pos,
+.detailToday.pos,
+.today.pos{
+  color:var(--accent)!important;
+}
+.progress > div,
+.monthMini .bar{
+  background:var(--accent)!important;
+}
+.divChart .bar,
+.barItem .bar{
+  background:linear-gradient(180deg,#39a961,var(--accent))!important;
+}
+.marketStatus.live{
+  background:var(--accent-soft)!important;
+  color:var(--accent-strong)!important;
+}
+
+/* Neutral action styling is the same in Add Lot, Holding and Settings. */
+.primary{
+  background:#111!important;
+  color:#fff!important;
+}
+.secondaryBtn,
+.ghostBtn{
+  color:#111!important;
+  background:#fff!important;
+  border-color:var(--line)!important;
+}
+.secondaryBtn:active,
+.ghostBtn:active{
+  background:#f1f1ef!important;
+}
+
+/* Settings organization */
+.settingsSectionTitle{
+  margin:14px 0 2px;
+  font-size:13px;
+  font-weight:850;
+  letter-spacing:.02em;
+  color:var(--text);
+}
+.settingsGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+#settingsModal .field{
+  margin:10px 0;
+}
+#settingsModal .field label{
+  color:var(--muted);
+  font-weight:750;
+}
+#settingsModal .field input{
+  font-variant-numeric:tabular-nums;
+}
+
+/* Summary cards stay fully centered. */
+.metrics .metric,
+.metrics .metric .label,
+.metrics .metric .value{
+  text-align:center!important;
+}
+.metrics .metric{
+  align-items:center!important;
+}
+
+/* Keep the app palette consistent inside charts. */
+.chartScrubHint,
+.chartScrubDate{
+  color:var(--muted);
+}
+
+@media(max-width:430px){
+  .settingsGrid{grid-template-columns:1fr 1fr;gap:8px}
+}
+
+
+/* v5.7 semantic palette
+   Inspired by the user's preferred dashboard:
+   teal = positive/annual income
+   orange = current/monthly income & prices
+   purple = received dividend/yield
+   red = negative movement
+   blue-purple = progress/accent
+*/
+:root{
+  --teal:#2fc89e;
+  --teal-deep:#199675;
+  --orange:#e89a2d;
+  --purple:#9957e8;
+  --red:#e14a55;
+  --blue:#5d79e6;
+
+  --green:var(--teal);
+  --accent:var(--teal);
+  --accent-strong:var(--teal-deep);
+  --accent-soft:#e7f7f1;
+}
+
+/* Portfolio / return semantics */
+.subgain,
+#retMetric,
+.holdingReturnValue.pos,
+.holdingReturnPct.pos,
+.detailToday.pos,
+.today.pos{
+  color:var(--teal)!important;
+}
+.detailToday.neg,
+.today.neg,
+.holdingReturnValue.neg,
+.holdingReturnPct.neg{
+  color:var(--red)!important;
+}
+
+/* Summary cards */
+#yieldMetric{
+  color:var(--purple)!important;
+}
+
+/* Home dividend card */
+#ytdReceived{
+  color:var(--purple)!important;
+}
+#monthReceived{
+  color:var(--orange)!important;
+}
+#annualIncome{
+  color:var(--teal)!important;
+}
+#monthlyIncome{
+  color:var(--orange)!important;
+}
+
+/* Holding details */
+#detailPrice{
+  color:var(--orange)!important;
+}
+#detailMonthlyDividend,
+.holdingMetric .value.income{
+  color:var(--orange)!important;
+}
+#detailDividendReceived,
+.holdingMetric .value.received{
+  color:var(--purple)!important;
+}
+
+/* Dividend page */
+#divTotal{
+  color:var(--purple)!important;
+}
+.divChart .bar,
+.barItem .bar{
+  background:linear-gradient(180deg,#b56ef2,var(--purple))!important;
+}
+
+/* Income progress keeps the blue-purple accent from the preferred dashboard. */
+.progress > div{
+  background:linear-gradient(90deg,var(--blue),var(--purple))!important;
+}
+.monthMini .bar{
+  background:var(--teal)!important;
+}
+
+/* Chart line remains teal for portfolio growth. */
+.lineChart path[stroke]{
+  stroke:var(--teal)!important;
+}
+.lineChart circle{
+  stroke:var(--teal)!important;
+}
+
+/* Status pill follows the same teal family. */
+.marketStatus.live{
+  background:#e8f7f1!important;
+  color:var(--teal-deep)!important;
+}
+.statusDot{
+  background:var(--teal)!important;
+}
+
+/* Destructive actions stay red; neutral actions stay black/white. */
+.deleteLot,
+.danger,
+.dangerBtn{
+  color:var(--red)!important;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1035,6 +1245,20 @@ body.chartScrubbing{
 <div class="modal" id="settingsModal">
   <div class="sheet">
     <div class="sheetHead"><h2>Settings</h2><button class="close" id="closeSettings">×</button></div>
+    <div class="settingsSectionTitle">Account</div>
+    <div class="settingsGrid">
+      <div class="field">
+        <label>Cash Balance (CAD)</label>
+        <input id="accountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="406.21"/>
+      </div>
+      <div class="field">
+        <label>Net Deposits (CAD)</label>
+        <input id="netDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="30250.00"/>
+      </div>
+    </div>
+    <div class="settingsNote">Portfolio Value includes cash. Total Return uses Portfolio Value − Net Deposits, matching the account-level calculation shown by Wealthsimple.</div>
+
+    <div class="settingsSectionTitle">Market Data</div>
     <div class="field">
       <label>Market Data API</label>
       <input id="apiBaseInput" type="url" autocapitalize="off" autocomplete="off" placeholder="https://your-worker.workers.dev"/>
@@ -1089,6 +1313,8 @@ var settingsBtn=document.getElementById("settingsBtn");
 var navSettings=document.getElementById("navSettings");
 var settingsModal=document.getElementById("settingsModal");
 var closeSettings=document.getElementById("closeSettings");
+var accountCashInput=document.getElementById("accountCashInput");
+var netDepositsInput=document.getElementById("netDepositsInput");
 var apiBaseInput=document.getElementById("apiBaseInput");
 var saveSettings=document.getElementById("saveSettings");
 var refreshData=document.getElementById("refreshData");
@@ -1123,6 +1349,23 @@ const demoDivPayments = [];
 let divPayments = [];
 
 let lots = loadLotsSafe() || [];
+
+function loadNumberSetting(key, fallback){
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw===null || raw==="")return fallback;
+    const n=Number(raw);
+    return Number.isFinite(n)?n:fallback;
+  }catch(e){return fallback}
+}
+function saveNumberSetting(key,value){
+  try{localStorage.setItem(key,String(value))}catch(e){}
+}
+
+// Current account values from Wealthsimple; editable in Settings.
+// They are intentionally separate from holdings so cash does not distort Book Value or Yield.
+let accountCash = loadNumberSetting("portfolioAccountCashCAD",406.21);
+let netDeposits = loadNumberSetting("portfolioNetDepositsCAD",30250.00);
 function syncDateDisplay(){
   if(fDateDisplay) fDateDisplay.textContent = fDate.value || "YYYY-MM-DD";
 }
@@ -1520,9 +1763,11 @@ async function loadPortfolioHistory(label){
     if(currentPortfolioRange==="ALL"){
       const ps=positions();
       const mv=ps.reduce((s,p)=>s+p.mv,0);
+      const accountValue=mv+Number(accountCash||0);
       const bv=ps.reduce((s,p)=>s+p.bv,0);
       const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
-      const total=(mv-bv)+divAll;
+      const holdingsTotal=(mv-bv)+divAll;
+      const total=netDeposits>0 ? accountValue-netDeposits : holdingsTotal;
       portfolioGain.textContent=signedMoney(total)+" all time";
       portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
     }else{
@@ -1636,7 +1881,7 @@ async function loadPortfolioHistory(label){
 
     if(growthPoints.length<2 || !(growth>0))return;
 
-    const currentMV=positions().reduce((s,p)=>s+p.mv,0);
+    const currentMV=positions().reduce((s,p)=>s+p.mv,0)+Number(accountCash||0);
 
     // Convert the TWR growth path into a dollar-valued performance line that ends at
     // the current holdings market value. This makes the shape comparable to a broker
@@ -1695,11 +1940,13 @@ function positions(){
 function renderHome(){
   const ps=positions().sort((a,b)=>a.ticker.localeCompare(b.ticker, undefined, {numeric:true, sensitivity:"base"}));
   const mv=ps.reduce((s,p)=>s+p.mv,0);
+  const accountValue=mv+Number(accountCash||0);
   const bv=ps.reduce((s,p)=>s+p.bv,0);
   const capital=mv-bv;
   const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
-  const total=capital+divAll;
-  const totalPct=bv?total/bv*100:0;
+  const holdingsTotal=capital+divAll;
+  const total=netDeposits>0 ? accountValue-netDeposits : holdingsTotal;
+  const totalPct=netDeposits>0 ? total/netDeposits*100 : (bv?total/bv*100:0);
   const annual=ps.reduce((s,p)=>s+p.annual,0);
   const monthly=annual/12;
   const yieldPct=mv?annual/mv*100:0;
@@ -1707,7 +1954,7 @@ function renderHome(){
   const ytd=divPayments.filter(x=>x.date.startsWith(y+"-")).reduce((s,p)=>s+p.amount,0);
   const october=divPayments.filter(x=>x.date.startsWith(ym)).reduce((s,p)=>s+p.amount,0);
 
-  portfolioValue.textContent=fmt(mv);
+  portfolioValue.textContent=fmt(accountValue);
   if(currentPortfolioRange==="ALL"){
     portfolioGain.textContent=signedMoney(total)+" all time";
     portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
@@ -1783,17 +2030,17 @@ function renderLineChart(data,total){
   lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#5fa467" stop-opacity=".25"/>
-        <stop offset="100%" stop-color="#5fa467" stop-opacity="0"/>
+        <stop offset="0%" stop-color="#159447" stop-opacity=".25"/>
+        <stop offset="100%" stop-color="#159447" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>
-    <path d="${d}" fill="none" stroke="#5fa467" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="#159447" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 
     <g id="chartCrosshair" style="display:none;pointer-events:none">
       <line id="chartVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
       <line id="chartHLine" x1="${pad}" x2="${w-pad}" y1="0" y2="0" stroke="#a7aaa8" stroke-width="1" stroke-dasharray="4 4"/>
-      <circle id="chartPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#5fa467" stroke-width="3"/>
+      <circle id="chartPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#159447" stroke-width="3"/>
     </g>
   </svg>`;
 
@@ -2057,6 +2304,8 @@ document.getElementById("detailHomeBtn").onclick=()=>showView("home");
 document.getElementById("detailAddLotBtn").onclick=()=>{ if(currentDetailTicker) document.getElementById("fTicker").value=currentDetailTicker; openModal(); };
 
 function openSettings(){
+  if(accountCashInput)accountCashInput.value=Number(accountCash||0).toFixed(2);
+  if(netDepositsInput)netDepositsInput.value=Number(netDeposits||0).toFixed(2);
   apiBaseInput.value=DEFAULT_MARKET_API;
   apiBaseInput.readOnly=true;
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
@@ -2068,8 +2317,18 @@ if(navSettings)navSettings.onclick=openSettings;
 if(closeSettings)closeSettings.onclick=closeSettingsFn;
 settingsModal.onclick=e=>{if(e.target===settingsModal)closeSettingsFn()};
 saveSettings.onclick=async()=>{
+  const nextCash=Number(accountCashInput?.value||0);
+  const nextDeposits=Number(netDepositsInput?.value||0);
+  accountCash=Number.isFinite(nextCash)?Math.max(0,nextCash):0;
+  netDeposits=Number.isFinite(nextDeposits)?Math.max(0,nextDeposits):0;
+  saveNumberSetting("portfolioAccountCashCAD",accountCash);
+  saveNumberSetting("portfolioNetDepositsCAD",netDeposits);
+
   marketApiBase=DEFAULT_MARKET_API;
   try{localStorage.removeItem("marketApiBase")}catch(e){}
+
+  chartCache.clear();
+  renderHome();
   closeSettingsFn();
   await refreshLiveData(false);
 };
