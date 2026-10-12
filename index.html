@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.5 Holding detail redesigned as a compact position card; Home unchanged -->
+<!-- v3.6 Holding detail adds Stock Return excluding dividends; Home unchanged -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -461,6 +461,15 @@ input,button{touch-action:manipulation;}
 .holdingReturnValue.pos,.holdingReturnPct.pos{color:var(--green)}
 .holdingReturnValue.neg,.holdingReturnPct.neg{color:var(--red)}
 
+
+/* v3.6 return breakdown */
+.holdingReturnStack{display:block}
+.holdingReturnInnerDivider{
+  height:1px;
+  background:var(--line);
+  margin:13px 0;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -614,10 +623,20 @@ input,button{touch-action:manipulation;}
 
       <div class="holdingDivider"></div>
 
-      <div class="holdingReturnRow">
-        <div class="label">Total Return</div>
-        <div class="holdingReturnValue" id="detailTotal">$0</div>
-        <div class="holdingReturnPct" id="detailTotalPct">+0.00% Incl. Dividends</div>
+      <div class="holdingReturnStack">
+        <div class="holdingReturnRow">
+          <div class="label">Stock Return</div>
+          <div class="holdingReturnValue" id="detailStockReturn">$0</div>
+          <div class="holdingReturnPct" id="detailStockReturnPct">+0.00% Excl. Dividends</div>
+        </div>
+
+        <div class="holdingReturnInnerDivider"></div>
+
+        <div class="holdingReturnRow">
+          <div class="label">Total Return</div>
+          <div class="holdingReturnValue" id="detailTotal">$0</div>
+          <div class="holdingReturnPct" id="detailTotalPct">+0.00% Incl. Dividends</div>
+        </div>
       </div>
     </div>
 
@@ -1387,6 +1406,14 @@ function openHoldingDetail(ticker){
   document.getElementById("detailAvg").textContent = fmt(toCAD(p.avg,p.currency));
   document.getElementById("detailMV").textContent = fmt(p.mv);
   document.getElementById("detailBV").textContent = fmt(p.bv);
+
+  const stockReturnEl = document.getElementById("detailStockReturn");
+  const stockReturnPct = p.bv ? capital / p.bv * 100 : 0;
+  const stockReturnPctEl = document.getElementById("detailStockReturnPct");
+  stockReturnEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital));
+  stockReturnEl.className = "holdingReturnValue " + (capital>=0 ? "pos" : "neg");
+  stockReturnPctEl.textContent = pct(stockReturnPct) + " Excl. Dividends";
+  stockReturnPctEl.className = "holdingReturnPct " + (capital>=0 ? "pos" : "neg");
 
   const totalEl = document.getElementById("detailTotal");
   const totalPct = p.bv ? total / p.bv * 100 : 0;
