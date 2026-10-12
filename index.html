@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16.5 Category detail group-by-note toggle -->
+<!-- v5.17 Stats spending + income overview with visible monthly amounts -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2748,6 +2748,122 @@ html,body{
 .categoryNoteAmount.expense{color:var(--red)}
 .categoryNoteAmount.income{color:var(--green)}
 
+
+/* v5.17 Stats yearly overview */
+.statsYearOverviewSection{
+  padding-top:9px!important;
+}
+.statsTrendCard{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:16px;
+  box-shadow:0 5px 16px rgba(0,0,0,.025);
+}
+.statsTrendHero{
+  padding-bottom:14px;
+  border-bottom:1px solid var(--line);
+}
+.statsTrendEyebrow{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.statsTrendHighest{
+  margin-top:5px;
+  font-size:15px;
+  font-weight:900;
+  line-height:1.3;
+}
+.expenseTrendCard .statsTrendHighest strong{color:var(--red)}
+.incomeTrendCard .statsTrendHighest strong{color:var(--green)}
+.statsTrendMetrics{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  margin-top:12px;
+}
+.statsTrendMetric{
+  background:#f7f7f5;
+  border-radius:15px;
+  padding:11px 12px;
+  min-width:0;
+}
+.statsTrendMetric .label{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.035em;
+}
+.statsTrendMetric .value{
+  margin-top:4px;
+  font-size:14px;
+  font-weight:900;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+.statsMonthBreakdown{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:14px;
+}
+.statsMonthTile{
+  min-width:0;
+  background:#fafaf8;
+  border:1px solid #eeeeea;
+  border-radius:14px;
+  padding:10px;
+}
+.statsMonthTileTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.statsMonthTileMonth{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.statsMonthTileValue{
+  min-width:0;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+.expenseTrendCard .statsMonthTileValue{color:#c94349}
+.incomeTrendCard .statsMonthTileValue{color:#16875f}
+.statsMonthMiniTrack{
+  height:5px;
+  margin-top:7px;
+  background:#eceeeb;
+  border-radius:99px;
+  overflow:hidden;
+}
+.statsMonthMiniFill{
+  height:100%;
+  min-width:2px;
+  border-radius:99px;
+}
+.expenseTrendCard .statsMonthMiniFill{background:#e57272}
+.incomeTrendCard .statsMonthMiniFill{background:#46b982}
+.statsMonthTile.zero .statsMonthMiniFill{width:0!important;min-width:0}
+.statsMonthTile.zero .statsMonthTileValue{color:#a6a8aa}
+@media(max-width:360px){
+  .statsMonthBreakdown{grid-template-columns:1fr}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3034,9 +3150,14 @@ html,body{
       <div class="ledgerSummaryCard net"><div class="label">Net</div><div class="value" id="statsNet">$0</div></div>
     </div>
 
-    <div class="statsSection" id="statsYearTrendSection" style="display:none">
-      <div class="statsSectionHead"><h2>Monthly spending</h2><span id="statsYearTrendTotal"></span></div>
-      <div class="statsCard"><div class="statsYearMonths" id="statsYearMonths"></div></div>
+    <div class="statsSection statsYearOverviewSection" id="statsYearTrendSection" style="display:none">
+      <div class="statsSectionHead"><h2>Spending overview</h2><span id="statsYearTrendTotal"></span></div>
+      <div class="statsTrendCard expenseTrendCard" id="statsExpenseTrendCard"></div>
+    </div>
+
+    <div class="statsSection statsYearOverviewSection" id="statsIncomeTrendSection" style="display:none">
+      <div class="statsSectionHead"><h2>Income overview</h2><span id="statsIncomeTrendTotal"></span></div>
+      <div class="statsTrendCard incomeTrendCard" id="statsIncomeTrendCard"></div>
     </div>
 
     <div class="statsSection">
@@ -3592,7 +3713,10 @@ var statsExpenseCount=document.getElementById("statsExpenseCount");
 var statsIncomeCount=document.getElementById("statsIncomeCount");
 var statsYearTrendSection=document.getElementById("statsYearTrendSection");
 var statsYearTrendTotal=document.getElementById("statsYearTrendTotal");
-var statsYearMonths=document.getElementById("statsYearMonths");
+var statsExpenseTrendCard=document.getElementById("statsExpenseTrendCard");
+var statsIncomeTrendSection=document.getElementById("statsIncomeTrendSection");
+var statsIncomeTrendTotal=document.getElementById("statsIncomeTrendTotal");
+var statsIncomeTrendCard=document.getElementById("statsIncomeTrendCard");
 var transactionModal=document.getElementById("transactionModal");
 var transactionModalTitle=document.getElementById("transactionModalTitle");
 var closeTransactionModal=document.getElementById("closeTransactionModal");
@@ -6061,6 +6185,64 @@ function openCategoryDetail(type,category){
 }
 function closeCategoryDetailFn(){categoryDetailModal.classList.remove("show")}
 
+
+function yearMonthStats(year,type){
+  return Array.from({length:12},(_,i)=>{
+    const ym=`${year}-${String(i+1).padStart(2,"0")}`;
+    const rows=ledgerTransactions.filter(t=>t.date.startsWith(ym) && t.type===type);
+    const value=rows.reduce((s,t)=>s+transactionAmountCAD(t),0);
+    return {month:i,ym,value,count:rows.length};
+  });
+}
+function statsAverageMonthDivisor(year){
+  const now=new Date();
+  const currentYear=now.getFullYear();
+  if(year<currentYear)return 12;
+  if(year>currentYear)return 12;
+  return Math.max(1,now.getMonth()+1);
+}
+function renderYearTrendCard(container,year,type){
+  if(!container)return;
+  const months=yearMonthStats(year,type);
+  const total=months.reduce((s,m)=>s+m.value,0);
+  const count=months.reduce((s,m)=>s+m.count,0);
+  const divisor=statsAverageMonthDivisor(year);
+  const average=total/divisor;
+  const highest=months.reduce((best,m)=>m.value>best.value?m:best,months[0]||{month:0,value:0});
+  const max=Math.max(...months.map(m=>m.value),1);
+  const highMonthName=new Date(year,highest.month,1).toLocaleDateString("en-CA",{month:"long"});
+  const label=type==="expense"?"spending":"income";
+
+  container.innerHTML=`
+    <div class="statsTrendHero">
+      <div class="statsTrendEyebrow">Highest monthly ${label}</div>
+      <div class="statsTrendHighest">${highMonthName} · <strong>${fmt(highest.value)}</strong></div>
+      <div class="statsTrendMetrics">
+        <div class="statsTrendMetric">
+          <div class="label">Average / month</div>
+          <div class="value">${fmt(average)}</div>
+        </div>
+        <div class="statsTrendMetric">
+          <div class="label">Transactions</div>
+          <div class="value">${count.toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+    <div class="statsMonthBreakdown">
+      ${months.map(m=>{
+        const monthName=new Date(year,m.month,1).toLocaleDateString("en-CA",{month:"short"});
+        const width=m.value>0?Math.max(3,(m.value/max)*100):0;
+        return `<div class="statsMonthTile ${m.value===0?"zero":""}">
+          <div class="statsMonthTileTop">
+            <span class="statsMonthTileMonth">${monthName}</span>
+            <span class="statsMonthTileValue">${fmt(m.value)}</span>
+          </div>
+          <div class="statsMonthMiniTrack"><div class="statsMonthMiniFill" style="width:${width.toFixed(1)}%"></div></div>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
 function renderStats(){
   if(!statsView)return;
   statsMode.querySelectorAll("[data-stats-mode]").forEach(b=>b.classList.toggle("active",b.dataset.statsMode===statsCurrentMode));
@@ -6079,19 +6261,14 @@ function renderStats(){
   renderCategoryStats(statsExpenseCategories,rows,"expense");
   renderCategoryStats(statsIncomeCategories,rows,"income");
 
-  statsYearTrendSection.style.display=statsCurrentMode==="year"?"block":"none";
-  if(statsCurrentMode==="year"){
-    const months=Array.from({length:12},(_,i)=>{
-      const ym=`${statsYear}-${String(i+1).padStart(2,"0")}`;
-      const t=txTotals(ledgerTransactions.filter(x=>x.date.startsWith(ym)));
-      return {month:i,value:t.expense};
-    });
-    const max=Math.max(...months.map(x=>x.value),1);
+  const yearMode=statsCurrentMode==="year";
+  statsYearTrendSection.style.display=yearMode?"block":"none";
+  statsIncomeTrendSection.style.display=yearMode?"block":"none";
+  if(yearMode){
     statsYearTrendTotal.textContent=`${fmt(totals.expense)} total`;
-    statsYearMonths.innerHTML=months.map(m=>`<div class="statsMonthBarWrap">
-      <div class="statsMonthBar" style="height:${Math.max(2,m.value/max*110).toFixed(1)}px"></div>
-      <div class="statsMonthLabel">${new Date(2026,m.month,1).toLocaleDateString("en-CA",{month:"short"}).slice(0,1)}</div>
-    </div>`).join("");
+    statsIncomeTrendTotal.textContent=`${fmt(totals.income)} total`;
+    renderYearTrendCard(statsExpenseTrendCard,statsYear,"expense");
+    renderYearTrendCard(statsIncomeTrendCard,statsYear,"income");
   }
 }
 
