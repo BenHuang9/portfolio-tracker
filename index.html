@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.8 Home Holdings sorted A-Z and centered by column -->
+<!-- v3.9 Home Holdings aligned with fixed grid tracks -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -471,27 +471,60 @@ input,button{touch-action:manipulation;}
 }
 
 
-/* v3.8 Center Home Holdings columns */
-.holdings .thead > div{
-  text-align:center !important;
+/* v3.9 Home Holdings alignment */
+.holdings .hdr,
+.holdings .row{
+  grid-template-columns:minmax(0,1.75fr) .62fr .82fr 1fr;
+  column-gap:6px;
+  padding-left:12px;
+  padding-right:24px; /* reserve space for chevron */
 }
-.holdings .row > div{
-  text-align:center !important;
+
+/* Header labels sit cleanly over their columns. */
+.holdings .hdr > div{
+  text-align:center;
 }
+.holdings .hdr > div:first-child{
+  text-align:left;
+  padding-left:50px; /* aligns STOCK with ticker text, not the logo */
+}
+
+/* Keep every stock row on the same left edge. */
 .holdings .stock{
-  justify-content:center !important;
-  text-align:left !important;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  justify-content:stretch;
+  min-width:0;
+  text-align:left;
 }
 .holdings .stock > div:last-child{
-  text-align:left !important;
+  min-width:0;
+  text-align:left;
 }
+
+/* Numeric columns are truly centered inside fixed grid tracks. */
 .holdings .num{
-  justify-self:center !important;
-  text-align:center !important;
+  width:100%;
+  justify-self:stretch;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
 }
 .holdings .today{
-  justify-self:center !important;
-  text-align:center !important;
+  width:100%;
+  justify-self:stretch;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.holdings .today .pct{
+  text-align:center;
+}
+
+/* Prevent small width changes from making rows look jagged. */
+.holdings .ticker,
+.holdings .title{
+  text-align:left;
 }
 
 </style>
