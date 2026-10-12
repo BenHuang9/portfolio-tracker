@@ -4,7 +4,7 @@
 //   1) Official fund issuer pages for supported Harvest / Purpose ETFs
 //   2) Alpha Vantage corporate actions
 //   3) Yahoo ex-date fallback
-// v5.0: Adds official payment-date sources for Purpose Cboe (.NE), Hamilton HYLD, Vanguard VFV, and Evolve BANK.
+// v5.2: Evolve BANK now uses Evolve's monthly distribution announcements, which contain the real ex-date/pay-date pair.
 // Purpose history is supplemented from official monthly distribution announcements so YTD includes older payments.
 // ALPHAVANTAGE_API_KEY is stored as a Cloudflare Worker Secret.
 
@@ -76,8 +76,12 @@ function parseFlexibleDate(v){
   if(m)return `${m[3]}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
   m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
   if(m){const y=Number(m[3])>=70?1900+Number(m[3]):2000+Number(m[3]);return `${y}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}
-  m=s.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})$/i);
-  if(m){const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};return `${m[3]}-${String(months[m[1].toLowerCase()]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}
+  m=s.match(/^(January|February|March|April|May|June|July|August|September|Sept|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})$/i);
+  if(m){
+    const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    const key=m[1].slice(0,3).toLowerCase();
+    return `${m[3]}-${String(months[key]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  }
   return null;
 }
 function extractDateTokens(text){
@@ -329,11 +333,116 @@ async function vanguardDividendHistory(symbol){
   if(!dividends.length)return null;
   return {providerSymbol:ticker,source:"Vanguard official",sourceUrl:url,dividends};
 }
+function evolveMonthlyAnnouncementUrls(monthsBack=15){
+  const names=["january","february","march","april","may","june","july","august","september","october","november","december"];
+  const now=new Date();
+  const urls=[];
+  for(let i=0;i<monthsBack;i++){
+    const d=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-i,1));
+    const year=d.getUTCFullYear();
+    const month=names[d.getUTCMonth()];
+    urls.push(`https://evolveetfs.com/${year}/${String(d.getUTCMonth()+1).padStart(2,"0")}/evolve-announces-${month}-${year}-distributions-for-ultrayield-etfs-and-certain-evolve-funds/`);
+  }
+  return urls;
+}
+
+function extractEvolveFundAnnouncementRow(html,ticker){
+  const pageText=rowText(html);
+  const namedDate="(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},?\\s+\\d{4}";
+
+  // Evolve's "Evolve Funds" table usually contains only ticker + amount.
+  // The exact ex-date and payment date are stated in the paragraph immediately above the table.
+  const exRe=new RegExp(
+    `For the Distributions for all other Evolve Funds[\\s\\S]{0,450}?ex-dividend date and record date is anticipated to be (${namedDate})`,
+    "i"
+  );
+  const payRe=new RegExp(
+    `Unitholders of Evolve Funds on record date will receive cash distributions payable on or about (${namedDate})`,
+    "i"
+  );
+
+  const exMatch=pageText.match(exRe);
+  const payMatch=pageText.match(payRe);
+  if(!exMatch || !payMatch)return null;
+
+  const exDate=parseFlexibleDate(exMatch[1]);
+  const paymentDate=parseFlexibleDate(payMatch[1]);
+  if(!exDate || !paymentDate)return null;
+
+  const rows=String(html||"").match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[];
+  const tickerRe=new RegExp(`(?:^|\\s)${escapeRegex(ticker)}(?:\\s|$)`,"i");
+
+  for(const rawRow of rows){
+    const text=rowText(rawRow);
+    if(!tickerRe.test(text))continue;
+
+    // Look after the ticker so we don't accidentally capture a number from the fund name.
+    const tickerPos=text.toUpperCase().indexOf(ticker.toUpperCase());
+    const tail=tickerPos>=0?text.slice(tickerPos+ticker.length):text;
+    const amountMatch=tail.match(/\$\s*([0-9]+(?:\.[0-9]+)?)/);
+    if(!amountMatch)continue;
+
+    const amount=Number(amountMatch[1]);
+    if(!(amount>0))continue;
+
+    return {
+      exDate,
+      paymentDate,
+      declarationDate:null,
+      recordDate:exDate,
+      amount,
+      paymentDateEstimated:false
+    };
+  }
+  return null;
+}
+
+async function evolveAnnouncementDividendHistory(ticker){
+  const rows=[];
+  let usedPages=0;
+  const urls=evolveMonthlyAnnouncementUrls(15);
+
+  for(const url of urls){
+    try{
+      const html=await fetchOfficialHtml(url);
+      if(!html)continue;
+      const row=extractEvolveFundAnnouncementRow(html,ticker);
+      if(row){
+        rows.push(row);
+        usedPages++;
+      }
+    }catch(e){
+      console.warn("Evolve monthly announcement lookup failed",ticker,url,String(e?.message||e));
+    }
+  }
+
+  return {
+    dividends:uniqueByDividendKey(rows),
+    usedPages
+  };
+}
+
 async function evolveDividendHistory(symbol){
   if(!symbol.endsWith(".TO"))return null;
   const ticker=baseTicker(symbol);
   const url=EVOLVE_FUND_URLS[ticker];
   if(!url)return null;
+
+  // The BANK product page does not expose its history as a normal 3-date HTML table.
+  // Evolve's official monthly announcements do expose the exact ex-date, pay date and amount.
+  const announcementHistory=await evolveAnnouncementDividendHistory(ticker);
+  if(announcementHistory.dividends.length){
+    return {
+      providerSymbol:ticker,
+      source:"Evolve official",
+      sourceUrl:url,
+      historySourceUrl:"https://evolveetfs.com/news/",
+      officialAnnouncementPages:announcementHistory.usedPages,
+      dividends:announcementHistory.dividends
+    };
+  }
+
+  // Keep the product-page parser as a future-compatible fallback.
   const html=await fetchOfficialHtml(url);
   if(!html)return null;
   const dividends=extractThreeDateDistributionRows(html);
@@ -440,7 +549,7 @@ export default {
         dividendSource:"Official issuer history, then Alpha Vantage, then Yahoo fallback",
         officialFundSources:["Harvest Portfolios","Purpose Investments","Hamilton ETFs","Vanguard Canada","Evolve ETFs"],
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
-        dividendCache:"v5.0 official/exact responses cached; Yahoo fallback is not cached"
+        dividendCache:"v5.2 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }
 
@@ -483,7 +592,7 @@ export default {
       // Versioned cache key prevents older fallback/estimated-payment data from being reused.
       // Only exact payment-date responses (official issuer or Alpha) are cached here.
       const cache=caches.default;
-      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v50/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
+      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v52/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
       const cached=await cache.match(cacheKey);
       if(cached){
         const h=new Headers(cached.headers);
