@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.15 Transaction UI polish + direct month picker -->
+<!-- v5.16 Quick accounting + category note memory + category drilldown -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1915,6 +1915,324 @@ body.manualDetailOpen{padding-bottom:0!important}
   .ledgerMonthPickerWrap{min-height:44px}
 }
 
+
+/* v5.16 quick accounting */
+#transactionModal{
+  align-items:flex-end;
+}
+#transactionModal .quickTxSheet{
+  height:calc(100dvh - 44px);
+  max-height:calc(100dvh - 44px);
+  padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+  border-radius:28px 28px 0 0;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.quickTxHead{
+  position:sticky;
+  top:-14px;
+  z-index:8;
+  background:#fff;
+  padding:10px 0 8px;
+  margin-bottom:10px;
+}
+.quickTxHead h2{font-size:24px}
+.quickAmountCard{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:5px;
+  padding:8px 8px 14px;
+}
+.quickAmountCurrency{
+  font-size:25px;
+  font-weight:900;
+  color:var(--muted);
+}
+#txAmount{
+  width:min(280px,78vw);
+  padding:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  text-align:center;
+  font-size:46px;
+  line-height:1.05;
+  font-weight:950;
+  letter-spacing:-1.7px;
+  color:var(--text);
+  font-variant-numeric:tabular-nums;
+}
+#txAmount::placeholder{color:#c6c7c8}
+.quickSectionHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:4px 2px 9px;
+  font-size:13px;
+  font-weight:900;
+}
+.quickSectionHint{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:750;
+}
+.quickCategoryGrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:13px;
+}
+.quickCategoryBtn{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:16px;
+  min-height:65px;
+  padding:8px 4px 7px;
+  color:var(--text);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+}
+.quickCategoryBtn:active{background:#f3f3f1}
+.quickCategoryBtn.active{
+  border-color:#111;
+  background:#111;
+  color:#fff;
+}
+.quickCategoryIcon{
+  width:27px;
+  height:27px;
+  border-radius:9px;
+  display:grid;
+  place-items:center;
+  background:#efefed;
+  color:#111;
+  font-size:12px;
+  font-weight:950;
+}
+.quickCategoryBtn.active .quickCategoryIcon{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+}
+.quickCategoryName{
+  width:100%;
+  font-size:9px;
+  font-weight:850;
+  line-height:1.05;
+  text-align:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.quickNoteHead{margin-top:4px}
+.quickNoteChips{
+  display:flex;
+  gap:7px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  padding:0 0 9px;
+}
+.quickNoteChips::-webkit-scrollbar{display:none}
+.quickNoteChip{
+  flex:0 0 auto;
+  border:1px solid var(--line);
+  background:#f5f5f3;
+  color:var(--text);
+  border-radius:999px;
+  min-height:34px;
+  padding:7px 12px;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.quickNoteChip.active{
+  background:#111;
+  color:#fff;
+  border-color:#111;
+}
+.quickNoteEmpty{
+  color:var(--muted);
+  font-size:11px;
+  padding:8px 2px 10px;
+}
+.quickNoteInput{
+  width:100%;
+  border:1px solid #cfd1d4;
+  background:#fff;
+  border-radius:14px;
+  padding:12px 13px;
+  font-size:15px;
+  color:var(--text);
+}
+.quickMetaGrid{
+  display:grid;
+  grid-template-columns:1.35fr .9fr;
+  gap:9px;
+  margin-top:3px;
+}
+.quickField{margin:10px 0}
+.quickField label{
+  display:block;
+  font-size:11px;
+  font-weight:850;
+  margin-bottom:6px;
+}
+.quickField select,.quickField input{
+  width:100%;
+  min-height:45px;
+  padding:10px 11px;
+  border:1px solid #cfd1d4;
+  border-radius:13px;
+  background:#fff;
+  font-size:13px;
+  color:var(--text);
+}
+.quickTransferGrid{grid-template-columns:1fr 1fr}
+.quickKeypad{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin:10px 0 9px;
+}
+.quickKeypad button{
+  border:0;
+  background:#f1f1ef;
+  border-radius:14px;
+  min-height:48px;
+  font-size:21px;
+  font-weight:850;
+  color:var(--text);
+}
+.quickKeypad button:active{background:#dfdfdc}
+.quickSaveBtn{
+  position:sticky;
+  bottom:0;
+  z-index:7;
+  min-height:51px;
+  margin-top:4px;
+  box-shadow:0 -8px 18px rgba(255,255,255,.92);
+}
+#txTransferFields{
+  display:block;
+}
+#txTransferFields.txHidden{display:none!important}
+
+/* Stats category rows are now tappable. */
+.categoryRowButton{
+  width:100%;
+  border:0;
+  background:transparent;
+  padding:0;
+  margin:0 0 15px;
+  text-align:left;
+  color:var(--text);
+}
+.categoryRowButton:last-child{margin-bottom:0}
+.categoryRowButton .categoryTop{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto 16px;
+  gap:9px;
+  align-items:center;
+}
+.categoryRowChevron{
+  color:#aaa;
+  font-size:18px;
+  font-weight:700;
+}
+
+/* Category detail */
+#categoryDetailModal{align-items:flex-end}
+.categoryDetailSheet{
+  height:min(88dvh,760px);
+  max-height:88dvh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.categoryDetailHead{
+  position:sticky;
+  top:-18px;
+  z-index:5;
+  background:#fff;
+  padding-top:15px;
+}
+.categoryDetailEyebrow{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  margin-bottom:3px;
+}
+.categoryDetailTotal{
+  font-size:38px;
+  font-weight:950;
+  letter-spacing:-1px;
+  margin-top:4px;
+}
+.categoryDetailCount{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:750;
+  margin-top:3px;
+}
+.categoryDetailBars{
+  display:flex;
+  align-items:flex-end;
+  gap:7px;
+  height:145px;
+  margin:24px 0 18px;
+  padding:0 4px 22px;
+  border-bottom:1px solid var(--line);
+}
+.categoryDetailBarCol{
+  flex:1;
+  min-width:0;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  align-items:center;
+  gap:5px;
+}
+.categoryDetailBar{
+  width:100%;
+  max-width:26px;
+  min-height:2px;
+  background:#111;
+  border-radius:7px 7px 2px 2px;
+}
+.categoryDetailBarLabel{
+  position:absolute;
+  transform:translateY(19px);
+  font-size:8px;
+  color:var(--muted);
+  font-weight:800;
+}
+.categoryDetailTransactions .ledgerDayGroup{
+  margin-left:0;
+  margin-right:0;
+}
+.categoryDetailTransactions .ledgerRow{
+  grid-template-columns:40px minmax(0,1fr) auto;
+}
+
+@media(max-width:430px){
+  #transactionModal .quickTxSheet{
+    height:calc(100dvh - 32px);
+    max-height:calc(100dvh - 32px);
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .quickCategoryGrid{gap:6px}
+  .quickCategoryBtn{min-height:60px;border-radius:14px}
+  .quickCategoryName{font-size:8.5px}
+  #txAmount{font-size:42px}
+  .quickKeypad button{min-height:45px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -2504,8 +2822,8 @@ body.manualDetailOpen{padding-bottom:0!important}
 
 
 <div class="modal" id="transactionModal">
-  <div class="sheet">
-    <div class="sheetHead">
+  <div class="sheet quickTxSheet">
+    <div class="sheetHead quickTxHead">
       <h2 id="transactionModalTitle">Add Transaction</h2>
       <button class="close" id="closeTransactionModal">×</button>
     </div>
@@ -2516,45 +2834,86 @@ body.manualDetailOpen{padding-bottom:0!important}
       <button type="button" data-tx-type="transfer">Transfer</button>
     </div>
 
-    <div class="field">
-      <label>Amount</label>
-      <input id="txAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"/>
-    </div>
-
-    <div class="field">
-      <label>Date</label>
-      <input id="txDate" type="date"/>
+    <div class="quickAmountCard">
+      <div class="quickAmountCurrency">$</div>
+      <input id="txAmount" type="text" inputmode="none" readonly value="" placeholder="0.00" aria-label="Amount"/>
     </div>
 
     <div id="txNormalFields">
-      <div class="field">
-        <label>Category</label>
-        <select id="txCategory"></select>
+      <div class="quickSectionHead"><span>Category</span></div>
+      <select id="txCategory" class="txHidden" aria-hidden="true" tabindex="-1"></select>
+      <div class="quickCategoryGrid" id="txCategoryGrid"></div>
+
+      <div class="quickSectionHead quickNoteHead">
+        <span>Note</span>
+        <span class="quickSectionHint">Saved by category</span>
       </div>
-      <div class="field">
-        <label>Account</label>
-        <select id="txAccount"></select>
+      <div class="quickNoteChips" id="txNoteChips"></div>
+      <input class="quickNoteInput" id="txNote" autocomplete="off" placeholder="Optional note"/>
+
+      <div class="quickMetaGrid">
+        <div class="field quickField">
+          <label>Account</label>
+          <select id="txAccount"></select>
+        </div>
+        <div class="field quickField">
+          <label>Date</label>
+          <input id="txDate" type="date"/>
+        </div>
       </div>
     </div>
 
     <div class="txTransferFields txHidden" id="txTransferFields">
-      <div class="field">
-        <label>From</label>
-        <select id="txFromAccount"></select>
+      <div class="quickMetaGrid quickTransferGrid">
+        <div class="field quickField">
+          <label>From</label>
+          <select id="txFromAccount"></select>
+        </div>
+        <div class="field quickField">
+          <label>To</label>
+          <select id="txToAccount"></select>
+        </div>
       </div>
-      <div class="field">
-        <label>To</label>
-        <select id="txToAccount"></select>
+      <div class="field quickField">
+        <label>Date</label>
+        <input id="txTransferDateMirror" type="date"/>
       </div>
+      <input id="txTransferNoteMirror" class="quickNoteInput" autocomplete="off" placeholder="Optional transfer note"/>
     </div>
 
-    <div class="field">
-      <label>Note</label>
-      <input id="txNote" autocomplete="off" placeholder="Optional note"/>
+    <div class="quickKeypad" id="txKeypad" aria-label="Amount keypad">
+      <button type="button" data-key="1">1</button>
+      <button type="button" data-key="2">2</button>
+      <button type="button" data-key="3">3</button>
+      <button type="button" data-key="4">4</button>
+      <button type="button" data-key="5">5</button>
+      <button type="button" data-key="6">6</button>
+      <button type="button" data-key="7">7</button>
+      <button type="button" data-key="8">8</button>
+      <button type="button" data-key="9">9</button>
+      <button type="button" data-key=".">.</button>
+      <button type="button" data-key="0">0</button>
+      <button type="button" data-key="back" aria-label="Delete digit">⌫</button>
     </div>
 
-    <button class="primary" id="saveTransaction">Save Transaction</button>
+    <button class="primary quickSaveBtn" id="saveTransaction">Save Transaction</button>
     <button class="txDeleteBtn" id="deleteTransaction" type="button" style="display:none">Delete Transaction</button>
+  </div>
+</div>
+
+<div class="modal" id="categoryDetailModal">
+  <div class="sheet categoryDetailSheet">
+    <div class="sheetHead categoryDetailHead">
+      <div>
+        <div class="categoryDetailEyebrow" id="categoryDetailPeriod">—</div>
+        <h2 id="categoryDetailTitle">Category</h2>
+      </div>
+      <button class="close" id="closeCategoryDetail">×</button>
+    </div>
+    <div class="categoryDetailTotal" id="categoryDetailTotal">$0.00</div>
+    <div class="categoryDetailCount" id="categoryDetailCount">0 transactions</div>
+    <div class="categoryDetailBars" id="categoryDetailBars"></div>
+    <div class="categoryDetailTransactions" id="categoryDetailTransactions"></div>
   </div>
 </div>
 
@@ -2715,6 +3074,19 @@ var txTypeTabs=document.getElementById("txTypeTabs");
 var txAmount=document.getElementById("txAmount");
 var txDate=document.getElementById("txDate");
 var txCategory=document.getElementById("txCategory");
+var txCategoryGrid=document.getElementById("txCategoryGrid");
+var txNoteChips=document.getElementById("txNoteChips");
+var txKeypad=document.getElementById("txKeypad");
+var txTransferDateMirror=document.getElementById("txTransferDateMirror");
+var txTransferNoteMirror=document.getElementById("txTransferNoteMirror");
+var categoryDetailModal=document.getElementById("categoryDetailModal");
+var closeCategoryDetail=document.getElementById("closeCategoryDetail");
+var categoryDetailPeriod=document.getElementById("categoryDetailPeriod");
+var categoryDetailTitle=document.getElementById("categoryDetailTitle");
+var categoryDetailTotal=document.getElementById("categoryDetailTotal");
+var categoryDetailCount=document.getElementById("categoryDetailCount");
+var categoryDetailBars=document.getElementById("categoryDetailBars");
+var categoryDetailTransactions=document.getElementById("categoryDetailTransactions");
 var txAccount=document.getElementById("txAccount");
 var txNormalFields=document.getElementById("txNormalFields");
 var txTransferFields=document.getElementById("txTransferFields");
@@ -4674,6 +5046,117 @@ function categoryTotals(rows,type){
   return [...map.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
 }
 
+
+const CATEGORY_ICON_MAP={
+  "Food & Dining":"F",
+  "Groceries":"G",
+  "Shopping":"S",
+  "Auto":"A",
+  "Transportation":"T",
+  "Bills":"B",
+  "Home":"H",
+  "Entertainment":"E",
+  "Travel":"✈",
+  "Health":"+",
+  "Education":"E",
+  "Social":"S",
+  "Loaned Out":"L",
+  "Subscriptions":"S",
+  "Other":"…",
+  "Salary":"$",
+  "Bonus":"B",
+  "Overtime":"O",
+  "Refund":"R",
+  "Interest":"%",
+  "Other Income":"+"
+};
+function safeHtml(v){
+  return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+}
+function quickCategoryIcon(name){
+  return CATEGORY_ICON_MAP[name]||txCategoryInitial(name);
+}
+function noteHistoryForCategory(type,category,limit=10){
+  const seen=new Set();
+  const out=[];
+  ledgerTransactions
+    .filter(t=>t.type===type && t.category===category && String(t.note||"").trim())
+    .slice()
+    .sort((a,b)=>{
+      const d=String(b.date||"").localeCompare(String(a.date||""));
+      return d || (Number(b.createdAt||0)-Number(a.createdAt||0));
+    })
+    .forEach(t=>{
+      const note=String(t.note||"").trim();
+      const key=note.toLocaleLowerCase();
+      if(!seen.has(key)){
+        seen.add(key);
+        out.push(note);
+      }
+    });
+  return out.slice(0,limit);
+}
+function renderQuickCategoryGrid(){
+  if(!txCategoryGrid)return;
+  const rows=currentTransactionType==="income"?INCOME_CATEGORIES:EXPENSE_CATEGORIES;
+  const selected=txCategory.value||rows[0]||"";
+  txCategoryGrid.innerHTML=rows.map(name=>`
+    <button type="button" class="quickCategoryBtn ${name===selected?"active":""}" data-quick-category="${safeHtml(name)}">
+      <span class="quickCategoryIcon">${safeHtml(quickCategoryIcon(name))}</span>
+      <span class="quickCategoryName">${safeHtml(name)}</span>
+    </button>
+  `).join("");
+  txCategoryGrid.querySelectorAll("[data-quick-category]").forEach(btn=>btn.onclick=()=>{
+    txCategory.value=btn.dataset.quickCategory;
+    renderQuickCategoryGrid();
+    renderQuickNoteChips();
+  });
+}
+function renderQuickNoteChips(){
+  if(!txNoteChips)return;
+  if(currentTransactionType==="transfer"){
+    txNoteChips.innerHTML="";
+    return;
+  }
+  const notes=noteHistoryForCategory(currentTransactionType,txCategory.value,10);
+  const current=String(txNote.value||"").trim();
+  if(!notes.length){
+    txNoteChips.innerHTML='<div class="quickNoteEmpty">Your previous notes for this category will appear here.</div>';
+    return;
+  }
+  txNoteChips.innerHTML=notes.map(note=>`
+    <button type="button" class="quickNoteChip ${note===current?"active":""}" data-note="${safeHtml(note)}">${safeHtml(note)}</button>
+  `).join("");
+  txNoteChips.querySelectorAll("[data-note]").forEach(btn=>btn.onclick=()=>{
+    txNote.value=btn.dataset.note;
+    renderQuickNoteChips();
+  });
+}
+function setQuickAmountValue(next){
+  let s=String(next??"").replace(/[^\d.]/g,"");
+  const parts=s.split(".");
+  if(parts.length>2)s=parts.shift()+"."+parts.join("");
+  const dot=s.indexOf(".");
+  if(dot>=0)s=s.slice(0,dot+3);
+  s=s.replace(/^0+(?=\d)/,"");
+  if(s.startsWith("."))s="0"+s;
+  if(s.length>9)s=s.slice(0,9);
+  txAmount.value=s;
+}
+function quickAmountKey(key){
+  let cur=String(txAmount.value||"");
+  if(key==="back"){
+    setQuickAmountValue(cur.slice(0,-1));
+    return;
+  }
+  if(key==="."){
+    if(cur.includes("."))return;
+    setQuickAmountValue((cur||"0")+".");
+    return;
+  }
+  setQuickAmountValue(cur+String(key));
+}
+
 function populateTransactionAccounts(){
   const accounts=transactionAccounts();
   const options=accounts.map(a=>`<option value="${a.id}">${accountSelectLabel(a)}</option>`).join("");
@@ -4684,7 +5167,12 @@ function populateTransactionAccounts(){
 }
 function populateTransactionCategories(type){
   const rows=type==="income"?INCOME_CATEGORIES:EXPENSE_CATEGORIES;
-  txCategory.innerHTML=rows.map(x=>`<option value="${x}">${x}</option>`).join("");
+  const previous=txCategory.value;
+  txCategory.innerHTML=rows.map(x=>`<option value="${safeHtml(x)}">${safeHtml(x)}</option>`).join("");
+  if(previous && rows.includes(previous))txCategory.value=previous;
+  else if(rows.length)txCategory.value=rows[0];
+  renderQuickCategoryGrid();
+  renderQuickNoteChips();
 }
 function setTransactionType(type){
   currentTransactionType=["expense","income","transfer"].includes(type)?type:"expense";
@@ -4693,6 +5181,10 @@ function setTransactionType(type){
   txNormalFields.classList.toggle("txHidden",transfer);
   txTransferFields.classList.toggle("txHidden",!transfer);
   if(!transfer)populateTransactionCategories(currentTransactionType);
+  if(transfer){
+    txTransferDateMirror.value=txDate.value||localDateISO();
+    txTransferNoteMirror.value=txNote.value||"";
+  }
 }
 function openTransactionModal(id=null){
   const accounts=populateTransactionAccounts();
@@ -4706,7 +5198,7 @@ function openTransactionModal(id=null){
   transactionModalTitle.textContent=existing?"Edit Transaction":"Add Transaction";
   deleteTransaction.style.display=existing?"block":"none";
   setTransactionType(existing?.type||"expense");
-  txAmount.value=existing?Number(existing.amount).toFixed(2):"";
+  setQuickAmountValue(existing?Number(existing.amount).toFixed(2):"");
   txDate.value=existing?.date||ledgerSelectedDay||localDateISO();
   txDate.max=localDateISO();
   txNote.value=existing?.note||"";
@@ -4721,14 +5213,19 @@ function openTransactionModal(id=null){
       else{
         const opt=document.createElement("option");opt.value=existing.category;opt.textContent=existing.category;txCategory.appendChild(opt);txCategory.value=existing.category;
       }
+      renderQuickCategoryGrid();
+      renderQuickNoteChips();
     }
   }else{
     txAccount.value=accounts[0]?.id||"";
     txFromAccount.value=accounts[0]?.id||"";
     txToAccount.value=accounts[1]?.id||accounts[0]?.id||"";
   }
+  txTransferDateMirror.value=txDate.value||localDateISO();
+  txTransferNoteMirror.value=txNote.value||"";
+  renderQuickCategoryGrid();
+  renderQuickNoteChips();
   transactionModal.classList.add("show");
-  setTimeout(()=>txAmount.focus(),80);
 }
 function closeTransactionModalFn(){
   transactionModal.classList.remove("show");
@@ -4745,6 +5242,10 @@ function commitLedgerChange(){
 }
 function saveTransactionFromModal(){
   const amount=Math.abs(Number(txAmount.value));
+  if(currentTransactionType==="transfer"){
+    txDate.value=txTransferDateMirror.value||txDate.value;
+    txNote.value=txTransferNoteMirror.value||"";
+  }
   const date=txDate.value;
   if(!(amount>0)){alert("Enter an amount greater than 0.");return}
   if(!date){alert("Choose a date.");return}
@@ -4891,11 +5392,78 @@ function renderCategoryStats(container,rows,type){
   const cats=categoryTotals(rows,type);
   if(!cats.length){container.innerHTML='<div class="statsEmpty">No '+type+' transactions in this period.</div>';return}
   const max=Math.max(...cats.map(x=>x.value),1);
-  container.innerHTML=cats.map(c=>`<div class="categoryRow">
-    <div class="categoryTop"><div class="categoryName">${c.name}</div><div class="categoryValue">${fmt(c.value)}</div></div>
+  container.innerHTML=cats.map(c=>`<button type="button" class="categoryRowButton" data-category="${safeHtml(c.name)}" data-category-type="${type}">
+    <div class="categoryTop"><div class="categoryName">${safeHtml(c.name)}</div><div class="categoryValue">${fmt(c.value)}</div><div class="categoryRowChevron">›</div></div>
     <div class="categoryTrack"><div class="categoryFill ${type}" style="width:${Math.max(2,c.value/max*100).toFixed(1)}%"></div></div>
-  </div>`).join("");
+  </button>`).join("");
+  container.querySelectorAll("[data-category]").forEach(btn=>btn.onclick=()=>openCategoryDetail(btn.dataset.categoryType,btn.dataset.category));
 }
+
+function categoryDetailRows(type,category){
+  return periodRowsForStats()
+    .filter(t=>t.type===type && t.category===category)
+    .slice()
+    .sort((a,b)=>b.date.localeCompare(a.date)||(Number(b.createdAt)-Number(a.createdAt)));
+}
+function renderCategoryDetailTransactions(rows,type){
+  if(!rows.length){
+    categoryDetailTransactions.innerHTML='<div class="statsEmpty">No transactions in this category.</div>';
+    return;
+  }
+  const groups=new Map();
+  rows.forEach(t=>{if(!groups.has(t.date))groups.set(t.date,[]);groups.get(t.date).push(t)});
+  categoryDetailTransactions.innerHTML=[...groups.entries()].map(([date,items])=>{
+    const dayLabel=parseLocalDate(date).toLocaleDateString("en-CA",{weekday:"short",month:"short",day:"numeric"});
+    return `<div class="ledgerDayGroup">
+      <div class="ledgerDayHeader"><strong>${dayLabel}</strong></div>
+      <div class="ledgerRows">${items.map(t=>{
+        const cad=transactionAmountCAD(t);
+        const meta=`${safeHtml(transactionAccountDisplayName(t))}${t.note?` · ${safeHtml(t.note)}`:""}`;
+        const amount=type==="expense"?`−${fmt(cad)}`:`+${fmt(cad)}`;
+        return `<button class="ledgerRow" type="button" data-category-tx-id="${safeHtml(t.id)}">
+          <span class="ledgerIcon">${safeHtml(quickCategoryIcon(t.category))}</span>
+          <span class="ledgerRowMain"><span class="ledgerRowTitle">${safeHtml(t.category)}</span><span class="ledgerRowMeta">${meta}</span></span>
+          <span class="ledgerAmount ${type}">${amount}</span>
+        </button>`;
+      }).join("")}</div>
+    </div>`;
+  }).join("");
+  categoryDetailTransactions.querySelectorAll("[data-category-tx-id]").forEach(btn=>btn.onclick=()=>{
+    categoryDetailModal.classList.remove("show");
+    openTransactionModal(btn.dataset.categoryTxId);
+  });
+}
+function openCategoryDetail(type,category){
+  const rows=categoryDetailRows(type,category);
+  const total=rows.reduce((s,t)=>s+transactionAmountCAD(t),0);
+  categoryDetailTitle.textContent=category;
+  categoryDetailPeriod.textContent=statsCurrentMode==="month"?monthLabel(statsMonth):String(statsYear);
+  categoryDetailTotal.textContent=(type==="expense"?"−":"+")+fmt(total);
+  categoryDetailTotal.style.color=type==="expense"?"var(--red)":"var(--green)";
+  categoryDetailCount.textContent=`${rows.length} transaction${rows.length===1?"":"s"}`;
+
+  if(statsCurrentMode==="year"){
+    const months=Array.from({length:12},(_,i)=>{
+      const ym=`${statsYear}-${String(i+1).padStart(2,"0")}`;
+      const value=rows.filter(t=>t.date.startsWith(ym)).reduce((s,t)=>s+transactionAmountCAD(t),0);
+      return {i,value};
+    });
+    const max=Math.max(...months.map(x=>x.value),1);
+    categoryDetailBars.innerHTML=months.map(m=>`
+      <div class="categoryDetailBarCol">
+        <div class="categoryDetailBar" style="height:${Math.max(2,m.value/max*105).toFixed(1)}px"></div>
+        <div class="categoryDetailBarLabel">${new Date(2026,m.i,1).toLocaleDateString("en-CA",{month:"short"}).slice(0,1)}</div>
+      </div>`).join("");
+    categoryDetailBars.style.display="flex";
+  }else{
+    categoryDetailBars.style.display="none";
+    categoryDetailBars.innerHTML="";
+  }
+  renderCategoryDetailTransactions(rows,type);
+  categoryDetailModal.classList.add("show");
+}
+function closeCategoryDetailFn(){categoryDetailModal.classList.remove("show")}
+
 function renderStats(){
   if(!statsView)return;
   statsMode.querySelectorAll("[data-stats-mode]").forEach(b=>b.classList.toggle("active",b.dataset.statsMode===statsCurrentMode));
@@ -5541,6 +6109,14 @@ netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWo
 saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
 
+
+
+if(txKeypad)txKeypad.querySelectorAll("[data-key]").forEach(btn=>btn.onclick=()=>quickAmountKey(btn.dataset.key));
+if(txNote)txNote.addEventListener("input",renderQuickNoteChips);
+if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{txDate.value=txTransferDateMirror.value});
+if(txTransferNoteMirror)txTransferNoteMirror.addEventListener("input",()=>{txNote.value=txTransferNoteMirror.value});
+if(closeCategoryDetail)closeCategoryDetail.onclick=closeCategoryDetailFn;
+if(categoryDetailModal)categoryDetailModal.onclick=e=>{if(e.target===categoryDetailModal)closeCategoryDetailFn()};
 
 // v5.13 accounting interactions
 if(addTransactionBtn)addTransactionBtn.onclick=()=>openTransactionModal();
