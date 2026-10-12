@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.6 Remove snapshots + add icons cleanup -->
+<!-- v5.17.7 Hotfix restore Home rendering -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -3794,7 +3794,7 @@ var deleteTransaction=document.getElementById("deleteTransaction");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
 var netWorthReturn=document.getElementById("netWorthReturn");
-var netWorthPrincipal=document.getElementById("netWorthPrincipal");
+var netWorthPrincipalEl=document.getElementById("netWorthPrincipal");
 var netWorthScrubInfo=document.getElementById("netWorthScrubInfo");
 var netWorthScrubDate=document.getElementById("netWorthScrubDate");
 var netWorthScrubValue=document.getElementById("netWorthScrubValue");
@@ -6464,7 +6464,7 @@ function netWorthRowsForRange(range){
 function setNetWorthReturn(){
   if(!netWorthReturn)return;
   const principal=netWorthPrincipal();
-  if(netWorthPrincipal)netWorthPrincipal.textContent=fmt(principal.total);
+  if(netWorthPrincipalEl)netWorthPrincipalEl.textContent=fmt(principal.total);
   const totalReturn=currentNetWorthTotalReturn();
   if(!Number.isFinite(totalReturn)){
     netWorthReturn.textContent="— Total Return";
