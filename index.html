@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.4 Chart gesture fix: no layout jump, iOS gesture capture, smoother scrubbing -->
+<!-- v4.5 Chart scrub locks page scroll completely until finger release -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -592,6 +592,21 @@ input,button{touch-action:manipulation;}
   font-size:11px;
   font-weight:700;
   text-align:right;
+}
+
+
+/* v4.5 Freeze page while scrubbing chart */
+html.chartScrubbing,
+body.chartScrubbing{
+  overscroll-behavior:none;
+}
+body.chartScrubbing{
+  position:fixed;
+  left:0;
+  right:0;
+  width:100%;
+  overflow:hidden;
+  touch-action:none;
 }
 
 </style>
@@ -1278,6 +1293,21 @@ function renderLineChart(data,total){
   const dot=svg.querySelector("#chartPoint");
 
   let scrubbing=false;
+  let scrubScrollY=0;
+
+  function lockPageScroll(){
+    scrubScrollY=window.scrollY || window.pageYOffset || 0;
+    document.documentElement.classList.add("chartScrubbing");
+    document.body.classList.add("chartScrubbing");
+    document.body.style.top=`-${scrubScrollY}px`;
+  }
+
+  function unlockPageScroll(){
+    document.documentElement.classList.remove("chartScrubbing");
+    document.body.classList.remove("chartScrubbing");
+    document.body.style.top="";
+    window.scrollTo(0,scrubScrollY);
+  }
 
   function formatScrubDate(sec){
     const d=new Date(sec*1000);
@@ -1339,6 +1369,7 @@ function renderLineChart(data,total){
     chartScrubInfo.classList.remove("show");
     if(rafId){cancelAnimationFrame(rafId);rafId=0}
     pendingClientX=null;
+    unlockPageScroll();
   }
 
   let activePointerId=null;
@@ -1348,6 +1379,7 @@ function renderLineChart(data,total){
     if(activePointerId!==null)return;
     activePointerId=e.pointerId;
     scrubbing=true;
+    lockPageScroll();
     e.preventDefault();
     try{lineChart.setPointerCapture(e.pointerId)}catch(_){}
     applyScrub(e.clientX);
@@ -1810,6 +1842,17 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 }
+
+
+window.addEventListener("blur",()=>{
+  if(document.body.classList.contains("chartScrubbing")){
+    document.documentElement.classList.remove("chartScrubbing");
+    document.body.classList.remove("chartScrubbing");
+    const top=parseInt(document.body.style.top||"0",10);
+    document.body.style.top="";
+    if(Number.isFinite(top)) window.scrollTo(0,Math.abs(top));
+  }
+});
 
 </script>
 
