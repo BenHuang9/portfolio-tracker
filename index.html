@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.1 Category detail segmented view toggle -->
+<!-- v5.17.2 Single-line account dropdown -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2869,6 +2869,14 @@ html,body{
 /* Keep the segmented control visually separate from the content list. */
 .categoryDetailTransactions{margin-top:0}
 .categoryDetailBars + .categoryDetailTransactions{margin-top:2px}
+
+
+/* v5.17.2 account dropdown cleanup */
+#txAccount,#txFromAccount,#txToAccount{
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
 
 </style>
 
@@ -5834,7 +5842,9 @@ function quickAmountKey(key){
 
 function populateTransactionAccounts(){
   const accounts=transactionAccounts();
-  const options=accounts.map(a=>`<option value="${a.id}">${accountSelectLabel(a)}</option>`).join("");
+  // Keep native iOS picker rows to one line. Balances are intentionally omitted here;
+  // Home remains the source for current account balances.
+  const options=accounts.map(a=>`<option value="${a.id}">${safeHtml(a.name)}</option>`).join("");
   txAccount.innerHTML=options;
   txFromAccount.innerHTML=options;
   txToAccount.innerHTML=options;
