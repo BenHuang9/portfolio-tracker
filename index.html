@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.2 UI copy: consistent capitalization across all pages -->
+<!-- v3.3 holding cards: full position metrics on Home -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -352,6 +352,134 @@ input,button{touch-action:manipulation;}
   color:var(--muted);
   font-size:12px;
   font-weight:650;
+}
+
+
+/* v3.3 holding cards */
+.holdings{
+  background:transparent;
+  border:0;
+  border-radius:0;
+  overflow:visible;
+  box-shadow:none;
+}
+.holdings .thead{display:none}
+#holdingsRows{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+.holdingCard{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:16px;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+}
+.holdingCard:active{transform:scale(.995)}
+.hcTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.hcTicker{
+  font-size:20px;
+  font-weight:900;
+  letter-spacing:-.2px;
+}
+.hcTitle{
+  margin-top:3px;
+  font-size:12px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:240px;
+}
+.hcWeight{
+  flex:0 0 auto;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  padding-top:2px;
+}
+.hcPriceRow{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 0 13px;
+  margin-top:2px;
+  border-bottom:1px solid var(--line);
+}
+.hcPrice{
+  font-size:27px;
+  font-weight:900;
+  letter-spacing:-.4px;
+}
+.hcToday{
+  text-align:right;
+  font-size:14px;
+  line-height:1.25;
+  font-weight:850;
+}
+.hcToday.pos{color:var(--green)}
+.hcToday.neg{color:var(--red)}
+.hcToday span{display:block;font-size:12px;margin-top:2px}
+.hcGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  column-gap:18px;
+  row-gap:12px;
+  padding:14px 0;
+}
+.hcMetric .l{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.25px;
+}
+.hcMetric .v{
+  margin-top:3px;
+  font-size:17px;
+  font-weight:850;
+  line-height:1.1;
+}
+.hcMetric .v.income{color:#c97800}
+.hcMetric .v.received{color:#7d36c7}
+.hcReturn{
+  border-top:1px solid var(--line);
+  padding-top:13px;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}
+.hcReturn .l{
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.25px;
+}
+.hcReturnValue{
+  text-align:right;
+  font-size:18px;
+  font-weight:900;
+  line-height:1.15;
+}
+.hcReturnValue.pos{color:var(--green)}
+.hcReturnValue.neg{color:var(--red)}
+.hcReturnValue span{
+  display:block;
+  font-size:12px;
+  margin-top:3px;
+}
+@media(min-width:760px){
+  #holdingsRows{grid-template-columns:1fr 1fr}
 }
 
 </style>
@@ -889,22 +1017,73 @@ function renderHome(){
   annualIncome.textContent=fmt0(annual);
   monthlyIncome.textContent=fmt0(monthly);
   incomeProgress.style.width=Math.min(100,annual?ytd/annual*100:0)+"%";
-  holdingCount.textContent=ps.length+" holdings";
+  holdingCount.textContent=ps.length+" Holdings";
 
-  holdingsRows.innerHTML=ps.length ? ps.map(p=>`
-    <div class="row" data-ticker="${p.ticker}">
-      <div class="stock">
-        <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
-        <div style="min-width:0">
-          <div class="ticker">${p.ticker}</div>
-          <div class="title">${p.title}</div>
+  const totalBookValue=ps.reduce((s,p)=>s+p.bv,0);
+  holdingsRows.innerHTML=ps.length ? ps.map(p=>{
+    const received=tickerDivReceived(p.ticker);
+    const capital=p.mv-p.bv;
+    const totalReturn=capital+received;
+    const totalReturnPct=p.bv?totalReturn/p.bv*100:0;
+    const bookWeight=totalBookValue?p.bv/totalBookValue*100:0;
+    const monthlyDividend=p.annual/12;
+
+    return `
+      <div class="holdingCard" data-ticker="${p.ticker}">
+        <div class="hcTop">
+          <div style="min-width:0">
+            <div class="hcTicker">${p.ticker}</div>
+            <div class="hcTitle">${p.title}</div>
+          </div>
+          <div class="hcWeight">${bookWeight.toFixed(1)}% of Book</div>
         </div>
-      </div>
-      <div class="num">${p.shares.toLocaleString()}</div>
-      <div class="num">${fmt(toCAD(p.price,p.currency))}</div>
-      <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
-    </div>
-  `).join("") : `<div class="emptyHolding">No holdings yet. Tap “Add lot” to add your first position.</div>`;
+
+        <div class="hcPriceRow">
+          <div class="hcPrice">${fmt(toCAD(p.price,p.currency))}</div>
+          <div class="hcToday ${p.today>=0?"pos":"neg"}">
+            ${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}
+            <span>${pct(p.todayPct)} Today</span>
+          </div>
+        </div>
+
+        <div class="hcGrid">
+          <div class="hcMetric">
+            <div class="l">Shares</div>
+            <div class="v">${p.shares.toLocaleString()}</div>
+          </div>
+          <div class="hcMetric">
+            <div class="l">Avg Cost</div>
+            <div class="v">${fmt(toCAD(p.avg,p.currency))}</div>
+          </div>
+
+          <div class="hcMetric">
+            <div class="l">Market Value</div>
+            <div class="v">${fmt(p.mv)}</div>
+          </div>
+          <div class="hcMetric">
+            <div class="l">Book Value</div>
+            <div class="v">${fmt(p.bv)}</div>
+          </div>
+
+          <div class="hcMetric">
+            <div class="l">Monthly Dividend</div>
+            <div class="v income">${fmt(monthlyDividend)}</div>
+          </div>
+          <div class="hcMetric">
+            <div class="l">Dividend Received</div>
+            <div class="v received">${fmt(received)}</div>
+          </div>
+        </div>
+
+        <div class="hcReturn">
+          <div class="l">Total Return</div>
+          <div class="hcReturnValue ${totalReturn>=0?"pos":"neg"}">
+            ${totalReturn>=0?"+":"-"}${fmt(Math.abs(totalReturn))}
+            <span>${pct(totalReturnPct)} Incl. Dividends</span>
+          </div>
+        </div>
+      </div>`;
+  }).join("") : `<div class="emptyHolding">No holdings yet. Tap “Add Lot” to add your first position.</div>`;
 
   const monthVals = monthlySeries("YTD");
   const max=Math.max(...monthVals.map(x=>x.amount),1);
@@ -1271,7 +1450,7 @@ function openHoldingDetail(ticker){
 }
 
 function bindHoldingRows(){
-  document.querySelectorAll(".row[data-ticker]").forEach(row=>{
+  document.querySelectorAll("[data-ticker]").forEach(row=>{
     row.onclick = () => openHoldingDetail(row.dataset.ticker);
   });
 }
