@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.4 Home Principal Amount -->
+<!-- v5.17.6 Remove snapshots + add icons cleanup -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2896,6 +2896,21 @@ html,body{
   font-variant-numeric:tabular-nums;
 }
 
+
+/* v5.17.6 visual cleanup */
+#homeSnapshotBtn,
+#addNetWorthSnapshotBtn,
+#netWorthSnapshotModal,
+#addLiabilityAccountBtn{
+  display:none !important;
+}
+.brandMark{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+.iconGlyph{width:100%;height:100%;display:grid;place-items:center;font-size:18px;font-weight:900;line-height:1}
+.wealthGroupIcon .iconGlyph{font-size:17px}
+.categoryNameWrap{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.categoryBadge{width:28px;height:28px;border-radius:10px;background:#f0f0ee;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+.quickCategoryIcon{font-size:15px}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3026,16 +3041,14 @@ html,body{
   <section id="netWorthView" class="view active wealthHomeView">
     <div class="wealthHomeTop">
       <h1>Home</h1>
-      <button class="wealthQuickBtn" id="homeSnapshotBtn" type="button" aria-label="Add net worth snapshot">
-        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
+      
     </div>
 
     <div class="wealthHero">
       <div class="wealthEyebrow" id="netWorthMeta">Total net worth</div>
       <div class="wealthNetRow"><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
       <div class="netWorthReturn" id="netWorthReturn">— Total Return</div>
-      <div class="netWorthPrincipalLine"><span>Principal</span><strong id="netWorthPrincipal">$0.00</strong></div>
+      <div class="netWorthPrincipalLine"><span>Net asset base</span><strong id="netWorthPrincipal">$0.00</strong></div>
     </div>
 
     <div class="chartScrubInfo netWorthScrubInfo" id="netWorthScrubInfo">
@@ -3054,11 +3067,7 @@ html,body{
       <button>1W</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button class="active">ALL</button>
     </div>
 
-    <div class="snapshotActionRow wealthSnapshotRow">
-      <button class="snapshotBtn" id="addNetWorthSnapshotBtn">
-        <span class="snapshotPlus">＋</span><span>Add Snapshot</span>
-      </button>
-    </div>
+    
 
     <div class="wealthCard breakdownCard">
       <div class="wealthCardHead">
@@ -3088,7 +3097,7 @@ html,body{
 
     <div class="wealthGroupCard">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon investmentIcon">▥</span><div><div class="wealthGroupTitle">Investments</div><div class="wealthGroupSub" id="investmentGroupSub">4 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon investmentIcon"><span class="iconGlyph">📈</span></span><div><div class="wealthGroupTitle">Investments</div><div class="wealthGroupSub" id="investmentGroupSub">4 accounts</div></div></div>
         <strong id="investmentGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="investmentAccountsList"></div>
@@ -3096,7 +3105,7 @@ html,body{
 
     <div class="wealthGroupCard">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon cashIcon">$</span><div><div class="wealthGroupTitle">Cash & bank</div><div class="wealthGroupSub" id="cashGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon cashIcon"><span class="iconGlyph">💵</span></span><div><div class="wealthGroupTitle">Cash & bank</div><div class="wealthGroupSub" id="cashGroupSub">0 accounts</div></div></div>
         <strong id="cashGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="manualAssetList"></div>
@@ -3104,7 +3113,7 @@ html,body{
 
     <div class="wealthGroupCard" id="otherAssetsGroup">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon otherIcon">◇</span><div><div class="wealthGroupTitle">Other assets</div><div class="wealthGroupSub" id="otherGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon otherIcon"><span class="iconGlyph">💎</span></span><div><div class="wealthGroupTitle">Other assets</div><div class="wealthGroupSub" id="otherGroupSub">0 accounts</div></div></div>
         <strong id="otherGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="manualOtherAssetList"></div>
@@ -3112,13 +3121,13 @@ html,body{
 
     <div class="wealthGroupCard debtGroup">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon debtIcon">−</span><div><div class="wealthGroupTitle">Debts</div><div class="wealthGroupSub" id="debtGroupSub">0 accounts</div></div></div>
-        <div class="wealthGroupRight"><strong id="debtGroupTotal">$0</strong><button class="miniAddBtn" id="addLiabilityAccountBtn">+</button></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon debtIcon"><span class="iconGlyph">💳</span></span><div><div class="wealthGroupTitle">Debts</div><div class="wealthGroupSub" id="debtGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupRight"><strong id="debtGroupTotal">$0</strong></div>
       </div>
       <div class="netWorthList wealthAccountList" id="manualLiabilityList"></div>
     </div>
 
-    <div class="wealthHomeFoot">Daily Net Worth saves one snapshot per calendar day.</div>
+    <div class="wealthHomeFoot">Net worth updates automatically from your investments and transactions.</div>
   </section>
 
 
@@ -5410,12 +5419,12 @@ function accountCategoryLabel(a){
 }
 function accountCategoryIcon(a){
   const c=String(a?.category||"");
-  if(c==="chequing")return "C";
-  if(c==="savings")return "S";
-  if(c==="cash")return "$";
-  if(c==="credit_card")return "▰";
-  if(c==="other_asset")return "◇";
-  return a?.type==="liability"?"−":"$";
+  if(c==="chequing")return "🏦";
+  if(c==="savings")return "💰";
+  if(c==="cash")return "💵";
+  if(c==="credit_card")return "💳";
+  if(c==="other_asset")return "💎";
+  return a?.type==="liability"?"💳":"💵";
 }
 function isTransactionAccount(a){
   if(!a)return false;
@@ -5739,30 +5748,63 @@ function categoryTotals(rows,type){
 
 
 const CATEGORY_ICON_MAP={
-  "Food & Dining":"F",
-  "Groceries":"G",
-  "Shopping":"S",
-  "Auto":"A",
-  "Transportation":"T",
-  "Bills":"B",
-  "Home":"H",
-  "Entertainment":"E",
-  "Travel":"✈",
-  "Health":"+",
-  "Education":"E",
-  "Social":"S",
-  "Loaned Out":"L",
-  "Subscriptions":"S",
-  "Other":"…",
-  "Salary":"$",
-  "Bonus":"B",
-  "Overtime":"O",
-  "Refund":"R",
-  "Interest":"%",
-  "Other Income":"+"
+  "Food & Dining":"🍽️",
+  "Groceries":"🛒",
+  "Shopping":"🛍️",
+  "Auto":"🚗",
+  "Transportation":"🚇",
+  "Bills":"🧾",
+  "Home":"🏠",
+  "Entertainment":"🎬",
+  "Travel":"✈️",
+  "Health":"🩺",
+  "Education":"🎓",
+  "Social":"👥",
+  "Loaned Out":"🤝",
+  "Subscriptions":"🔁",
+  "Other":"⋯",
+  "Salary":"💼",
+  "Bonus":"🎁",
+  "Overtime":"⏰",
+  "Refund":"↩️",
+  "Interest":"🏦",
+  "Other Income":"💰"
 };
 function safeHtml(v){
   return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+}
+
+function svgDataUri(svg){
+  return "data:image/svg+xml;charset=UTF-8,"+encodeURIComponent(svg);
+}
+const BRAND_MARKS={
+  wealthsimple:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#111111"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#ffffff">W</text></svg>`),
+  questrade:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#1b6edc"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#ffffff">Q</text></svg>`),
+  cibc:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#c5172e"/><text x="32" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="800" fill="#ffffff">CIBC</text></svg>`),
+  bmo:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#1473e6"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" fill="#ffffff">BMO</text></svg>`),
+  cash:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💵</text></svg>`),
+  savings:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💰</text></svg>`),
+  chequing:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">🏦</text></svg>`),
+  credit_card:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💳</text></svg>`),
+  other_asset:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💎</text></svg>`)
+};
+function brandMarkForName(name,category,type){
+  const s=String(name||"").toLowerCase();
+  if(s.includes("wealthsimple") || /^ws/.test(s))return BRAND_MARKS.wealthsimple;
+  if(s.includes("questrade"))return BRAND_MARKS.questrade;
+  if(s.includes("cibc"))return BRAND_MARKS.cibc;
+  if(s.includes("bmo"))return BRAND_MARKS.bmo;
+  if(category && BRAND_MARKS[category])return BRAND_MARKS[category];
+  if(type==="liability")return BRAND_MARKS.credit_card;
+  return null;
+}
+function investmentIconMarkup(a){
+  const src=brandMarkForName(a?.name||a?.short||a?.id);
+  return src?`<img class="brandMark" src="${src}" alt="">`:`<span class="iconGlyph">${safeHtml(a?.icon||"📈")}</span>`;
+}
+function manualAccountIconMarkup(a){
+  const src=brandMarkForName(a?.name,a?.category,a?.type);
+  return src?`<img class="brandMark" src="${src}" alt="">`:`<span class="iconGlyph">${safeHtml(accountCategoryIcon(a))}</span>`;
 }
 function quickCategoryIcon(name){
   return CATEGORY_ICON_MAP[name]||txCategoryInitial(name);
@@ -6093,7 +6135,7 @@ function renderTransactions(){
           : `${transactionAccountDisplayName(t)}${t.note?` · ${t.note}`:""}`;
         const amount=t.type==="expense"?`−${fmt(cad)}`:t.type==="income"?`+${fmt(cad)}`:fmt(cad);
         return `<button class="ledgerRow" type="button" data-tx-id="${t.id}">
-          <span class="ledgerIcon">${t.type==="transfer"?"↔":txCategoryInitial(t.category)}</span>
+          <span class="ledgerIcon">${t.type==="transfer"?"↔":quickCategoryIcon(t.category)}</span>
           <span class="ledgerRowMain"><span class="ledgerRowTitle">${title}</span><span class="ledgerRowMeta">${meta}</span></span>
           <span class="ledgerAmount ${t.type}">${amount}</span>
         </button>`;
@@ -6107,7 +6149,7 @@ function renderCategoryStats(container,rows,type){
   if(!cats.length){container.innerHTML='<div class="statsEmpty">No '+type+' transactions in this period.</div>';return}
   const max=Math.max(...cats.map(x=>x.value),1);
   container.innerHTML=cats.map(c=>`<button type="button" class="categoryRowButton" data-category="${safeHtml(c.name)}" data-category-type="${type}">
-    <div class="categoryTop"><div class="categoryName">${safeHtml(c.name)}</div><div class="categoryValue">${fmt(c.value)}</div><div class="categoryRowChevron">›</div></div>
+    <div class="categoryTop"><div class="categoryNameWrap"><span class="categoryBadge">${safeHtml(quickCategoryIcon(c.name))}</span><div class="categoryName">${safeHtml(c.name)}</div></div><div class="categoryValue">${fmt(c.value)}</div><div class="categoryRowChevron">›</div></div>
     <div class="categoryTrack"><div class="categoryFill ${type}" style="width:${Math.max(2,c.value/max*100).toFixed(1)}%"></div></div>
   </button>`).join("");
   container.querySelectorAll("[data-category]").forEach(btn=>btn.onclick=()=>openCategoryDetail(btn.dataset.categoryType,btn.dataset.category));
@@ -6432,7 +6474,7 @@ function setNetWorthReturn(){
   netWorthReturn.textContent=`${signedMoney(totalReturn)} Total Return`;
   netWorthReturn.classList.toggle("pos",totalReturn>=0);
   netWorthReturn.classList.toggle("neg",totalReturn<0);
-  netWorthReturn.title=`Principal ${fmt(principal.total)} · Investment principal ${fmt(principal.investmentPrincipal)}`;
+  netWorthReturn.title=`Net asset base ${fmt(principal.total)} · Investment basis ${fmt(principal.investmentPrincipal)}`;
 }
 function renderNetWorthChart(){
   if(!netWorthChart)return;
@@ -6440,7 +6482,7 @@ function renderNetWorthChart(){
   const rows=netWorthRowsForRange(currentNetWorthRange);
 
   if(rows.length<2){
-    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first daily snapshot.<br>Today’s value is saved automatically — or add a dated snapshot below.</div>';
+    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history will build automatically as your investments and account balances update.</div>';
     setNetWorthReturn();
     if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
     netWorthChart.onpointerdown=null;
@@ -6653,13 +6695,13 @@ function renderNetWorth(){
     const s=portfolioSummary(a.id);
     if(a.id==="cibc_mutual_fund"){
       return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
-        <div class="netWorthIcon">${a.icon}</div>
+        <div class="netWorthIcon">${investmentIconMarkup(a)}</div>
         <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">3 funds · Book ${fmt0(cibcSummary.bookValue)}</div></div>
         <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Investment</span></div>
       </div>`;
     }
     return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
-      <div class="netWorthIcon">${a.icon}</div>
+      <div class="netWorthIcon">${investmentIconMarkup(a)}</div>
       <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${s.ps.length} holding${s.ps.length===1?"":"s"} · Cash ${fmt0(cashForAccount(a.id))}</div></div>
       <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Investment</span></div>
     </div>`;
@@ -6672,7 +6714,7 @@ function renderNetWorth(){
     const latest=activity[activity.length-1]||a.history[a.history.length-1];
     const sub=a.currency==="USD"?`${a.currency} ${manualCurrentValue(a).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`:`Updated ${relativeUpdatedText(latest?.date).toLowerCase()}`;
     return `<div class="netWorthRow manualAccountRow" data-manual-id="${a.id}">
-      <div class="netWorthIcon">${accountCategoryIcon(a)}</div>
+      <div class="netWorthIcon">${manualAccountIconMarkup(a)}</div>
       <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${accountCategoryLabel(a)} · ${a.currency}</div></div>
       <div class="netWorthAmount ${a.type==="liability"?"liability":""}">${a.type==="liability"?"−":""}${fmt(cad)}<span class="sub">${sub}</span></div>
     </div>`;
@@ -6863,7 +6905,7 @@ function openManualUpdateModal(){
 }
 function closeManualUpdateModalFn(){manualUpdateModal.classList.remove("show")}
 addAssetAccountBtn.onclick=()=>openManualAccountModal('asset');
-addLiabilityAccountBtn.onclick=()=>openManualAccountModal('liability');
+if(addLiabilityAccountBtn)addLiabilityAccountBtn.onclick=()=>openManualAccountModal('liability');
 closeManualAccount.onclick=closeManualAccountModal;
 manualAccountModal.onclick=e=>{if(e.target===manualAccountModal)closeManualAccountModal()};
 saveManualAccount.onclick=()=>{
@@ -6939,10 +6981,10 @@ document.querySelectorAll('#netWorthRanges button').forEach(b=>b.onclick=()=>{
   currentNetWorthRange=String(b.textContent||"ALL").trim();
   renderNetWorthChart();
 });
-addNetWorthSnapshotBtn.onclick=openNetWorthSnapshotModal;
+if(addNetWorthSnapshotBtn)addNetWorthSnapshotBtn.onclick=openNetWorthSnapshotModal;
 if(homeSnapshotBtn)homeSnapshotBtn.onclick=openNetWorthSnapshotModal;
 closeNetWorthSnapshot.onclick=closeNetWorthSnapshotModalFn;
-netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWorthSnapshotModalFn()};
+if(netWorthSnapshotModal)netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWorthSnapshotModalFn()};
 saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
 
