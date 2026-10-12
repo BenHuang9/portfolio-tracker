@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.12.3 Disable scrub when chart unavailable -->
+<!-- v5.12.4 Native trading-currency prices + CAD returns -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1546,6 +1546,27 @@ body.manualDetailOpen{padding-bottom:0!important}
   .wealthAccountList .netWorthAmount{min-width:104px}
 }
 
+
+/* v5.12.4 native security price currency */
+.holdingSummaryCard .detailPrice{
+  white-space:nowrap;
+  letter-spacing:-.035em;
+}
+.holdingMetric .value{
+  overflow-wrap:anywhere;
+}
+.holdingReturnValue{
+  white-space:nowrap;
+}
+@media(max-width:430px){
+  .holdingSummaryCard .detailPrice{
+    font-size:33px!important;
+  }
+  .holdingReturnValue{
+    font-size:18px!important;
+  }
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -2434,6 +2455,14 @@ fDate.addEventListener("input",syncDateDisplay);
 
 const fmt = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2}).format(n);
 const fmt0 = n => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(n);
+const fmtUSD = n => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n);
+function fmtNativePrice(value,currency,{compact=false}={}){
+  const n=Number(value)||0;
+  if(currency==="USD"){
+    return compact ? `US$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}` : `${fmtUSD(n)} USD`;
+  }
+  return compact ? fmt(n) : `${fmt(n)} CAD`;
+}
 const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
 
 
@@ -3355,7 +3384,7 @@ function renderHome(){
         </div>
       </div>
       <div class="num">${p.shares.toLocaleString()}</div>
-      <div class="num">${fmt(toCAD(p.price,p.currency))}</div>
+      <div class="num">${fmtNativePrice(p.price,p.currency,{compact:true})}</div>
       <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
     </div>`).join(""):`<div class="emptyHolding">No holdings in ${accountName(selectedPortfolioAccount)}. Tap “Add Lot” to add one.</div>`;
 
@@ -4146,7 +4175,7 @@ function renderNetWorth(){
       return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
         <div class="netWorthIcon">${a.icon}</div>
         <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">3 funds · Book ${fmt0(cibcSummary.bookValue)}</div></div>
-        <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Daily NAV</span></div>
+        <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Investment</span></div>
       </div>`;
     }
     return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
@@ -4565,21 +4594,21 @@ function openHoldingDetail(ticker){
   document.getElementById("detailTicker").textContent = p.ticker;
   document.getElementById("detailTitle").textContent = p.title;
   document.getElementById("detailBookWeight").textContent = bookWeight.toFixed(1) + "% of Book";
-  document.getElementById("detailPrice").textContent = fmt(toCAD(p.price,p.currency));
+  document.getElementById("detailPrice").textContent = fmtNativePrice(p.price,p.currency);
 
   const todayEl = document.getElementById("detailToday");
-  todayEl.textContent = (p.today>=0?"+":"-") + fmt(Math.abs(p.today)) + " Today (" + pct(p.todayPct) + ")";
+  todayEl.textContent = (p.today>=0?"+":"-") + fmt(Math.abs(p.today)) + " CAD Today (" + pct(p.todayPct) + ")";
   todayEl.className = "detailToday " + (p.today>=0 ? "pos" : "neg");
 
   document.getElementById("detailShares").textContent = p.shares.toLocaleString();
-  document.getElementById("detailAvg").textContent = fmt(toCAD(p.avg,p.currency));
-  document.getElementById("detailMV").textContent = fmt(p.mv);
-  document.getElementById("detailBV").textContent = fmt(p.bv);
+  document.getElementById("detailAvg").textContent = fmtNativePrice(p.avg,p.currency);
+  document.getElementById("detailMV").textContent = `${fmt(p.mv)} CAD`;
+  document.getElementById("detailBV").textContent = `${fmt(p.bv)} CAD`;
 
   const stockReturnEl = document.getElementById("detailStockReturn");
   const stockReturnPct = p.bv ? capital / p.bv * 100 : 0;
   const stockReturnPctEl = document.getElementById("detailStockReturnPct");
-  stockReturnEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital));
+  stockReturnEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital)) + " CAD";
   stockReturnEl.className = "holdingReturnValue " + (capital>=0 ? "pos" : "neg");
   stockReturnPctEl.textContent = pct(stockReturnPct) + " Excl. Dividends";
   stockReturnPctEl.className = "holdingReturnPct " + (capital>=0 ? "pos" : "neg");
@@ -4587,7 +4616,7 @@ function openHoldingDetail(ticker){
   const totalEl = document.getElementById("detailTotal");
   const totalPct = p.bv ? total / p.bv * 100 : 0;
   const totalPctEl = document.getElementById("detailTotalPct");
-  totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total));
+  totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total)) + " CAD";
   totalEl.className = "holdingReturnValue " + (total>=0 ? "pos" : "neg");
   totalPctEl.textContent = pct(totalPct) + " Incl. Dividends";
   totalPctEl.className = "holdingReturnPct " + (total>=0 ? "pos" : "neg");
@@ -4609,11 +4638,11 @@ function openHoldingDetail(ticker){
           : l.positionAdjustment
             ? "Position adjustment · "+new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
             : new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
-        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}${l.openingPosition||l.positionAdjustment?" avg cost":""}</div>
+        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmtNativePrice(Number(l.cost),p.currency)}${l.openingPosition||l.positionAdjustment?" avg cost":""}</div>
         <div class="accountBadge">${accountName(l.accountId)}</div>
       </div>
       <div class="lotRight">
-        <div class="lotCost">${fmt(toCAD(Number(l.shares)*Number(l.cost),p.currency))}</div>
+        <div class="lotCost">${fmtNativePrice(Number(l.shares)*Number(l.cost),p.currency)}</div>
         <button class="deleteLotBtn" type="button" data-lot-index="${l._lotIndex}" aria-label="Delete lot">Delete</button>
       </div>
     </div>
