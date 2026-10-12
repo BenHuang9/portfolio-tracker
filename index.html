@@ -712,7 +712,7 @@ body.chartScrubbing{
       <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
-    <div class="dataFootnote">Dividend eligibility uses ex-dividend date. Payment dates come from official Harvest/Purpose data when available, then Alpha Vantage; Yahoo ex-date is only a fallback.</div>
+    <div class="dataFootnote">Dividend eligibility uses ex-dividend date. Payment dates use official issuer data when available (Harvest, Purpose, Hamilton, Vanguard, Evolve), then Alpha Vantage; Yahoo ex-date is only a fallback.</div>
   </section>
 
 
@@ -950,7 +950,7 @@ let liveUpdatedAt = null;
 let currentPortfolioRange = "ALL";
 let dividendSyncInProgress = false;
 const chartCache = new Map();
-const DIVIDEND_META_KEY = "dividendFetchMetaV48";
+const DIVIDEND_META_KEY = "dividendFetchMetaV50";
 const DIVIDEND_ALPHA_TTL = 7 * 24 * 60 * 60 * 1000;
 const DIVIDEND_OFFICIAL_TTL = 24 * 60 * 60 * 1000;
 const DIVIDEND_FALLBACK_TTL = 60 * 60 * 1000;
@@ -1072,7 +1072,7 @@ function dividendNeedsRefresh(ticker,meta){
   if(!row?.fetchedAt)return true;
   const ttl=row.source==="alpha"
     ? DIVIDEND_ALPHA_TTL
-    : (row.source==="harvest" || row.source==="purpose")
+    : (["harvest","purpose","hamilton","vanguard","evolve"].includes(row.source))
     ? DIVIDEND_OFFICIAL_TTL
     : DIVIDEND_FALLBACK_TTL;
   return Date.now()-Number(row.fetchedAt)>ttl;
@@ -1080,10 +1080,13 @@ function dividendNeedsRefresh(ticker,meta){
 function dividendSourceCode(source){
   if(source==="Harvest official")return "harvest";
   if(source==="Purpose official")return "purpose";
+  if(source==="Hamilton official")return "hamilton";
+  if(source==="Vanguard official")return "vanguard";
+  if(source==="Evolve official")return "evolve";
   if(source==="Alpha Vantage")return "alpha";
   return "yahoo";
 }
-function isExactDividendSource(code){return code==="harvest" || code==="purpose" || code==="alpha";}
+function isExactDividendSource(code){return ["harvest","purpose","hamilton","vanguard","evolve","alpha"].includes(code);}
 async function syncDividendHistory(tickers){
   if(dividendSyncInProgress || !marketApiBase || !tickers.length)return;
   const meta=readDividendMeta();

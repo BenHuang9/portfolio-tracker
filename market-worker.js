@@ -4,7 +4,8 @@
 //   1) Official fund issuer pages for supported Harvest / Purpose ETFs
 //   2) Alpha Vantage corporate actions
 //   3) Yahoo ex-date fallback
-// v4.9: Purpose history is supplemented from official monthly distribution announcements so YTD includes older payments, not only the few rows visible on the fund page.
+// v5.0: Adds official payment-date sources for Purpose Cboe (.NE), Hamilton HYLD, Vanguard VFV, and Evolve BANK.
+// Purpose history is supplemented from official monthly distribution announcements so YTD includes older payments.
 // ALPHAVANTAGE_API_KEY is stored as a Cloudflare Worker Secret.
 
 const ALLOWED_RANGES = new Set(["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]);
@@ -68,12 +69,19 @@ function rowText(html){
 function normDate(v){return String(v||"").replaceAll("/","-")}
 
 function parseFlexibleDate(v){
-  const s=String(v||"").trim();
+  const s=String(v||"").trim().replace(/,/g,"").replace(/\s+/g," ");
   let m=s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
   if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
   m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
   if(m)return `${m[3]}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
+  if(m){const y=Number(m[3])>=70?1900+Number(m[3]):2000+Number(m[3]);return `${y}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}
+  m=s.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})$/i);
+  if(m){const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};return `${m[3]}-${String(months[m[1].toLowerCase()]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}
   return null;
+}
+function extractDateTokens(text){
+  return String(text||"").match(/\b(?:\d{4}[\/-]\d{1,2}[\/-]\d{1,2}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/gi)||[];
 }
 function escapeRegex(s){return String(s||"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
 function uniqueByDividendKey(rows){
@@ -210,7 +218,7 @@ async function harvestDividendHistory(symbol){
 }
 
 async function purposeDividendHistory(symbol){
-  if(!symbol.endsWith(".TO"))return null;
+  if(!/\.(TO|NE)$/.test(symbol))return null;
   const ticker=baseTicker(symbol);
   const slug=PURPOSE_FUND_SLUGS[ticker];
   if(!slug)return null;
@@ -250,11 +258,99 @@ async function purposeDividendHistory(symbol){
   };
 }
 
+const HAMILTON_FUND_URLS={
+  HYLD:"https://hamiltonetfs.com/etf/hyld/"
+};
+const VANGUARD_FUND_URLS={
+  VFV:"https://www.vanguard.ca/en/product/etf/equity/9563/vanguard-sp-500-index-etf"
+};
+const EVOLVE_FUND_URLS={
+  BANK:"https://evolveetfs.com/product/bank/"
+};
+
+function extractTwoDateDistributionRows(html){
+  const out=[];
+  const rows=String(html||"").match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[];
+  for(const rawRow of rows){
+    const text=rowText(rawRow);
+    const tokens=extractDateTokens(text);
+    if(tokens.length<2)continue;
+    const exDate=parseFlexibleDate(tokens[0]);
+    const paymentDate=parseFlexibleDate(tokens[1]);
+    if(!exDate||!paymentDate)continue;
+    const m=text.match(/\$\s*([0-9]+(?:\.[0-9]+)?)/);
+    if(!m)continue;
+    const amount=Number(m[1]);
+    if(!(amount>0))continue;
+    out.push({exDate,paymentDate,declarationDate:null,recordDate:exDate,amount,paymentDateEstimated:false});
+  }
+  return uniqueByDividendKey(out);
+}
+function extractThreeDateDistributionRows(html){
+  const out=[];
+  const rows=String(html||"").match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[];
+  for(const rawRow of rows){
+    const text=rowText(rawRow);
+    const tokens=extractDateTokens(text);
+    if(tokens.length<3)continue;
+    const exDate=parseFlexibleDate(tokens[0]);
+    const recordDate=parseFlexibleDate(tokens[1]);
+    const paymentDate=parseFlexibleDate(tokens[2]);
+    if(!exDate||!recordDate||!paymentDate)continue;
+    const lastDatePos=text.toLowerCase().lastIndexOf(tokens[2].toLowerCase());
+    const tail=lastDatePos>=0?text.slice(lastDatePos+tokens[2].length):text;
+    const m=tail.match(/\$\s*([0-9]+(?:\.[0-9]+)?)/) || text.match(/\$\s*([0-9]+(?:\.[0-9]+)?)/);
+    if(!m)continue;
+    const amount=Number(m[1]);
+    if(!(amount>0))continue;
+    out.push({exDate,paymentDate,declarationDate:null,recordDate,amount,paymentDateEstimated:false});
+  }
+  return uniqueByDividendKey(out);
+}
+async function hamiltonDividendHistory(symbol){
+  if(!symbol.endsWith(".TO"))return null;
+  const ticker=baseTicker(symbol);
+  const url=HAMILTON_FUND_URLS[ticker];
+  if(!url)return null;
+  const html=await fetchOfficialHtml(url);
+  if(!html)return null;
+  const dividends=extractTwoDateDistributionRows(html);
+  if(!dividends.length)return null;
+  return {providerSymbol:ticker,source:"Hamilton official",sourceUrl:url,dividends};
+}
+async function vanguardDividendHistory(symbol){
+  if(!symbol.endsWith(".TO"))return null;
+  const ticker=baseTicker(symbol);
+  const url=VANGUARD_FUND_URLS[ticker];
+  if(!url)return null;
+  const html=await fetchOfficialHtml(url);
+  if(!html)return null;
+  const dividends=extractThreeDateDistributionRows(html);
+  if(!dividends.length)return null;
+  return {providerSymbol:ticker,source:"Vanguard official",sourceUrl:url,dividends};
+}
+async function evolveDividendHistory(symbol){
+  if(!symbol.endsWith(".TO"))return null;
+  const ticker=baseTicker(symbol);
+  const url=EVOLVE_FUND_URLS[ticker];
+  if(!url)return null;
+  const html=await fetchOfficialHtml(url);
+  if(!html)return null;
+  const dividends=extractThreeDateDistributionRows(html);
+  if(!dividends.length)return null;
+  return {providerSymbol:ticker,source:"Evolve official",sourceUrl:url,dividends};
+}
+
 async function officialDividendHistory(symbol){
-  // Known Purpose tickers are checked first, then Harvest's generic ticker URL.
   const purpose=await purposeDividendHistory(symbol);
   if(purpose)return purpose;
-  return await harvestDividendHistory(symbol);
+  const harvest=await harvestDividendHistory(symbol);
+  if(harvest)return harvest;
+  const hamilton=await hamiltonDividendHistory(symbol);
+  if(hamilton)return hamilton;
+  const vanguard=await vanguardDividendHistory(symbol);
+  if(vanguard)return vanguard;
+  return await evolveDividendHistory(symbol);
 }
 
 function safeAlphaProblem(msg,apiKey){
@@ -341,10 +437,10 @@ export default {
       return json({
         ok:true,
         priceSource:"Yahoo Finance chart proxy",
-        dividendSource:"Official issuer history (including Purpose monthly announcements), then Alpha Vantage, then Yahoo fallback",
-        officialFundSources:["Harvest Portfolios","Purpose Investments fund pages + monthly distribution announcements"],
+        dividendSource:"Official issuer history, then Alpha Vantage, then Yahoo fallback",
+        officialFundSources:["Harvest Portfolios","Purpose Investments","Hamilton ETFs","Vanguard Canada","Evolve ETFs"],
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
-        dividendCache:"v4.9 official/exact responses cached; Yahoo fallback is not cached"
+        dividendCache:"v5.0 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }
 
@@ -387,7 +483,7 @@ export default {
       // Versioned cache key prevents older fallback/estimated-payment data from being reused.
       // Only exact payment-date responses (official issuer or Alpha) are cached here.
       const cache=caches.default;
-      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v49/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
+      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v50/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
       const cached=await cache.match(cacheKey);
       if(cached){
         const h=new Headers(cached.headers);
