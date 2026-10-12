@@ -2962,6 +2962,26 @@ html,body{
   margin-top:2px;
 }
 
+
+/* v5.18.2 enter details first, amount last */
+.quickAmountEntry{
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid var(--line);
+}
+.quickAmountHead{
+  margin:0 2px 2px!important;
+}
+.quickAmountEntry .quickAmountCard{
+  padding:2px 8px 4px!important;
+}
+.quickAmountEntry .quickKeypad{
+  margin:4px 0 10px!important;
+}
+#txNormalFields,#txTransferFields{
+  margin-top:8px!important;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3563,26 +3583,6 @@ html,body{
       <button type="button" data-tx-type="transfer">Transfer</button>
     </div>
 
-    <div class="quickAmountCard">
-      <div class="quickAmountCurrency">$</div>
-      <input id="txAmount" type="text" inputmode="none" readonly value="" placeholder="0.00" aria-label="Amount"/>
-    </div>
-
-    <div class="quickKeypad" id="txKeypad" aria-label="Amount keypad">
-      <button type="button" data-key="1">1</button>
-      <button type="button" data-key="2">2</button>
-      <button type="button" data-key="3">3</button>
-      <button type="button" data-key="4">4</button>
-      <button type="button" data-key="5">5</button>
-      <button type="button" data-key="6">6</button>
-      <button type="button" data-key="7">7</button>
-      <button type="button" data-key="8">8</button>
-      <button type="button" data-key="9">9</button>
-      <button type="button" data-key=".">.</button>
-      <button type="button" data-key="0">0</button>
-      <button type="button" data-key="back" aria-label="Delete digit">⌫</button>
-    </div>
-
     <div id="txNormalFields">
       <div class="quickSectionHead"><span>Category</span></div>
       <select id="txCategory" class="txHidden" aria-hidden="true" tabindex="-1"></select>
@@ -3632,6 +3632,31 @@ html,body{
       </div>
       <input id="txTransferNoteMirror" class="quickNoteInput" autocomplete="off" placeholder="Optional transfer note"/>
     </div>
+
+    <div class="quickAmountEntry">
+      <div class="quickSectionHead quickAmountHead"><span>Amount</span></div>
+    <div class="quickAmountCard">
+      <div class="quickAmountCurrency">$</div>
+      <input id="txAmount" type="text" inputmode="none" readonly value="" placeholder="0.00" aria-label="Amount"/>
+    </div>
+
+    <div class="quickKeypad" id="txKeypad" aria-label="Amount keypad">
+      <button type="button" data-key="1">1</button>
+      <button type="button" data-key="2">2</button>
+      <button type="button" data-key="3">3</button>
+      <button type="button" data-key="4">4</button>
+      <button type="button" data-key="5">5</button>
+      <button type="button" data-key="6">6</button>
+      <button type="button" data-key="7">7</button>
+      <button type="button" data-key="8">8</button>
+      <button type="button" data-key="9">9</button>
+      <button type="button" data-key=".">.</button>
+      <button type="button" data-key="0">0</button>
+      <button type="button" data-key="back" aria-label="Delete digit">⌫</button>
+    </div>
+
+    </div>
+
 
 
     <button class="primary quickSaveBtn" id="saveTransaction">Save Transaction</button>
