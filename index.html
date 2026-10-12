@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.10 Wealth-style Home dashboard -->
+<!-- v5.11 CIBC Mutual Funds -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1489,6 +1489,42 @@ body.manualDetailOpen{padding-bottom:0!important}
   .wealthAccountsHeader{padding-left:14px;padding-right:14px}
 }
 
+
+/* v5.11 CIBC Mutual Fund account */
+.cibcFundDetailView{min-height:100vh;padding-bottom:max(34px,env(safe-area-inset-bottom));background:var(--bg)}
+.cibcFundHero{padding:22px 22px 12px}
+.cibcFundEyebrow{font-size:13px;font-weight:800;color:var(--muted);margin-bottom:5px}
+.cibcFundBalanceRow{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.cibcFundBalance{font-size:44px;line-height:1;font-weight:900;letter-spacing:-.045em;font-variant-numeric:tabular-nums}
+.cibcFundCurrency{font-size:16px;font-weight:850}
+.cibcFundGain{margin-top:12px;font-size:17px;font-weight:850;color:var(--teal);font-variant-numeric:tabular-nums}
+.cibcFundNote{margin-top:7px;font-size:12px;font-weight:700;color:var(--muted)}
+.cibcFundSummary{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 18px 16px}
+.cibcFundSummaryCard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px 16px}
+.cibcFundSummaryCard .label{font-size:11px;color:var(--muted);font-weight:800}
+.cibcFundSummaryCard .value{font-size:18px;font-weight:900;margin-top:5px;font-variant-numeric:tabular-nums}
+.cibcFundSection{padding:0 18px 24px}
+.cibcFundSectionHead{display:flex;align-items:flex-end;justify-content:space-between;margin:6px 2px 11px}
+.cibcFundSectionHead h2{margin:0;font-size:20px;letter-spacing:-.025em}
+.cibcFundSectionHead .small{font-size:11px;font-weight:750;color:var(--muted)}
+.cibcHoldingCard{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;margin-bottom:11px;box-shadow:0 5px 18px rgba(0,0,0,.035)}
+.cibcHoldingTop{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.cibcHoldingCode{font-size:18px;font-weight:900;letter-spacing:-.02em}
+.cibcHoldingName{font-size:12px;line-height:1.35;font-weight:700;color:var(--muted);margin-top:3px;max-width:250px}
+.cibcHoldingMV{text-align:right;font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cibcHoldingGain{text-align:right;margin-top:3px;font-size:12px;font-weight:850;color:var(--teal);white-space:nowrap}
+.cibcHoldingGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:15px;padding-top:14px;border-top:1px solid var(--line)}
+.cibcHoldingMetric .label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800}
+.cibcHoldingMetric .value{font-size:13px;font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
+.cibcInvestBadge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;margin-left:5px;font-size:9px;font-weight:850;background:#ececea;color:var(--muted);vertical-align:1px}
+@media(max-width:430px){
+  .cibcFundHero{padding-left:20px;padding-right:20px}
+  .cibcFundBalance{font-size:40px}
+  .cibcFundSummary,.cibcFundSection{padding-left:12px;padding-right:12px}
+  .cibcHoldingGrid{grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .cibcHoldingMetric .value{font-size:12px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1705,6 +1741,36 @@ body.manualDetailOpen{padding-bottom:0!important}
     </div>
 
     <div class="wealthHomeFoot">Daily Net Worth saves one snapshot per calendar day.</div>
+  </section>
+
+  <section id="cibcFundView" class="view cibcFundDetailView">
+    <div class="manualDetailTopbar">
+      <button class="manualDetailIconBtn" id="cibcFundBackBtn" aria-label="Back">
+        <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h1>CIBC Mutual Fund</h1>
+      <div style="width:42px;height:42px"></div>
+    </div>
+
+    <div class="cibcFundHero">
+      <div class="cibcFundEyebrow">Investment account</div>
+      <div class="cibcFundBalanceRow">
+        <div class="cibcFundBalance" id="cibcFundBalance">$0.00</div>
+        <div class="cibcFundCurrency">CAD</div>
+      </div>
+      <div class="cibcFundGain" id="cibcFundGain">+$0.00 (+0.00%)</div>
+      <div class="cibcFundNote">3 CIBC Class A mutual funds · purchased in 2024</div>
+    </div>
+
+    <div class="cibcFundSummary">
+      <div class="cibcFundSummaryCard"><div class="label">Book Value</div><div class="value" id="cibcFundBook">$0.00</div></div>
+      <div class="cibcFundSummaryCard"><div class="label">Unrealized Gain</div><div class="value" id="cibcFundGainCard">$0.00</div></div>
+    </div>
+
+    <div class="cibcFundSection">
+      <div class="cibcFundSectionHead"><h2>Holdings</h2><div class="small">3 funds</div></div>
+      <div id="cibcFundHoldings"></div>
+    </div>
   </section>
 
   <section id="manualAccountDetailView" class="view manualAccountDetailView">
@@ -2111,6 +2177,13 @@ var manualAccountBalance=document.getElementById("manualAccountBalance");
 var saveManualAccount=document.getElementById("saveManualAccount");
 var deleteManualAccount=document.getElementById("deleteManualAccount");
 var manualAccountBalanceField=document.getElementById("manualAccountBalanceField");
+var cibcFundView=document.getElementById("cibcFundView");
+var cibcFundBackBtn=document.getElementById("cibcFundBackBtn");
+var cibcFundBalance=document.getElementById("cibcFundBalance");
+var cibcFundGain=document.getElementById("cibcFundGain");
+var cibcFundBook=document.getElementById("cibcFundBook");
+var cibcFundGainCard=document.getElementById("cibcFundGainCard");
+var cibcFundHoldings=document.getElementById("cibcFundHoldings");
 var manualAccountDetailView=document.getElementById("manualAccountDetailView");
 var manualDetailBackBtn=document.getElementById("manualDetailBackBtn");
 var manualDetailDeleteBtn=document.getElementById("manualDetailDeleteBtn");
@@ -2168,6 +2241,18 @@ const INVESTMENT_ACCOUNTS=[
   {id:"questrade_tfsa",name:"Questrade TFSA",short:"Questrade TFSA",icon:"Q"},
   {id:"questrade_cash",name:"Questrade Cash",short:"Questrade Cash",icon:"Q"}
 ];
+const CIBC_MUTUAL_FUNDS=[
+  {ticker:"ATL486",name:"CIBC Dividend Growth Fund, Class A",units:197.745,bookValue:9737.31,marketValue:11299.90,displayPrice:57.14},
+  {ticker:"ATL496",name:"CIBC Technology Innovation Fund, Class A",units:84.413,bookValue:5194.48,marketValue:9487.66,displayPrice:112.40},
+  {ticker:"ATL525",name:"CIBC U.S. Equity Fund, Class A",units:201.869,bookValue:5194.48,marketValue:8362.74,displayPrice:41.43}
+];
+function cibcMutualFundSummary(){
+  const bookValue=CIBC_MUTUAL_FUNDS.reduce((s,f)=>s+Number(f.bookValue||0),0);
+  const marketValue=CIBC_MUTUAL_FUNDS.reduce((s,f)=>s+Number(f.marketValue||0),0);
+  const gain=marketValue-bookValue;
+  const gainPct=bookValue?gain/bookValue*100:0;
+  return {bookValue,marketValue,gain,gainPct};
+}
 const DEFAULT_INVESTMENT_ACCOUNT="wealthsimple_tfsa";
 
 let lots = (loadLotsSafe() || []).map(l=>({...l,accountId:l.accountId||DEFAULT_INVESTMENT_ACCOUNT}));
@@ -3552,6 +3637,20 @@ function loadNetWorthHistory(){
 }
 function saveNetWorthHistory(){try{localStorage.setItem(NET_WORTH_HISTORY_KEY,JSON.stringify(netWorthHistory.slice(-730)))}catch(e){}}
 let manualAccounts=loadManualAccounts();
+// v5.11: replace an old exact-name manual placeholder with the real 3-fund CIBC account.
+// Keep a backup in localStorage before removing it, so the migration is reversible.
+(function migrateCibcManualPlaceholderV511(){
+  try{
+    if(localStorage.getItem("cibcMutualFundMigrationV511"))return;
+    const matches=manualAccounts.filter(a=>a&&a.type==="asset"&&String(a.name||"").trim().toLowerCase()==="cibc mutual fund");
+    if(matches.length){
+      localStorage.setItem("cibcManualAccountBackupV511",JSON.stringify(matches));
+      manualAccounts=manualAccounts.filter(a=>!matches.includes(a));
+      saveManualAccounts();
+    }
+    localStorage.setItem("cibcMutualFundMigrationV511","1");
+  }catch(e){console.warn("CIBC manual placeholder migration failed",e)}
+})();
 let netWorthHistory=loadNetWorthHistory();
 
 function manualCurrentValue(a){
@@ -3563,7 +3662,8 @@ function manualBalanceCAD(a){
   return a.currency==="USD"?n*fx:n;
 }
 function netWorthTotals(){
-  const investments=INVESTMENT_ACCOUNTS.reduce((s,a)=>s+portfolioSummary(a.id).accountValue,0);
+  const brokerInvestments=INVESTMENT_ACCOUNTS.reduce((s,a)=>s+portfolioSummary(a.id).accountValue,0);
+  const investments=brokerInvestments+cibcMutualFundSummary().marketValue;
   const manualAssets=manualAccounts.filter(a=>a.type==="asset").reduce((s,a)=>s+manualBalanceCAD(a),0);
   const liabilities=manualAccounts.filter(a=>a.type==="liability").reduce((s,a)=>s+manualBalanceCAD(a),0);
   const assets=investments+manualAssets;
@@ -3857,6 +3957,7 @@ function renderNetWorth(){
   setSeg(breakdownOtherSeg,otherTotal);
   setSeg(breakdownDebtSeg,totals.liabilities);
 
+  const cibcSummary=cibcMutualFundSummary();
   investmentAccountsList.innerHTML=INVESTMENT_ACCOUNTS.map(a=>{
     const s=portfolioSummary(a.id);
     return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
@@ -3864,7 +3965,11 @@ function renderNetWorth(){
       <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${s.ps.length} holding${s.ps.length===1?"":"s"} · Cash ${fmt0(cashForAccount(a.id))}</div></div>
       <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Portfolio</span></div>
     </div>`;
-  }).join('');
+  }).join('')+`<div class="netWorthRow cibcFundAccountRow" data-cibc-fund-account="1">
+      <div class="netWorthIcon">C</div>
+      <div><div class="netWorthAccountName">CIBC Mutual Fund <span class="cibcInvestBadge">3 FUNDS</span></div><div class="netWorthAccountMeta">ATL486 · ATL496 · ATL525 · Purchased 2024</div></div>
+      <div class="netWorthAmount">${fmt(cibcSummary.marketValue)}<span class="sub">Book ${fmt0(cibcSummary.bookValue)}</span></div>
+    </div>`;
 
   const rowHtml=a=>{
     normalizeManualHistory(a);
@@ -3886,8 +3991,47 @@ function renderNetWorth(){
   renderNetWorthChart();
 
   document.querySelectorAll('.investmentAccountRow').forEach(row=>row.onclick=()=>{setSelectedPortfolioAccount(row.dataset.investmentAccount);showView('home')});
+  document.querySelectorAll('.cibcFundAccountRow').forEach(row=>row.onclick=openCibcFundDetail);
   document.querySelectorAll('.manualAccountRow').forEach(row=>row.onclick=()=>openManualAccountDetail(row.dataset.manualId));
 }
+function renderCibcFundDetail(){
+  const s=cibcMutualFundSummary();
+  cibcFundBalance.textContent=fmt(s.marketValue);
+  cibcFundGain.textContent=`${signedMoney(s.gain)} (${s.gainPct>=0?"+":""}${s.gainPct.toFixed(2)}%)`;
+  cibcFundGain.style.color=s.gain>=0?"var(--teal)":"var(--red)";
+  cibcFundBook.textContent=fmt(s.bookValue);
+  cibcFundGainCard.textContent=signedMoney(s.gain);
+  cibcFundGainCard.style.color=s.gain>=0?"var(--teal)":"var(--red)";
+  cibcFundHoldings.innerHTML=CIBC_MUTUAL_FUNDS.map(f=>{
+    const gain=f.marketValue-f.bookValue;
+    const gainPct=f.bookValue?gain/f.bookValue*100:0;
+    return `<div class="cibcHoldingCard">
+      <div class="cibcHoldingTop">
+        <div><div class="cibcHoldingCode">${f.ticker}</div><div class="cibcHoldingName">${f.name}</div></div>
+        <div><div class="cibcHoldingMV">${fmt(f.marketValue)}</div><div class="cibcHoldingGain" style="color:${gain>=0?'var(--teal)':'var(--red)'}">${signedMoney(gain)} (${gainPct>=0?'+':''}${gainPct.toFixed(2)}%)</div></div>
+      </div>
+      <div class="cibcHoldingGrid">
+        <div class="cibcHoldingMetric"><div class="label">Units</div><div class="value">${Number(f.units).toLocaleString(undefined,{minimumFractionDigits:3,maximumFractionDigits:3})}</div></div>
+        <div class="cibcHoldingMetric"><div class="label">Book Value</div><div class="value">${fmt(f.bookValue)}</div></div>
+        <div class="cibcHoldingMetric"><div class="label">Price / Unit</div><div class="value">${fmt(f.displayPrice)}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openCibcFundDetail(){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.navbtn').forEach(n=>n.classList.remove('active'));
+  cibcFundView.classList.add('active');
+  document.body.classList.add('manualDetailOpen');
+  renderCibcFundDetail();
+  window.scrollTo(0,0);
+}
+function closeCibcFundDetail(){
+  document.body.classList.remove('manualDetailOpen');
+  showView('networth');
+}
+if(cibcFundBackBtn)cibcFundBackBtn.onclick=closeCibcFundDetail;
+
 function getManualAccount(id){return manualAccounts.find(a=>a.id===id)||null}
 function manualHistoryRangeRows(a,range){
   normalizeManualHistory(a);
