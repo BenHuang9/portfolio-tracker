@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.5 Chart scrub locks page scroll completely until finger release -->
+<!-- v4.6 Dividend payment-date engine: Alpha Vantage + Yahoo fallback -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -712,7 +712,7 @@ body.chartScrubbing{
       <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
-    <div class="dataFootnote">Dividend dates from this free market-data source are ex-dividend dates. Actual broker payment dates can be later.</div>
+    <div class="dataFootnote">Dividend eligibility uses ex-dividend date. YTD and monthly income use payment date when available from Alpha Vantage; Yahoo ex-date is used only as a fallback.</div>
   </section>
 
 
@@ -944,10 +944,16 @@ const DEFAULT_MARKET_API = "https://portfolio-market-data.benhuang011.workers.de
 let marketApiBase = DEFAULT_MARKET_API;
 let liveMode = false;
 let dividendEventsByTicker = {};
+let dividendSourceByTicker = {};
 let fxHistory = [];
 let liveUpdatedAt = null;
 let currentPortfolioRange = "ALL";
+let dividendSyncInProgress = false;
 const chartCache = new Map();
+const DIVIDEND_META_KEY = "dividendFetchMetaV46";
+const DIVIDEND_ALPHA_TTL = 7 * 24 * 60 * 60 * 1000;
+const DIVIDEND_FALLBACK_TTL = 6 * 60 * 60 * 1000;
+const DIVIDEND_REQUEST_GAP = 13000; // protects the free Alpha Vantage per-minute quota
 
 function loadTextSafe(key, fallback){try{return localStorage.getItem(key)||fallback}catch(e){return fallback}}
 function saveTextSafe(key, value){try{localStorage.setItem(key,value)}catch(e){}}
@@ -967,7 +973,7 @@ function saveMarketCache(){
   try{
     const compactCatalog={};
     Object.keys(catalog).forEach(k=>compactCatalog[k]=catalog[k]);
-    localStorage.setItem("marketCacheV26",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,fxHistory,updatedAt:liveUpdatedAt}));
+    localStorage.setItem("marketCacheV26",JSON.stringify({fx,catalog:compactCatalog,divPayments,dividendEventsByTicker,dividendSourceByTicker,fxHistory,updatedAt:liveUpdatedAt}));
   }catch(e){}
 }
 function loadMarketCache(){
@@ -978,6 +984,7 @@ function loadMarketCache(){
     Object.keys(c.catalog).forEach(k=>catalog[k]=c.catalog[k]);
     if(Array.isArray(c.divPayments))divPayments=c.divPayments;
     dividendEventsByTicker=c.dividendEventsByTicker||{};
+    dividendSourceByTicker=c.dividendSourceByTicker||{};
     fxHistory=Array.isArray(c.fxHistory)?c.fxHistory:[];
     liveUpdatedAt=c.updatedAt||null;
     liveMode=true;
@@ -995,6 +1002,21 @@ async function apiQuote(symbol, range="1y", interval="1d"){
   if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`${symbol}: ${r.status} ${msg}`)}
   return await r.json();
 }
+async function apiDividends(symbol){
+  const r=await fetch(apiUrl("/dividends",{symbol}),{cache:"no-store"});
+  if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`${symbol} dividends: ${r.status} ${msg}`)}
+  return await r.json();
+}
+function normalizeYahooDividendEvents(events){
+  return (events||[]).map(e=>({
+    exDate:e.exDate||e.date,
+    paymentDate:e.paymentDate||e.date,
+    declarationDate:e.declarationDate||null,
+    recordDate:e.recordDate||null,
+    amount:Number(e.amount)||0,
+    paymentDateEstimated:true
+  })).filter(e=>e.exDate && e.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
+}
 function sharesHeldOn(ticker,dateStr){
   return lots.filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
 }
@@ -1006,20 +1028,90 @@ function fxAtDate(dateStr){
 }
 function rebuildDividendPayments(){
   const out=[];
+  const today=new Date().toISOString().slice(0,10);
   for(const [ticker,events] of Object.entries(dividendEventsByTicker)){
     const q=market(ticker);
     for(const ev of (events||[])){
-      const sh=sharesHeldOn(ticker,ev.date);
+      const exDate=ev.exDate||ev.date;
+      const paymentDate=ev.paymentDate||exDate;
+      if(!exDate || !paymentDate || paymentDate>today)continue; // future declared dividend is not received yet
+      const sh=sharesHeldOn(ticker,exDate); // eligibility is determined at ex-date
       if(!(sh>0) || !(Number(ev.amount)>0))continue;
-      const rate=q.currency==="USD"?fxAtDate(ev.date):1;
-      out.push({date:ev.date,ticker,amount:sh*Number(ev.amount)*rate,perShare:Number(ev.amount)});
+      const rate=q.currency==="USD"?fxAtDate(paymentDate):1; // cash is converted near payment date
+      out.push({
+        date:paymentDate,
+        exDate,
+        paymentDate,
+        ticker,
+        amount:sh*Number(ev.amount)*rate,
+        perShare:Number(ev.amount),
+        paymentDateEstimated:Boolean(ev.paymentDateEstimated),
+        source:dividendSourceByTicker[ticker]||"yahoo"
+      });
     }
   }
-  if(out.length) divPayments=out.sort((a,b)=>a.date.localeCompare(b.date));
+  divPayments=out.sort((a,b)=>a.date.localeCompare(b.date));
 }
 function trailingAnnualDividendPerShare(events){
-  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-365);
-  return (events||[]).filter(e=>new Date(e.date+"T00:00:00")>=cutoff).reduce((s,e)=>s+Number(e.amount||0),0);
+  const now=new Date();
+  const today=now.toISOString().slice(0,10);
+  const cutoff=new Date(now); cutoff.setDate(cutoff.getDate()-365);
+  return (events||[]).filter(e=>{
+    const d=e.exDate||e.date;
+    return d && d<=today && new Date(d+"T00:00:00")>=cutoff;
+  }).reduce((s,e)=>s+Number(e.amount||0),0);
+}
+function readDividendMeta(){
+  try{return JSON.parse(localStorage.getItem(DIVIDEND_META_KEY)||"{}")||{}}catch(e){return {}}
+}
+function writeDividendMeta(meta){try{localStorage.setItem(DIVIDEND_META_KEY,JSON.stringify(meta))}catch(e){}}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+function dividendNeedsRefresh(ticker,meta){
+  const row=meta[ticker];
+  if(!row?.fetchedAt)return true;
+  const ttl=row.source==="alpha"?DIVIDEND_ALPHA_TTL:DIVIDEND_FALLBACK_TTL;
+  return Date.now()-Number(row.fetchedAt)>ttl;
+}
+async function syncDividendHistory(tickers){
+  if(dividendSyncInProgress || !marketApiBase || !tickers.length)return;
+  const meta=readDividendMeta();
+  const queue=tickers.filter(t=>dividendNeedsRefresh(t,meta));
+  if(!queue.length)return;
+  dividendSyncInProgress=true;
+  try{
+    for(let i=0;i<queue.length;i++){
+      const ticker=queue[i];
+      try{
+        const data=await apiDividends(ticker);
+        const events=(data.dividends||[]).map(e=>({
+          exDate:e.exDate||e.date,
+          paymentDate:e.paymentDate||e.exDate||e.date,
+          declarationDate:e.declarationDate||null,
+          recordDate:e.recordDate||null,
+          amount:Number(e.amount)||0,
+          paymentDateEstimated:Boolean(e.paymentDateEstimated)
+        })).filter(e=>e.exDate && e.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
+        const isAlpha=data.source==="Alpha Vantage";
+        dividendEventsByTicker[ticker]=events;
+        dividendSourceByTicker[ticker]=isAlpha?"alpha":"yahoo";
+        meta[ticker]={fetchedAt:Date.now(),source:isAlpha?"alpha":"yahoo"};
+        writeDividendMeta(meta);
+        if(catalog[ticker])catalog[ticker].annualDiv=trailingAnnualDividendPerShare(events);
+        rebuildDividendPayments();
+        saveMarketCache();
+        renderHome();
+        renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+        if(currentDetailTicker===ticker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(ticker);
+      }catch(err){
+        console.warn("Dividend history sync failed for",ticker,err);
+        meta[ticker]={fetchedAt:Date.now()-DIVIDEND_FALLBACK_TTL+60*60*1000,source:"error"};
+        writeDividendMeta(meta);
+      }
+      if(i<queue.length-1)await sleep(DIVIDEND_REQUEST_GAP);
+    }
+  }finally{
+    dividendSyncInProgress=false;
+  }
 }
 async function refreshLiveData(silent=false){
   marketApiBase=DEFAULT_MARKET_API;
@@ -1032,7 +1124,7 @@ async function refreshLiveData(silent=false){
   try{
     const tickers=[...new Set(lots.map(l=>l.ticker))];
     const results=await Promise.allSettled([
-      apiQuote("CAD=X","1y","1d"),
+      apiQuote("CAD=X","5y","1d"),
       ...tickers.map(t=>apiQuote(t,"5y","1wk"))
     ]);
 
@@ -1056,8 +1148,12 @@ async function refreshLiveData(silent=false){
       }
       successCount++;
       const q=res.value;
-      const events=(q.dividends||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
-      dividendEventsByTicker[ticker]=events;
+      const yahooEvents=normalizeYahooDividendEvents(q.dividends||[]);
+      if(dividendSourceByTicker[ticker]!=="alpha" || !Array.isArray(dividendEventsByTicker[ticker])){
+        dividendEventsByTicker[ticker]=yahooEvents;
+        if(!dividendSourceByTicker[ticker])dividendSourceByTicker[ticker]="yahoo";
+      }
+      const events=dividendEventsByTicker[ticker]||yahooEvents;
       catalog[ticker]={
         ...(catalog[ticker]||{}),
         title:q.title||ticker,
@@ -1087,6 +1183,8 @@ async function refreshLiveData(silent=false){
     renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
     if(currentDetailTicker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(currentDetailTicker);
     loadPortfolioHistory(currentPortfolioRange);
+    // Dividend history is intentionally refreshed separately and slowly so the free Alpha Vantage key is not rate-limited.
+    syncDividendHistory(tickers);
   }catch(err){
     console.error(err);
     setMarketStatus("error", (liveMode ? "Refresh failed · cached data · " : "Market data unavailable · demo data · ") + String(err?.message||err));

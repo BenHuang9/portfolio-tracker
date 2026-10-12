@@ -1,6 +1,7 @@
 // Cloudflare Worker for the personal Portfolio Tracker.
-// Proxies Yahoo Finance's undocumented chart endpoint and normalizes the result.
-// No API key is stored in the front-end.
+// Yahoo Finance: prices/history/search.
+// Alpha Vantage: dividend corporate actions with ex-date + payment date.
+// ALPHAVANTAGE_API_KEY is stored as a Cloudflare Worker Secret.
 
 const ALLOWED_RANGES = new Set(["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]);
 const ALLOWED_INTERVALS = new Set(["1m","2m","5m","15m","30m","60m","90m","1d","5d","1wk","1mo","3mo"]);
@@ -12,10 +13,46 @@ function cors(origin) {
     "Access-Control-Allow-Headers": "Content-Type"
   };
 }
-function json(body,status=200,origin=""){
-  return new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json;charset=UTF-8","Cache-Control":"public,max-age=30",...cors(origin)}});
+function json(body,status=200,origin="",cacheSeconds=30){
+  return new Response(JSON.stringify(body),{
+    status,
+    headers:{
+      "Content-Type":"application/json;charset=UTF-8",
+      "Cache-Control":`public,max-age=${cacheSeconds}`,
+      ...cors(origin)
+    }
+  });
 }
 function dateKey(sec){return new Date(sec*1000).toISOString().slice(0,10)}
+function validDate(v){return /^\d{4}-\d{2}-\d{2}$/.test(String(v||""))}
+function alphaSymbol(symbol){
+  if(symbol.endsWith(".TO")) return symbol.slice(0,-3)+".TRT";
+  if(symbol.endsWith(".V")) return symbol.slice(0,-2)+".TRV";
+  return symbol;
+}
+async function yahooDividendFallback(symbol){
+  const u=new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
+  u.searchParams.set("range","10y");
+  u.searchParams.set("interval","1mo");
+  u.searchParams.set("events","div");
+  u.searchParams.set("includeAdjustedClose","false");
+  const r=await fetch(u.toString(),{
+    headers:{"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/1.2)","Accept":"application/json"},
+    cf:{cacheTtl:3600,cacheEverything:true}
+  });
+  if(!r.ok) throw new Error(`Yahoo dividend fallback ${r.status}`);
+  const raw=await r.json();
+  const result=raw?.chart?.result?.[0];
+  if(!result) throw new Error(raw?.chart?.error?.description||"Yahoo dividend fallback unavailable");
+  return Object.values(result.events?.dividends||{}).map(d=>({
+    exDate:dateKey(d.date),
+    paymentDate:dateKey(d.date),
+    declarationDate:null,
+    recordDate:null,
+    amount:Number(d.amount)||0,
+    paymentDateEstimated:true
+  })).filter(d=>d.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -23,8 +60,16 @@ export default {
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors(origin)});
     if(request.method!=="GET")return json({error:"GET only"},405,origin);
     const url=new URL(request.url);
-    if(url.pathname==="/health")return json({ok:true,source:"Yahoo Finance chart proxy"},200,origin);
-    
+
+    if(url.pathname==="/health"){
+      return json({
+        ok:true,
+        priceSource:"Yahoo Finance chart proxy",
+        dividendSource:"Alpha Vantage with Yahoo fallback",
+        alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY)
+      },200,origin,30);
+    }
+
     if(url.pathname==="/search"){
       const q=(url.searchParams.get("q")||"").trim();
       if(!q)return json({results:[]},200,origin);
@@ -38,10 +83,7 @@ export default {
       searchUrl.searchParams.set("enableFuzzyQuery","true");
 
       const sr=await fetch(searchUrl.toString(),{
-        headers:{
-          "User-Agent":"Mozilla/5.0",
-          "Accept":"application/json,text/plain,*/*"
-        }
+        headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json,text/plain,*/*"}
       });
       if(!sr.ok)return json({error:`Yahoo search ${sr.status}`},502,origin);
       const sj=await sr.json();
@@ -60,7 +102,79 @@ export default {
       return json({results:rows},200,origin);
     }
 
-    if(url.pathname!=="/quote")return json({error:"Use /quote?symbol=AAPL"},404,origin);
+    if(url.pathname==="/dividends"){
+      const symbol=(url.searchParams.get("symbol")||"").trim().toUpperCase();
+      if(!symbol || symbol.length>32 || !/^[A-Z0-9.^=\-]+$/.test(symbol))return json({error:"Invalid symbol"},400,origin);
+
+      // Cache normalized dividend history at the Cloudflare edge. Dividend corporate actions
+      // do not need 5-minute refreshes; this also protects the Alpha Vantage free quota.
+      const cache=caches.default;
+      const cacheKey=new Request(`${url.origin}/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
+      const cached=await cache.match(cacheKey);
+      if(cached){
+        const h=new Headers(cached.headers); h.set("Access-Control-Allow-Origin","*"); h.set("X-Portfolio-Cache","HIT");
+        return new Response(cached.body,{status:cached.status,headers:h});
+      }
+
+      let alphaProblem="";
+      if(env.ALPHAVANTAGE_API_KEY){
+        try{
+          const avSymbol=alphaSymbol(symbol);
+          const av=new URL("https://www.alphavantage.co/query");
+          av.searchParams.set("function","DIVIDENDS");
+          av.searchParams.set("symbol",avSymbol);
+          av.searchParams.set("apikey",env.ALPHAVANTAGE_API_KEY);
+
+          const ar=await fetch(av.toString(),{
+            headers:{"Accept":"application/json","User-Agent":"PortfolioTracker/1.2"}
+          });
+          if(!ar.ok) throw new Error(`Alpha Vantage ${ar.status}`);
+          const raw=await ar.json();
+          if(raw?.Note || raw?.Information) throw new Error(raw.Note||raw.Information);
+          if(raw?.ErrorMessage) throw new Error(raw.ErrorMessage);
+
+          const rows=Array.isArray(raw?.data)?raw.data:[];
+          const dividends=rows.map(d=>{
+            const ex=validDate(d.ex_dividend_date)?d.ex_dividend_date:null;
+            const pay=validDate(d.payment_date)?d.payment_date:ex;
+            return {
+              exDate:ex,
+              paymentDate:pay,
+              declarationDate:validDate(d.declaration_date)?d.declaration_date:null,
+              recordDate:validDate(d.record_date)?d.record_date:null,
+              amount:Number(d.amount)||0,
+              paymentDateEstimated:!validDate(d.payment_date)
+            };
+          }).filter(d=>d.exDate && d.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
+
+          // A legitimate non-dividend-paying security may return an empty data array.
+          // If Alpha gave a normal response, trust it instead of inventing Yahoo events.
+          const body={symbol,providerSymbol:avSymbol,source:"Alpha Vantage",dividends};
+          const resp=json(body,200,origin,86400);
+          ctx.waitUntil(cache.put(cacheKey,resp.clone()));
+          return resp;
+        }catch(e){
+          alphaProblem=String(e?.message||e);
+          console.warn("Alpha Vantage dividend lookup failed",symbol,alphaProblem);
+        }
+      }else{
+        alphaProblem="ALPHAVANTAGE_API_KEY is not configured";
+      }
+
+      // Graceful fallback: keeps the app working if Alpha is rate-limited or does not know a symbol.
+      // These dates are ex-dividend dates, so paymentDateEstimated=true is explicit.
+      try{
+        const dividends=await yahooDividendFallback(symbol);
+        const body={symbol,providerSymbol:symbol,source:"Yahoo fallback",warning:alphaProblem,dividends};
+        const resp=json(body,200,origin,1800);
+        ctx.waitUntil(cache.put(cacheKey,resp.clone()));
+        return resp;
+      }catch(e){
+        return json({error:String(e?.message||e),alphaError:alphaProblem},502,origin,30);
+      }
+    }
+
+    if(url.pathname!=="/quote")return json({error:"Use /quote?symbol=AAPL or /dividends?symbol=AAPL"},404,origin);
 
     const symbol=(url.searchParams.get("symbol")||"").trim().toUpperCase();
     if(!symbol || symbol.length>32 || !/^[A-Z0-9.^=\-]+$/.test(symbol))return json({error:"Invalid symbol"},400,origin);
@@ -75,7 +189,7 @@ export default {
 
     try{
       const resp=await fetch(yahoo.toString(),{
-        headers:{"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/1.1)","Accept":"application/json"},
+        headers:{"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/1.2)","Accept":"application/json"},
         cf:{cacheTtl:30,cacheEverything:true}
       });
       if(!resp.ok)return json({error:`Yahoo upstream ${resp.status}`},502,origin);
@@ -99,8 +213,6 @@ export default {
         const marketDate=meta.regularMarketTime?dateKey(meta.regularMarketTime):null;
         const last=history.at(-1);
         const prior=history.at(-2);
-        // Yahoo metadata can report a stale pre-split previousClose for some ETFs.
-        // Derive the prior trading close from the actual chart series instead.
         if(marketDate && last?.date===marketDate && prior?.close>0) previousClose=Number(prior.close);
         else if(last?.close>0) previousClose=Number(last.close);
         else if(prior?.close>0) previousClose=Number(prior.close);
