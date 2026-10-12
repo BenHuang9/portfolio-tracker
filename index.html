@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
+<!-- v5.9.2 Manual Net Worth snapshot -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1279,6 +1280,15 @@ body.manualDetailOpen{padding-bottom:0!important}
   .manualDetailSection{padding-left:20px!important;padding-right:20px!important}
 }
 
+
+/* v5.9.2 simple Net Worth snapshot */
+.snapshotActionRow{display:flex;justify-content:flex-end;padding:8px 20px 0}
+.snapshotBtn{border:1px solid var(--line);background:var(--card);border-radius:999px;min-height:40px;padding:0 15px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:850;color:var(--text);box-shadow:0 5px 16px rgba(0,0,0,.04)}
+.snapshotBtn:active{background:#efefec}
+.snapshotPlus{font-size:17px;line-height:1;margin-top:-1px}
+#netWorthSnapshotModal .sheet{border-radius:28px 28px 0 0!important}
+#netWorthSnapshotModal .primary{min-height:54px;border-radius:18px!important}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1417,6 +1427,12 @@ body.manualDetailOpen{padding-bottom:0!important}
     </div>
     <div class="netWorthChart" id="netWorthChart">
       <div class="netWorthChartEmpty">Net worth history starts when you begin using this page.</div>
+    </div>
+
+    <div class="snapshotActionRow">
+      <button class="snapshotBtn" id="addNetWorthSnapshotBtn">
+        <span class="snapshotPlus">＋</span><span>Add Snapshot</span>
+      </button>
     </div>
 
     <div class="netWorthSummary">
@@ -1747,6 +1763,28 @@ body.manualDetailOpen{padding-bottom:0!important}
   </div>
 </div>
 
+<div class="modal" id="netWorthSnapshotModal">
+  <div class="sheet">
+    <div class="sheetHead">
+      <h2>Add Snapshot</h2>
+      <button class="close" id="closeNetWorthSnapshot">×</button>
+    </div>
+    <div class="field">
+      <label>Net Worth</label>
+      <div class="updateValueCurrencyWrap">
+        <input id="netWorthSnapshotValue" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+        <span class="updateValueCurrencyBadge">CAD</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>As of</label>
+      <input id="netWorthSnapshotDate" type="date"/>
+    </div>
+    <button class="primary" id="saveNetWorthSnapshot">Save Snapshot</button>
+    <div class="manualUpdateHint">This only adds a point to Net Worth history. It does not change any account balance or holding.</div>
+  </div>
+</div>
+
 <script>
 let fx = 1.39; // replaced by live USD/CAD when connected
 // Explicit DOM bindings for iOS Safari / in-app webviews.
@@ -1841,6 +1879,12 @@ var manualUpdateValue=document.getElementById("manualUpdateValue");
 var manualUpdateDate=document.getElementById("manualUpdateDate");
 var manualUpdateCurrencyBadge=document.getElementById("manualUpdateCurrencyBadge");
 var saveManualUpdate=document.getElementById("saveManualUpdate");
+var addNetWorthSnapshotBtn=document.getElementById("addNetWorthSnapshotBtn");
+var netWorthSnapshotModal=document.getElementById("netWorthSnapshotModal");
+var closeNetWorthSnapshot=document.getElementById("closeNetWorthSnapshot");
+var netWorthSnapshotValue=document.getElementById("netWorthSnapshotValue");
+var netWorthSnapshotDate=document.getElementById("netWorthSnapshotDate");
+var saveNetWorthSnapshot=document.getElementById("saveNetWorthSnapshot");
 
 const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
 (function resetOldPortfolioDataOnce(){
@@ -3283,6 +3327,33 @@ function recordNetWorthSnapshot(total){
   netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).sort((a,b)=>a.date.localeCompare(b.date)).slice(-730);
   saveNetWorthHistory();
 }
+
+function openNetWorthSnapshotModal(){
+  const totals=netWorthTotals();
+  netWorthSnapshotValue.value=Number(totals.total||0).toFixed(2);
+  const d=new Date();
+  d.setDate(d.getDate()-1);
+  netWorthSnapshotDate.value=localDateISO(d);
+  netWorthSnapshotDate.max=localDateISO();
+  netWorthSnapshotModal.classList.add("show");
+  setTimeout(()=>netWorthSnapshotValue.focus(),80);
+}
+function closeNetWorthSnapshotModalFn(){netWorthSnapshotModal.classList.remove("show")}
+function saveManualNetWorthSnapshot(){
+  const value=Number(netWorthSnapshotValue.value);
+  const date=netWorthSnapshotDate.value;
+  if(!Number.isFinite(value)||value<0){alert("Enter a valid Net Worth value.");return}
+  if(!date){alert("Choose a snapshot date.");return}
+  if(date>localDateISO()){alert("The snapshot date can’t be in the future.");return}
+  const ix=netWorthHistory.findIndex(x=>x.date===date);
+  if(ix>=0)netWorthHistory[ix].value=value;
+  else netWorthHistory.push({date,value});
+  netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).sort((a,b)=>a.date.localeCompare(b.date)).slice(-730);
+  saveNetWorthHistory();
+  closeNetWorthSnapshotModalFn();
+  renderNetWorthChart();
+}
+
 function renderNetWorthChart(){
   if(!netWorthChart)return;
   const now=new Date();
@@ -3295,7 +3366,7 @@ function renderNetWorthChart(){
     rows=rows.filter(x=>x.date>=cutoff);
   }
   if(rows.length<2){
-    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first snapshot.<br>Today’s value is already saved automatically.</div>';
+    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first snapshot.<br>Today’s value is saved automatically — or add a dated snapshot below.</div>';
     return;
   }
   const w=520,h=180,padX=14,padY=18;
@@ -3563,6 +3634,10 @@ document.querySelectorAll('#netWorthRanges button').forEach(b=>b.onclick=()=>{
   currentNetWorthRange=String(b.textContent||"ALL").trim();
   renderNetWorthChart();
 });
+addNetWorthSnapshotBtn.onclick=openNetWorthSnapshotModal;
+closeNetWorthSnapshot.onclick=closeNetWorthSnapshotModalFn;
+netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWorthSnapshotModalFn()};
+saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
 
 let tickerSearchTimer=null;
