@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17 Stats spending + income overview with visible monthly amounts -->
+<!-- v5.17.1 category detail button spacing fix -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2683,10 +2683,10 @@ html,body{
 /* v5.16.5 category group-by-note */
 .categoryDetailMetaRow{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-top:4px;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+  margin-top:10px;
 }
 .categoryDetailMetaRow .categoryDetailCount{
   margin-top:0!important;
@@ -2696,11 +2696,13 @@ html,body{
   background:#eef8f4;
   color:#17785c;
   border-radius:999px;
-  min-height:34px;
-  padding:7px 12px;
-  font-size:11px;
+  min-height:32px;
+  padding:7px 14px;
+  font-size:10.5px;
   font-weight:850;
   white-space:nowrap;
+  align-self:flex-start;
+  margin-top:2px;
 }
 .categoryGroupToggle.active{
   background:#dff2ea;
