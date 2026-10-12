@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.4 Holding detail enhanced; Home unchanged -->
+<!-- v3.5 Holding detail redesigned as a compact position card; Home unchanged -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -372,6 +372,95 @@ input,button{touch-action:manipulation;}
   text-align:right;
 }
 
+
+/* v3.5 Holding detail card layout */
+.holdingSummaryCard{
+  margin:6px 20px 8px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:18px;
+  box-shadow:var(--shadow);
+}
+.holdingSummaryTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.holdingPriceRow{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:16px;
+}
+.holdingSummaryCard .detailPrice{
+  margin:0;
+  font-size:36px;
+  line-height:1;
+}
+.holdingSummaryCard .detailToday{
+  margin:0;
+  text-align:right;
+  font-size:14px;
+  line-height:1.25;
+  padding-bottom:2px;
+}
+.holdingDivider{
+  height:1px;
+  background:var(--line);
+  margin:16px 0;
+}
+.holdingMetricsGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  column-gap:24px;
+  row-gap:18px;
+}
+.holdingMetric .label,
+.holdingReturnRow .label{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.25px;
+}
+.holdingMetric .value{
+  margin-top:4px;
+  font-size:18px;
+  line-height:1.1;
+  font-weight:850;
+}
+.holdingMetric .value.income{color:#c97800}
+.holdingMetric .value.received{color:#7d36c7}
+.holdingReturnRow{
+  display:grid;
+  grid-template-columns:1fr auto;
+  grid-template-areas:
+    "label value"
+    ". pct";
+  align-items:end;
+  gap:2px 14px;
+}
+.holdingReturnRow .label{grid-area:label}
+.holdingReturnValue{
+  grid-area:value;
+  text-align:right;
+  font-size:20px;
+  line-height:1.1;
+  font-weight:900;
+}
+.holdingReturnPct{
+  grid-area:pct;
+  text-align:right;
+  font-size:12px;
+  font-weight:800;
+  margin-top:3px;
+}
+.holdingReturnValue.pos,.holdingReturnPct.pos{color:var(--green)}
+.holdingReturnValue.neg,.holdingReturnPct.neg{color:var(--red)}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -478,27 +567,58 @@ input,button{touch-action:manipulation;}
       <div style="width:44px"></div>
     </div>
 
-    <div class="detailHero">
-      <div class="detailHeaderLine">
+    <div class="holdingSummaryCard">
+      <div class="holdingSummaryTop">
         <div style="min-width:0">
           <div class="detailTicker" id="detailTicker">—</div>
           <div class="detailTitle" id="detailTitle">Holding</div>
         </div>
         <div class="detailBookWeight" id="detailBookWeight">0.0% of Book</div>
       </div>
-      <div class="detailPrice" id="detailPrice">$0.00</div>
-      <div class="detailToday pos" id="detailToday">+$0.00 Today (+0.00%)</div>
-    </div>
 
-    <div class="detailGrid">
-      <div class="detailCard"><div class="label">Shares</div><div class="value" id="detailShares">0</div></div>
-      <div class="detailCard"><div class="label">Average Cost</div><div class="value" id="detailAvg">$0.00</div></div>
-      <div class="detailCard"><div class="label">Market Value</div><div class="value" id="detailMV">$0</div></div>
-      <div class="detailCard"><div class="label">Book Value</div><div class="value" id="detailBV">$0</div></div>
-      <div class="detailCard"><div class="label">Capital Gain/Loss</div><div class="value" id="detailCapital">$0</div></div>
-      <div class="detailCard"><div class="label">Total Return (Incl. Dividends)</div><div class="value" id="detailTotal">$0</div></div>
-      <div class="detailCard"><div class="label">Monthly Dividend</div><div class="value" id="detailMonthlyDiv">$0</div></div>
-      <div class="detailCard"><div class="label">Dividend Received</div><div class="value" id="detailReceived">$0</div></div>
+      <div class="holdingPriceRow">
+        <div class="detailPrice" id="detailPrice">$0.00</div>
+        <div class="detailToday pos" id="detailToday">+$0.00 Today (+0.00%)</div>
+      </div>
+
+      <div class="holdingDivider"></div>
+
+      <div class="holdingMetricsGrid">
+        <div class="holdingMetric">
+          <div class="label">Shares</div>
+          <div class="value" id="detailShares">0</div>
+        </div>
+        <div class="holdingMetric">
+          <div class="label">Average Cost</div>
+          <div class="value" id="detailAvg">$0.00</div>
+        </div>
+
+        <div class="holdingMetric">
+          <div class="label">Market Value</div>
+          <div class="value" id="detailMV">$0</div>
+        </div>
+        <div class="holdingMetric">
+          <div class="label">Book Value</div>
+          <div class="value" id="detailBV">$0</div>
+        </div>
+
+        <div class="holdingMetric">
+          <div class="label">Monthly Dividend</div>
+          <div class="value income" id="detailMonthlyDiv">$0</div>
+        </div>
+        <div class="holdingMetric">
+          <div class="label">Dividend Received</div>
+          <div class="value received" id="detailReceived">$0</div>
+        </div>
+      </div>
+
+      <div class="holdingDivider"></div>
+
+      <div class="holdingReturnRow">
+        <div class="label">Total Return</div>
+        <div class="holdingReturnValue" id="detailTotal">$0</div>
+        <div class="holdingReturnPct" id="detailTotalPct">+0.00% Incl. Dividends</div>
+      </div>
     </div>
 
     <div class="detailSection">
@@ -1268,13 +1388,13 @@ function openHoldingDetail(ticker){
   document.getElementById("detailMV").textContent = fmt(p.mv);
   document.getElementById("detailBV").textContent = fmt(p.bv);
 
-  const capEl = document.getElementById("detailCapital");
-  capEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital));
-  capEl.style.color = capital>=0 ? "var(--green)" : "var(--red)";
-
   const totalEl = document.getElementById("detailTotal");
+  const totalPct = p.bv ? total / p.bv * 100 : 0;
+  const totalPctEl = document.getElementById("detailTotalPct");
   totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total));
-  totalEl.style.color = total>=0 ? "var(--green)" : "var(--red)";
+  totalEl.className = "holdingReturnValue " + (total>=0 ? "pos" : "neg");
+  totalPctEl.textContent = pct(totalPct) + " Incl. Dividends";
+  totalPctEl.className = "holdingReturnPct " + (total>=0 ? "pos" : "neg");
 
   document.getElementById("detailMonthlyDiv").textContent = fmt(p.annual/12);
   document.getElementById("detailReceived").textContent = fmt(received);
