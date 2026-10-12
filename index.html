@@ -823,7 +823,7 @@ body.chartScrubbing{
         <div class="chartScrubDate" id="chartScrubDate"></div>
         <div class="chartScrubValue" id="chartScrubValue"></div>
       </div>
-      <div class="chartScrubHint">Performance Value</div>
+      <div class="chartScrubHint">Portfolio Performance</div>
     </div>
 
     <div class="chartWrap">
@@ -1514,11 +1514,9 @@ async function loadPortfolioHistory(label){
 
   const lotKey=lots.map(l=>`${l.ticker}:${l.date}:${l.shares}:${l.cost}`).join(";");
   const divKey=divPayments.map(p=>`${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
-  const key=currentPortfolioRange+"|"+lotKey+"|"+divKey;
+  const key="twr|"+currentPortfolioRange+"|"+lotKey+"|"+divKey;
 
-  if(chartCache.has(key)){
-    const cached=chartCache.get(key);
-    renderLineChart(cached.data);
+  const applyPeriodReturn=(payload)=>{
     if(currentPortfolioRange==="ALL"){
       const ps=positions();
       const mv=ps.reduce((s,p)=>s+p.mv,0);
@@ -1528,13 +1526,22 @@ async function loadPortfolioHistory(label){
       portfolioGain.textContent=signedMoney(total)+" all time";
       portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
     }else{
-      portfolioGain.textContent=signedMoney(cached.periodReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
-      portfolioGain.style.color=cached.periodReturn>=0?"var(--green)":"var(--red)";
+      const periodReturn=Number(payload?.periodReturn)||0;
+      portfolioGain.textContent=signedMoney(periodReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+      portfolioGain.style.color=periodReturn>=0?"var(--green)":"var(--red)";
     }
+  };
+
+  if(chartCache.has(key)){
+    const cached=chartCache.get(key);
+    renderLineChart(cached.data);
+    applyPeriodReturn(cached);
     return;
   }
 
-  const cfg=currentPortfolioRange==="ALL" ? allRangeConfig() : (portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
+  const cfg=currentPortfolioRange==="ALL"
+    ? allRangeConfig()
+    : (portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
 
   try{
     const tickers=[...new Set(lots.map(l=>l.ticker))];
@@ -1549,98 +1556,110 @@ async function loadPortfolioHistory(label){
     const fxQ=needsFx?responses[responses.length-1]:null;
     const fxHist=fxQ?.history||fxHistory||[];
 
-    let timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
-    timeline=sampleArray(timeline,220);
+    // Use the full timeline for the return calculation. We only thin the final
+    // rendered series, so purchases inside the selected period do not create jumps.
+    const timeline=[...new Set(
+      tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time))
+    )].sort((a,b)=>a-b);
 
-    // Raw historical holdings market value.
-    const rawValues=[];
-    for(const t of timeline){
-      const date=new Date(t*1000).toISOString().slice(0,10);
-      let total=0,has=false;
+    if(timeline.length<2)return;
+
+    const pointDate=t=>new Date(t*1000).toISOString().slice(0,10);
+    const cadPriceAt=(ticker,t)=>{
+      const px=valueAtOrBefore(qMap[ticker].history,t);
+      if(!(px>0))return null;
+      if(market(ticker).currency!=="USD")return px;
+      const rate=valueAtOrBefore(fxHist,t)||fx;
+      return px*rate;
+    };
+
+    // Find the first point where the portfolio actually has value.
+    let startIx=-1;
+    for(let i=0;i<timeline.length;i++){
+      const d=pointDate(timeline[i]);
+      let v=0;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,date);
+        const sh=sharesHeldOn(ticker,d);
+        if(!(sh>0))continue;
+        const px=cadPriceAt(ticker,timeline[i]);
+        if(px>0)v+=sh*px;
+      }
+      if(v>0){startIx=i;break;}
+    }
+    if(startIx<0 || startIx>=timeline.length-1)return;
+
+    let growth=1;
+    const growthPoints=[{time:timeline[startIx],growth:1}];
+
+    // Link sub-period returns. This is a time-weighted style calculation:
+    // - shares already held at the start of an interval participate in that interval
+    // - new buys are external cash flows, so they do not create fake investment gains
+    // - dividends paid during the interval are included as investment return
+    for(let i=startIx+1;i<timeline.length;i++){
+      const prevT=timeline[i-1];
+      const currT=timeline[i];
+      const prevDate=pointDate(prevT);
+      const currDate=pointDate(currT);
+
+      let prevValue=0;
+      let sameSharesEndValue=0;
+
+      for(const ticker of tickers){
+        const sh=sharesHeldOn(ticker,prevDate);
         if(!(sh>0))continue;
 
-        const px=valueAtOrBefore(qMap[ticker].history,t);
-        if(!(px>0))continue;
+        const p0=cadPriceAt(ticker,prevT);
+        const p1=cadPriceAt(ticker,currT);
+        if(!(p0>0) || !(p1>0))continue;
 
-        let rate=1;
-        if(market(ticker).currency==="USD"){
-          rate=valueAtOrBefore(fxHist,t)||fx;
+        prevValue+=sh*p0;
+        sameSharesEndValue+=sh*p1;
+      }
+
+      if(prevValue>0){
+        const dividends=divPayments
+          .filter(p=>p.date>prevDate && p.date<=currDate)
+          .reduce((s,p)=>s+Number(p.amount||0),0);
+
+        let r=(sameSharesEndValue + dividends - prevValue)/prevValue;
+
+        // Ignore only obviously corrupt upstream spikes; normal market moves remain untouched.
+        if(Number.isFinite(r)){
+          if(r<-0.95)r=-0.95;
+          if(r>5)r=5;
+          growth*=1+r;
         }
-        total+=sh*px*rate;
-        has=true;
       }
-      if(has)rawValues.push({time:t,value:total,date});
+
+      growthPoints.push({time:currT,growth});
     }
 
-    if(rawValues.length<2)return;
+    if(growthPoints.length<2 || !(growth>0))return;
 
-    const startDate=rawValues[0].date;
-    const endDate=rawValues.at(-1).date;
-    const startRaw=rawValues[0].value;
-
-    // Purchases after the first plotted day are external cash flows, not investment return.
-    const purchaseFlows=lots
-      .filter(l=>l.date>startDate && l.date<=endDate)
-      .map(l=>({date:l.date,amount:lotCostAtDateCAD(l,fxHist)}))
-      .filter(x=>x.amount>0)
-      .sort((a,b)=>a.date.localeCompare(b.date));
-
-    // Dividends are investment return. Add them back on their payment dates.
-    const dividendFlows=divPayments
-      .filter(p=>p.date>startDate && p.date<=endDate)
-      .map(p=>({date:p.date,amount:Number(p.amount)||0}))
-      .filter(x=>x.amount>0)
-      .sort((a,b)=>a.date.localeCompare(b.date));
-
-    let purchaseIx=0,divIx=0,cumPurchases=0,cumDividends=0;
-    const performancePoints=[];
-
-    for(const p of rawValues){
-      while(purchaseIx<purchaseFlows.length && purchaseFlows[purchaseIx].date<=p.date){
-        cumPurchases+=purchaseFlows[purchaseIx].amount;
-        purchaseIx++;
-      }
-      while(divIx<dividendFlows.length && dividendFlows[divIx].date<=p.date){
-        cumDividends+=dividendFlows[divIx].amount;
-        divIx++;
-      }
-
-      const returnDelta=(p.value-startRaw)-cumPurchases+cumDividends;
-      performancePoints.push({...p,returnDelta});
-    }
-
-    const finalReturn=performancePoints.at(-1).returnDelta;
-
-    // Anchor the synthetic performance series to today's real holdings market value.
-    // This keeps the endpoint meaningful while removing fake jumps caused by new buys.
     const currentMV=positions().reduce((s,p)=>s+p.mv,0);
-    const baseline=currentMV-finalReturn;
-    const adjusted=performancePoints.map(p=>({
+
+    // Convert the TWR growth path into a dollar-valued performance line that ends at
+    // the current holdings market value. This makes the shape comparable to a broker
+    // performance chart without pretending we know the user's historical cash balance.
+    const startEquivalent=currentMV/growth;
+    let adjusted=growthPoints.map(p=>({
       time:p.time,
-      value:baseline+p.returnDelta
+      value:startEquivalent*p.growth
     }));
 
-    // Make the last plotted point match the current market value.
-    adjusted[adjusted.length-1].value=currentMV;
+    adjusted=sampleArray(adjusted,220);
+    if(adjusted.length)adjusted[adjusted.length-1].value=currentMV;
 
-    const payload={data:adjusted,periodReturn:finalReturn};
+    const periodReturn=currentMV-startEquivalent;
+    const payload={
+      data:adjusted,
+      periodReturn,
+      periodPct:(growth-1)*100
+    };
+
     chartCache.set(key,payload);
     renderLineChart(adjusted);
-
-    if(currentPortfolioRange==="ALL"){
-      const ps=positions();
-      const mv=ps.reduce((s,p)=>s+p.mv,0);
-      const bv=ps.reduce((s,p)=>s+p.bv,0);
-      const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
-      const total=(mv-bv)+divAll;
-      portfolioGain.textContent=signedMoney(total)+" all time";
-      portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
-    }else{
-      portfolioGain.textContent=signedMoney(finalReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
-      portfolioGain.style.color=finalReturn>=0?"var(--green)":"var(--red)";
-    }
+    applyPeriodReturn(payload);
   }catch(e){
     console.warn("history",e);
   }
