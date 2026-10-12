@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.12.5 Clean native price display -->
+<!-- v5.12.6 Holdings Add Lot button + compact mobile nav -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1567,6 +1567,47 @@ body.manualDetailOpen{padding-bottom:0!important}
   }
 }
 
+
+/* v5.12.6 Holdings add-lot CTA + compact nav */
+.bottom{
+  grid-template-columns:repeat(3,1fr)!important;
+  max-width:430px!important;
+}
+.holdingsAddLotBtn{
+  width:100%;
+  min-height:48px;
+  margin:0 0 12px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--card);
+  color:var(--text);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  font-size:15px;
+  font-weight:850;
+  box-shadow:0 4px 14px rgba(0,0,0,.035);
+}
+.holdingsAddLotBtn:active{
+  background:#f1f1ee;
+  transform:scale(.995);
+}
+.holdingsAddLotPlus{
+  font-size:22px;
+  line-height:1;
+  margin-top:-1px;
+}
+@media(max-width:430px){
+  .bottom{
+    width:calc(100% - 16px)!important;
+    gap:4px!important;
+  }
+  .navLabel{
+    font-size:10px!important;
+  }
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1646,6 +1687,10 @@ body.manualDetailOpen{padding-bottom:0!important}
 
     <div class="section">
       <div class="sectionHead"><h2>Holdings</h2><div class="small" id="holdingCount">0 holdings</div></div>
+      <button class="holdingsAddLotBtn" id="holdingsAddLotBtn" type="button">
+        <span class="holdingsAddLotPlus">＋</span>
+        <span>Add Lot</span>
+      </button>
       <div class="holdings">
         <div class="hdr"><div>Stock</div><div>Shares</div><div>Price</div><div>Today</div></div>
         
@@ -1946,7 +1991,7 @@ body.manualDetailOpen{padding-bottom:0!important}
     </div>
   </section>
 
-  <button class="addFab" id="addBtn">+</button>
+  <button class="addFab" id="addBtn" style="display:none">+</button>
 
   <nav class="bottom" aria-label="Primary navigation">
     <button class="navbtn active" data-nav="networth">
@@ -1957,14 +2002,7 @@ body.manualDetailOpen{padding-bottom:0!important}
       <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2"/><path d="m4 7 6-4 6 7 5-4"/></svg></span>
       <span class="navLabel">Investment</span>
     </button>
-    <button class="navbtn" data-nav="div">
-      <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-7"/></svg></span>
-      <span class="navLabel">Dividends</span>
-    </button>
-    <button class="navbtn" id="navAdd">
-      <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
-      <span class="navLabel">Add Lot</span>
-    </button>
+
     <button class="navbtn" id="navSettings">
       <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="M19.1 13.5a7.9 7.9 0 0 0 0-3l2-1.5-2-3.5-2.5 1a8.7 8.7 0 0 0-2.6-1.5L13.7 2h-4L9.4 5a8.7 8.7 0 0 0-2.6 1.5l-2.5-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 3l-2 1.5 2 3.5 2.5-1A8.7 8.7 0 0 0 9.4 19l.3 3h4l.3-3a8.7 8.7 0 0 0 2.6-1.5l2.5 1 2-3.5z"/></svg></span>
       <span class="navLabel">Settings</span>
@@ -2146,6 +2184,7 @@ var monthlyIncome=document.getElementById("monthlyIncome");
 var incomeProgress=document.getElementById("incomeProgress");
 var holdingCount=document.getElementById("holdingCount");
 var holdingsRows=document.getElementById("holdingsRows");
+var holdingsAddLotBtn=document.getElementById("holdingsAddLotBtn");
 var homeMonthStrip=document.getElementById("homeMonthStrip");
 var lineChart=document.getElementById("lineChart");
 var divTotal=document.getElementById("divTotal");
@@ -4548,7 +4587,10 @@ function openModal(){
   addModal.classList.add("show");
 }
 function closeModalFn(){addModal.classList.remove("show");hideTickerResults()}
-if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
+if(addBtn) addBtn.onclick=openModal;
+if(navAdd) navAdd.onclick=openModal;
+if(holdingsAddLotBtn) holdingsAddLotBtn.onclick=openModal;
+if(closeModal) closeModal.onclick=closeModalFn;
 addModal.onclick=e=>{if(e.target===addModal)closeModalFn()};
 saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
