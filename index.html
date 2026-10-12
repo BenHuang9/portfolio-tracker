@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.9.2 Manual Net Worth snapshot -->
+<!-- v5.9.3 Net Worth return UI polish -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1289,6 +1289,23 @@ body.manualDetailOpen{padding-bottom:0!important}
 #netWorthSnapshotModal .sheet{border-radius:28px 28px 0 0!important}
 #netWorthSnapshotModal .primary{min-height:54px;border-radius:18px!important}
 
+
+/* v5.9.3 Net Worth return */
+.netWorthReturn{
+  margin-top:9px;
+  font-size:17px;
+  line-height:1.15;
+  font-weight:760;
+  letter-spacing:-.015em;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.netWorthReturn.pos{color:var(--teal)}
+.netWorthReturn.neg{color:var(--red)}
+@media(max-width:430px){
+  .netWorthReturn{font-size:16px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1420,6 +1437,7 @@ body.manualDetailOpen{padding-bottom:0!important}
     <div class="netWorthHero">
       <div><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
       <div class="netWorthMeta" id="netWorthMeta">Investments + cash − liabilities</div>
+      <div class="netWorthReturn" id="netWorthReturn">— history building</div>
     </div>
 
     <div class="seg netWorthRange" id="netWorthRanges">
@@ -1842,6 +1860,7 @@ var questradeCashAccountNetDepositsInput=document.getElementById("questradeCashA
 var netWorthView=document.getElementById("netWorthView");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
+var netWorthReturn=document.getElementById("netWorthReturn");
 var netWorthAssets=document.getElementById("netWorthAssets");
 var netWorthLiabilities=document.getElementById("netWorthLiabilities");
 var netWorthChart=document.getElementById("netWorthChart");
@@ -3354,34 +3373,59 @@ function saveManualNetWorthSnapshot(){
   renderNetWorthChart();
 }
 
+function netWorthRangeLabel(range){
+  return ({
+    "1M":"past month",
+    "3M":"past 3 months",
+    "6M":"past 6 months",
+    "1Y":"past year",
+    "ALL":"all time"
+  })[range]||String(range||"").toLowerCase();
+}
 function renderNetWorthChart(){
   if(!netWorthChart)return;
+
   const now=new Date();
   const daysMap={"1M":31,"3M":93,"6M":186,"1Y":365};
   let rows=netWorthHistory.slice();
+
   if(currentNetWorthRange!=="ALL"){
     const cutoffDate=new Date(now);
     cutoffDate.setDate(cutoffDate.getDate()-daysMap[currentNetWorthRange]);
     const cutoff=localDateISO(cutoffDate);
     rows=rows.filter(x=>x.date>=cutoff);
   }
+
   if(rows.length<2){
     netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first snapshot.<br>Today’s value is saved automatically — or add a dated snapshot below.</div>';
+    if(netWorthReturn){
+      netWorthReturn.textContent="— history building";
+      netWorthReturn.classList.remove("pos","neg");
+    }
     return;
   }
+
+  const first=rows[0],last=rows[rows.length-1];
+  const delta=Number(last.value)-Number(first.value);
+
+  if(netWorthReturn){
+    netWorthReturn.textContent=`${signedMoney(delta)} ${netWorthRangeLabel(currentNetWorthRange)}`;
+    netWorthReturn.classList.toggle("pos",delta>=0);
+    netWorthReturn.classList.toggle("neg",delta<0);
+  }
+
   const w=520,h=180,padX=14,padY=18;
   const vals=rows.map(x=>Number(x.value));
   let min=Math.min(...vals),max=Math.max(...vals);
   if(max===min){max+=1;min-=1}
+
   const x=i=>padX+(w-padX*2)*(i/(rows.length-1));
   const y=v=>padY+(h-padY*2)*(1-(v-min)/(max-min));
   const pts=rows.map((r,i)=>`${x(i).toFixed(2)},${y(Number(r.value)).toFixed(2)}`).join(' ');
-  const first=rows[0],last=rows[rows.length-1];
-  const delta=Number(last.value)-Number(first.value);
+
   netWorthChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Net worth history">
     <polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
     <circle cx="${x(rows.length-1)}" cy="${y(Number(last.value))}" r="4" fill="var(--teal)"/>
-    <text x="14" y="22" fill="#777a7f" font-size="12" font-weight="700">${signedMoney(delta)} ${currentNetWorthRange.toLowerCase()}</text>
   </svg>`;
 }
 function relativeUpdatedText(dateStr){
