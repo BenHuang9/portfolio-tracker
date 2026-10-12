@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16.4 Soft-color Transactions + Stats UI -->
+<!-- v5.16.5 Category detail group-by-note toggle -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2679,6 +2679,75 @@ html,body{
   color:#fff!important;
 }
 
+
+/* v5.16.5 category group-by-note */
+.categoryDetailMetaRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:4px;
+}
+.categoryDetailMetaRow .categoryDetailCount{
+  margin-top:0!important;
+}
+.categoryGroupToggle{
+  border:1px solid #cfe4da;
+  background:#eef8f4;
+  color:#17785c;
+  border-radius:999px;
+  min-height:34px;
+  padding:7px 12px;
+  font-size:11px;
+  font-weight:850;
+  white-space:nowrap;
+}
+.categoryGroupToggle.active{
+  background:#dff2ea;
+  border-color:#9fd6c1;
+  color:#12674f;
+}
+.categoryGroupToggle:active{
+  background:#d7eee4;
+}
+.categoryNoteSummary{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:18px;
+  overflow:hidden;
+}
+.categoryNoteRow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:14px 15px;
+  border-bottom:1px solid var(--line);
+}
+.categoryNoteRow:last-child{border-bottom:0}
+.categoryNoteMain{min-width:0}
+.categoryNoteName{
+  font-size:14px;
+  font-weight:850;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.categoryNoteSub{
+  margin-top:3px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:700;
+}
+.categoryNoteAmount{
+  text-align:right;
+  font-size:15px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.categoryNoteAmount.expense{color:var(--red)}
+.categoryNoteAmount.income{color:var(--green)}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3365,7 +3434,10 @@ html,body{
       <button class="close" id="closeCategoryDetail">×</button>
     </div>
     <div class="categoryDetailTotal" id="categoryDetailTotal">$0.00</div>
-    <div class="categoryDetailCount" id="categoryDetailCount">0 transactions</div>
+    <div class="categoryDetailMetaRow">
+      <div class="categoryDetailCount" id="categoryDetailCount">0 transactions</div>
+      <button class="categoryGroupToggle" id="categoryGroupToggle" type="button">Group by note</button>
+    </div>
     <div class="categoryDetailBars" id="categoryDetailBars"></div>
     <div class="categoryDetailTransactions" id="categoryDetailTransactions"></div>
   </div>
@@ -3541,6 +3613,7 @@ var categoryDetailPeriod=document.getElementById("categoryDetailPeriod");
 var categoryDetailTitle=document.getElementById("categoryDetailTitle");
 var categoryDetailTotal=document.getElementById("categoryDetailTotal");
 var categoryDetailCount=document.getElementById("categoryDetailCount");
+var categoryGroupToggle=document.getElementById("categoryGroupToggle");
 var categoryDetailBars=document.getElementById("categoryDetailBars");
 var categoryDetailTransactions=document.getElementById("categoryDetailTransactions");
 var txAccount=document.getElementById("txAccount");
@@ -5307,6 +5380,9 @@ let currentTransactionType="expense";
 let statsCurrentMode="month";
 let statsMonth=localDateISO().slice(0,7);
 let statsYear=Number(localDateISO().slice(0,4));
+let categoryDetailGrouped=false;
+let categoryDetailCurrentType="expense";
+let categoryDetailCurrentCategory="";
 
 function ledgerAccountById(id){return manualAccounts.find(a=>a.id===id)||null}
 const MIAO_2026_IMPORT_FLAG="miao2026HistoryImportedV514";
@@ -5910,8 +5986,50 @@ function renderCategoryDetailTransactions(rows,type){
     openTransactionModal(btn.dataset.categoryTxId);
   });
 }
+
+function categoryNoteGroups(rows){
+  const map=new Map();
+  rows.forEach(t=>{
+    const note=String(t.note||"").trim() || "No note";
+    if(!map.has(note))map.set(note,{note,count:0,total:0,lastDate:""});
+    const g=map.get(note);
+    g.count+=1;
+    g.total+=transactionAmountCAD(t);
+    if(!g.lastDate || String(t.date)>g.lastDate)g.lastDate=String(t.date);
+  });
+  return [...map.values()].sort((a,b)=>b.total-a.total || b.count-a.count || a.note.localeCompare(b.note));
+}
+function renderCategoryDetailGrouped(rows,type){
+  const groups=categoryNoteGroups(rows);
+  if(!groups.length){
+    categoryDetailTransactions.innerHTML='<div class="statsEmpty">No transactions in this category.</div>';
+    return;
+  }
+  categoryDetailTransactions.innerHTML=`<div class="categoryNoteSummary">${groups.map(g=>`
+    <div class="categoryNoteRow">
+      <div class="categoryNoteMain">
+        <div class="categoryNoteName">${safeHtml(g.note)}</div>
+        <div class="categoryNoteSub">${g.count} transaction${g.count===1?"":"s"}</div>
+      </div>
+      <div class="categoryNoteAmount ${type}">${type==="expense"?"−":"+"}${fmt(g.total)}</div>
+    </div>
+  `).join("")}</div>`;
+}
+function renderCurrentCategoryDetailBody(){
+  const rows=categoryDetailRows(categoryDetailCurrentType,categoryDetailCurrentCategory);
+  if(categoryDetailGrouped)renderCategoryDetailGrouped(rows,categoryDetailCurrentType);
+  else renderCategoryDetailTransactions(rows,categoryDetailCurrentType);
+  if(categoryGroupToggle){
+    categoryGroupToggle.classList.toggle("active",categoryDetailGrouped);
+    categoryGroupToggle.textContent=categoryDetailGrouped?"Show transactions":"Group by note";
+  }
+}
+
 function openCategoryDetail(type,category){
   const rows=categoryDetailRows(type,category);
+  categoryDetailCurrentType=type;
+  categoryDetailCurrentCategory=category;
+  categoryDetailGrouped=false;
   categoryDetailModal.classList.toggle("expenseDetail",type==="expense");
   categoryDetailModal.classList.toggle("incomeDetail",type==="income");
   const total=rows.reduce((s,t)=>s+transactionAmountCAD(t),0);
@@ -5938,7 +6056,7 @@ function openCategoryDetail(type,category){
     categoryDetailBars.style.display="none";
     categoryDetailBars.innerHTML="";
   }
-  renderCategoryDetailTransactions(rows,type);
+  renderCurrentCategoryDetailBody();
   categoryDetailModal.classList.add("show");
 }
 function closeCategoryDetailFn(){categoryDetailModal.classList.remove("show")}
@@ -6601,6 +6719,10 @@ if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{
   syncQuickDateDisplays();
 });
 if(txTransferNoteMirror)txTransferNoteMirror.addEventListener("input",()=>{txNote.value=txTransferNoteMirror.value});
+if(categoryGroupToggle)categoryGroupToggle.onclick=()=>{
+  categoryDetailGrouped=!categoryDetailGrouped;
+  renderCurrentCategoryDetailBody();
+};
 if(closeCategoryDetail)closeCategoryDetail.onclick=closeCategoryDetailFn;
 if(categoryDetailModal)categoryDetailModal.onclick=e=>{if(e.target===categoryDetailModal)closeCategoryDetailFn()};
 
