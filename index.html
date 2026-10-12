@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16 Quick accounting + category note memory + category drilldown -->
+<!-- v5.16.1 Mobile quick-entry width + vertical-scroll fix -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2231,6 +2231,133 @@ body.manualDetailOpen{padding-bottom:0!important}
   .quickCategoryName{font-size:8.5px}
   #txAmount{font-size:42px}
   .quickKeypad button{min-height:45px}
+}
+
+
+/* v5.16.1 quick-entry mobile overflow fix */
+html,body{
+  overflow-x:hidden!important;
+  max-width:100%!important;
+}
+#transactionModal{
+  overflow:hidden!important;
+  touch-action:pan-y!important;
+  overscroll-behavior-x:none;
+}
+#transactionModal .quickTxSheet{
+  width:100%!important;
+  max-width:560px!important;
+  min-width:0!important;
+  overflow-x:hidden!important;
+  overscroll-behavior-x:none;
+  touch-action:pan-y!important;
+}
+#transactionModal .quickTxSheet > *,
+#txNormalFields,
+#txTransferFields,
+.quickMetaGrid,
+.quickTransferGrid,
+.quickCategoryGrid,
+.quickAmountCard,
+.quickNoteChips,
+.quickKeypad{
+  min-width:0!important;
+  max-width:100%!important;
+}
+.quickCategoryGrid{
+  width:100%!important;
+}
+.quickCategoryBtn{
+  min-width:0!important;
+  width:100%!important;
+}
+.quickCategoryName{
+  min-width:0!important;
+  max-width:100%!important;
+}
+
+/* Notes stay inside the sheet and wrap to new rows instead of horizontal scrolling. */
+.quickNoteChips{
+  width:100%!important;
+  display:flex!important;
+  flex-wrap:wrap!important;
+  overflow-x:hidden!important;
+  overflow-y:visible!important;
+  touch-action:pan-y!important;
+}
+.quickNoteChip{
+  flex:0 0 auto;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Account/date and From/To controls always share the available width equally. */
+.quickMetaGrid,
+.quickTransferGrid{
+  width:100%!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  gap:9px!important;
+}
+.quickField{
+  min-width:0!important;
+  width:100%!important;
+}
+.quickField select,
+.quickField input,
+.quickNoteInput{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+}
+.quickField select,
+.quickField input{
+  height:45px!important;
+  min-height:45px!important;
+  padding:10px 11px!important;
+  border-radius:13px!important;
+  font-size:13px!important;
+}
+
+/* iOS date/select controls can otherwise force a wider intrinsic width. */
+#txDate,
+#txTransferDateMirror,
+#txAccount,
+#txFromAccount,
+#txToAccount{
+  -webkit-appearance:auto;
+  appearance:auto;
+  min-width:0!important;
+  width:100%!important;
+}
+
+/* Prevent the keypad/save area from creating sideways overflow. */
+.quickKeypad,
+.quickSaveBtn{
+  width:100%!important;
+  max-width:100%!important;
+}
+.quickKeypad button{
+  min-width:0!important;
+}
+
+/* Keep all touch scrolling vertical within the transaction sheet. */
+#transactionModal .sheet,
+#transactionModal .sheet *{
+  overscroll-behavior-x:none;
+}
+@media(max-width:430px){
+  #transactionModal .quickTxSheet{
+    left:0!important;
+    right:0!important;
+    margin:0!important;
+  }
+  .quickMetaGrid,
+  .quickTransferGrid{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  }
 }
 
 </style>
