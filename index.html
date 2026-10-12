@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.12.4 Native trading-currency prices + CAD returns -->
+<!-- v5.12.5 Clean native price display -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2459,9 +2459,9 @@ const fmtUSD = n => new Intl.NumberFormat("en-US",{style:"currency",currency:"US
 function fmtNativePrice(value,currency,{compact=false}={}){
   const n=Number(value)||0;
   if(currency==="USD"){
-    return compact ? `US$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}` : `${fmtUSD(n)} USD`;
+    return fmtUSD(n);
   }
-  return compact ? fmt(n) : `${fmt(n)} CAD`;
+  return fmt(n);
 }
 const pct = n => (n>=0?"+":"") + n.toFixed(2) + "%";
 
