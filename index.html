@@ -2911,6 +2911,25 @@ html,body{
 .categoryBadge{width:28px;height:28px;border-radius:10px;background:#f0f0ee;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
 .quickCategoryIcon{font-size:15px}
 
+
+/* v5.17.8 clean SVG icon system */
+.uiIconSvg{
+  width:20px;
+  height:20px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.9;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.wealthGroupIcon .uiIconSvg{width:20px;height:20px;color:#252525}
+.netWorthIcon .uiIconSvg{width:19px;height:19px;color:#292929}
+.quickCategoryIcon .uiIconSvg{width:18px;height:18px}
+.categoryBadge .uiIconSvg{width:17px;height:17px}
+.ledgerIcon .uiIconSvg{width:18px;height:18px}
+.brandMark{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3097,7 +3116,7 @@ html,body{
 
     <div class="wealthGroupCard">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon investmentIcon"><span class="iconGlyph">📈</span></span><div><div class="wealthGroupTitle">Investments</div><div class="wealthGroupSub" id="investmentGroupSub">4 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon investmentIcon"><svg class="uiIconSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/><path d="m4 7 6-4 6 6 5-4"/></svg></span></span><div><div class="wealthGroupTitle">Investments</div><div class="wealthGroupSub" id="investmentGroupSub">4 accounts</div></div></div>
         <strong id="investmentGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="investmentAccountsList"></div>
@@ -3105,7 +3124,7 @@ html,body{
 
     <div class="wealthGroupCard">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon cashIcon"><span class="iconGlyph">💵</span></span><div><div class="wealthGroupTitle">Cash & bank</div><div class="wealthGroupSub" id="cashGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon cashIcon"><svg class="uiIconSvg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10"/><path d="M7 15h5"/><circle cx="17" cy="15" r="1.5"/></svg></span></span><div><div class="wealthGroupTitle">Cash & bank</div><div class="wealthGroupSub" id="cashGroupSub">0 accounts</div></div></div>
         <strong id="cashGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="manualAssetList"></div>
@@ -3113,7 +3132,7 @@ html,body{
 
     <div class="wealthGroupCard" id="otherAssetsGroup">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon otherIcon"><span class="iconGlyph">💎</span></span><div><div class="wealthGroupTitle">Other assets</div><div class="wealthGroupSub" id="otherGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon otherIcon"><svg class="uiIconSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 9l8 12 8-12-8-6Z"/><path d="M4 9h16"/><path d="m9 9 3 12 3-12"/></svg></span></span><div><div class="wealthGroupTitle">Other assets</div><div class="wealthGroupSub" id="otherGroupSub">0 accounts</div></div></div>
         <strong id="otherGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="manualOtherAssetList"></div>
@@ -3121,7 +3140,7 @@ html,body{
 
     <div class="wealthGroupCard debtGroup">
       <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon debtIcon"><span class="iconGlyph">💳</span></span><div><div class="wealthGroupTitle">Debts</div><div class="wealthGroupSub" id="debtGroupSub">0 accounts</div></div></div>
+        <div class="wealthGroupIdentity"><span class="wealthGroupIcon debtIcon"><svg class="uiIconSvg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg></span></span><div><div class="wealthGroupTitle">Debts</div><div class="wealthGroupSub" id="debtGroupSub">0 accounts</div></div></div>
         <div class="wealthGroupRight"><strong id="debtGroupTotal">$0</strong></div>
       </div>
       <div class="netWorthList wealthAccountList" id="manualLiabilityList"></div>
@@ -5419,12 +5438,12 @@ function accountCategoryLabel(a){
 }
 function accountCategoryIcon(a){
   const c=String(a?.category||"");
-  if(c==="chequing")return "🏦";
-  if(c==="savings")return "💰";
-  if(c==="cash")return "💵";
-  if(c==="credit_card")return "💳";
-  if(c==="other_asset")return "💎";
-  return a?.type==="liability"?"💳":"💵";
+  if(c==="chequing")return "Bank";
+  if(c==="savings")return "Save";
+  if(c==="cash")return "Cash";
+  if(c==="credit_card")return "Card";
+  if(c==="other_asset")return "Asset";
+  return a?.type==="liability"?"Card":"Cash";
 }
 function isTransactionAccount(a){
   if(!a)return false;
@@ -5747,33 +5766,39 @@ function categoryTotals(rows,type){
 }
 
 
-const CATEGORY_ICON_MAP={
-  "Food & Dining":"🍽️",
-  "Groceries":"🛒",
-  "Shopping":"🛍️",
-  "Auto":"🚗",
-  "Transportation":"🚇",
-  "Bills":"🧾",
-  "Home":"🏠",
-  "Entertainment":"🎬",
-  "Travel":"✈️",
-  "Health":"🩺",
-  "Education":"🎓",
-  "Social":"👥",
-  "Loaned Out":"🤝",
-  "Subscriptions":"🔁",
-  "Other":"⋯",
-  "Salary":"💼",
-  "Bonus":"🎁",
-  "Overtime":"⏰",
-  "Refund":"↩️",
-  "Interest":"🏦",
-  "Other Income":"💰"
+function lineIcon(inner,extraClass=""){
+  return `<svg class="uiIconSvg ${extraClass}" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+}
+const CATEGORY_ICON_SVG={
+  "Food & Dining":()=>lineIcon('<path d="M6 3v8"/><path d="M3.5 3v5A2.5 2.5 0 0 0 6 10.5 2.5 2.5 0 0 0 8.5 8V3"/><path d="M6 10.5V21"/><path d="M16 3v18"/><path d="M16 3c3 2 4 5 4 8h-4"/>'),
+  "Groceries":()=>lineIcon('<path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/>'),
+  "Shopping":()=>lineIcon('<path d="M6 8h12l1 13H5L6 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>'),
+  "Auto":()=>lineIcon('<path d="M5 17h14l-1-6-2-4H8l-2 4-1 6Z"/><path d="M7 17v2"/><path d="M17 17v2"/><path d="M7 12h10"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/>'),
+  "Transportation":()=>lineIcon('<rect x="5" y="3" width="14" height="15" rx="3"/><path d="M8 18 6 21"/><path d="m16 18 2 3"/><path d="M8 7h8"/><path d="M8 12h8"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/>'),
+  "Bills":()=>lineIcon('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h3"/>'),
+  "Home":()=>lineIcon('<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>'),
+  "Entertainment":()=>lineIcon('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M7 3l5 3 5-3"/><path d="M8 11h8"/><path d="M8 15h5"/>'),
+  "Travel":()=>lineIcon('<path d="M2 16l20-8"/><path d="m7 14-3-4"/><path d="m14 11-2-7"/><path d="m17 10 3 3"/>'),
+  "Health":()=>lineIcon('<path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10Z"/><path d="M9 12h6"/><path d="M12 9v6"/>'),
+  "Education":()=>lineIcon('<path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M7 11v5c3 2 7 2 10 0v-5"/><path d="M21 9v6"/>'),
+  "Social":()=>lineIcon('<circle cx="9" cy="9" r="3"/><circle cx="17" cy="8" r="2"/><path d="M3 20c.8-4 3-6 6-6s5.2 2 6 6"/><path d="M15 14c3 0 5 2 6 5"/>'),
+  "Loaned Out":()=>lineIcon('<path d="M4 12h11"/><path d="m12 8 4 4-4 4"/><path d="M4 7V5h16v14H4v-2"/>'),
+  "Subscriptions":()=>lineIcon('<path d="M7 7h11l2 2v10H7z"/><path d="M4 5h11"/><path d="M5 9H3v10h11"/>'),
+  "Other":()=>lineIcon('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),
+  "Salary":()=>lineIcon('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M8 7V5h8v2"/><path d="M3 12h18"/><path d="M10 12v2h4v-2"/>'),
+  "Bonus":()=>lineIcon('<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M12 8c-3 0-5-1-5-3 0-1.2 1-2 2.2-2C11 3 12 5.2 12 8Z"/><path d="M12 8c3 0 5-1 5-3 0-1.2-1-2-2.2-2C13 3 12 5.2 12 8Z"/>'),
+  "Overtime":()=>lineIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  "Refund":()=>lineIcon('<path d="M9 7H4v5"/><path d="m4 12 4-4"/><path d="M6 17a8 8 0 1 0 0-10"/>'),
+  "Interest":()=>lineIcon('<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 3 3 8h18l-9-5Z"/><path d="M7 12v4"/><path d="M12 12v4"/><path d="M17 12v4"/>'),
+  "Other Income":()=>lineIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9 9.5c.8-1 1.7-1.5 3-1.5 1.7 0 3 1 3 2.3 0 3.5-6 1.2-6 4.3 0 1.4 1.3 2.4 3.1 2.4 1.2 0 2.2-.4 2.9-1.3"/>')
 };
+function categoryIconMarkup(name){
+  const fn=CATEGORY_ICON_SVG[name];
+  return fn?fn():lineIcon('<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>');
+}
 function safeHtml(v){
   return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 }
-
 function svgDataUri(svg){
   return "data:image/svg+xml;charset=UTF-8,"+encodeURIComponent(svg);
 }
@@ -5781,33 +5806,32 @@ const BRAND_MARKS={
   wealthsimple:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#111111"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#ffffff">W</text></svg>`),
   questrade:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#1b6edc"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#ffffff">Q</text></svg>`),
   cibc:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#c5172e"/><text x="32" y="40" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="800" fill="#ffffff">CIBC</text></svg>`),
-  bmo:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#1473e6"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" fill="#ffffff">BMO</text></svg>`),
-  cash:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💵</text></svg>`),
-  savings:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💰</text></svg>`),
-  chequing:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">🏦</text></svg>`),
-  credit_card:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💳</text></svg>`),
-  other_asset:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#f0f0ee"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#222">💎</text></svg>`)
+  bmo:svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#1473e6"/><text x="32" y="42" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" fill="#ffffff">BMO</text></svg>`)
 };
-function brandMarkForName(name,category,type){
-  const s=String(name||"").toLowerCase();
-  if(s.includes("wealthsimple") || /^ws/.test(s))return BRAND_MARKS.wealthsimple;
+function brandMarkForName(name){
+  const s=String(name||"").trim().toLowerCase();
+  if(s.includes("wealthsimple") || s==="ws" || s.startsWith("ws "))return BRAND_MARKS.wealthsimple;
   if(s.includes("questrade"))return BRAND_MARKS.questrade;
   if(s.includes("cibc"))return BRAND_MARKS.cibc;
   if(s.includes("bmo"))return BRAND_MARKS.bmo;
-  if(category && BRAND_MARKS[category])return BRAND_MARKS[category];
-  if(type==="liability")return BRAND_MARKS.credit_card;
   return null;
+}
+function genericAccountIconMarkup(a){
+  const c=String(a?.category||"");
+  if(c==="cash")return lineIcon('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h10"/><path d="M7 14h5"/>');
+  if(c==="savings")return lineIcon('<path d="M5 9c2-3 5-4 8-3 2 .5 3.5 1.6 4.5 3H21v4h-2c-.5 2-1.6 3.5-3 4.5V21h-3v-2h-3v2H7v-3c-2-1-3-3-3-5 0-1.5.3-2.8 1-4Z"/><circle cx="14.5" cy="10" r=".8"/>');
+  if(c==="chequing")return lineIcon('<path d="M3 9 12 4l9 5"/><path d="M5 10h14"/><path d="M6 10v7"/><path d="M10 10v7"/><path d="M14 10v7"/><path d="M18 10v7"/><path d="M4 20h16"/>');
+  if(c==="credit_card" || a?.type==="liability")return lineIcon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>');
+  if(c==="other_asset")return lineIcon('<path d="M12 3 4 9l8 12 8-12-8-6Z"/><path d="M4 9h16"/>');
+  return lineIcon('<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>');
 }
 function investmentIconMarkup(a){
   const src=brandMarkForName(a?.name||a?.short||a?.id);
-  return src?`<img class="brandMark" src="${src}" alt="">`:`<span class="iconGlyph">${safeHtml(a?.icon||"📈")}</span>`;
+  return src?`<img class="brandMark" src="${src}" alt="">`:lineIcon('<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/><path d="m4 7 6-4 6 6 5-4"/>');
 }
 function manualAccountIconMarkup(a){
-  const src=brandMarkForName(a?.name,a?.category,a?.type);
-  return src?`<img class="brandMark" src="${src}" alt="">`:`<span class="iconGlyph">${safeHtml(accountCategoryIcon(a))}</span>`;
-}
-function quickCategoryIcon(name){
-  return CATEGORY_ICON_MAP[name]||txCategoryInitial(name);
+  const src=brandMarkForName(a?.name);
+  return src?`<img class="brandMark" src="${src}" alt="">`:genericAccountIconMarkup(a);
 }
 function noteHistoryForCategory(type,category,limit=10){
   const seen=new Set();
@@ -5835,7 +5859,7 @@ function renderQuickCategoryGrid(){
   const selected=txCategory.value||rows[0]||"";
   txCategoryGrid.innerHTML=rows.map(name=>`
     <button type="button" class="quickCategoryBtn ${name===selected?"active":""}" data-quick-category="${safeHtml(name)}">
-      <span class="quickCategoryIcon">${safeHtml(quickCategoryIcon(name))}</span>
+      <span class="quickCategoryIcon">${categoryIconMarkup(name)}</span>
       <span class="quickCategoryName">${safeHtml(name)}</span>
     </button>
   `).join("");
@@ -6135,7 +6159,7 @@ function renderTransactions(){
           : `${transactionAccountDisplayName(t)}${t.note?` · ${t.note}`:""}`;
         const amount=t.type==="expense"?`−${fmt(cad)}`:t.type==="income"?`+${fmt(cad)}`:fmt(cad);
         return `<button class="ledgerRow" type="button" data-tx-id="${t.id}">
-          <span class="ledgerIcon">${t.type==="transfer"?"↔":quickCategoryIcon(t.category)}</span>
+          <span class="ledgerIcon">${t.type==="transfer"?lineIcon('<path d="M7 7h11l-3-3"/><path d="m18 7-3 3"/><path d="M17 17H6l3 3"/><path d="m6 17 3-3"/>'):categoryIconMarkup(t.category)}</span>
           <span class="ledgerRowMain"><span class="ledgerRowTitle">${title}</span><span class="ledgerRowMeta">${meta}</span></span>
           <span class="ledgerAmount ${t.type}">${amount}</span>
         </button>`;
@@ -6149,7 +6173,7 @@ function renderCategoryStats(container,rows,type){
   if(!cats.length){container.innerHTML='<div class="statsEmpty">No '+type+' transactions in this period.</div>';return}
   const max=Math.max(...cats.map(x=>x.value),1);
   container.innerHTML=cats.map(c=>`<button type="button" class="categoryRowButton" data-category="${safeHtml(c.name)}" data-category-type="${type}">
-    <div class="categoryTop"><div class="categoryNameWrap"><span class="categoryBadge">${safeHtml(quickCategoryIcon(c.name))}</span><div class="categoryName">${safeHtml(c.name)}</div></div><div class="categoryValue">${fmt(c.value)}</div><div class="categoryRowChevron">›</div></div>
+    <div class="categoryTop"><div class="categoryNameWrap"><span class="categoryBadge">${categoryIconMarkup(c.name)}</span><div class="categoryName">${safeHtml(c.name)}</div></div><div class="categoryValue">${fmt(c.value)}</div><div class="categoryRowChevron">›</div></div>
     <div class="categoryTrack"><div class="categoryFill ${type}" style="width:${Math.max(2,c.value/max*100).toFixed(1)}%"></div></div>
   </button>`).join("");
   container.querySelectorAll("[data-category]").forEach(btn=>btn.onclick=()=>openCategoryDetail(btn.dataset.categoryType,btn.dataset.category));
@@ -6177,7 +6201,7 @@ function renderCategoryDetailTransactions(rows,type){
         const meta=`${safeHtml(transactionAccountDisplayName(t))}${t.note?` · ${safeHtml(t.note)}`:""}`;
         const amount=type==="expense"?`−${fmt(cad)}`:`+${fmt(cad)}`;
         return `<button class="ledgerRow" type="button" data-category-tx-id="${safeHtml(t.id)}">
-          <span class="ledgerIcon">${safeHtml(quickCategoryIcon(t.category))}</span>
+          <span class="ledgerIcon">${categoryIconMarkup(t.category)}</span>
           <span class="ledgerRowMain"><span class="ledgerRowTitle">${safeHtml(t.category)}</span><span class="ledgerRowMeta">${meta}</span></span>
           <span class="ledgerAmount ${type}">${amount}</span>
         </button>`;
