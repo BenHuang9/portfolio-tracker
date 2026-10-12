@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.1 category detail button spacing fix -->
+<!-- v5.17.1 Category detail segmented view toggle -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2680,37 +2680,37 @@ html,body{
 }
 
 
-/* v5.16.5 category group-by-note */
-.categoryDetailMetaRow{
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:10px;
-  margin-top:10px;
+/* v5.17.1 category detail view switch */
+.categoryDetailCount{
+  margin-top:7px!important;
 }
-.categoryDetailMetaRow .categoryDetailCount{
-  margin-top:0!important;
+.categoryDetailViewTabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:4px;
+  width:100%;
+  margin:16px 0 18px;
+  padding:4px;
+  background:#f0f1ef;
+  border:1px solid #e4e5e1;
+  border-radius:16px;
 }
-.categoryGroupToggle{
-  border:1px solid #cfe4da;
-  background:#eef8f4;
-  color:#17785c;
-  border-radius:999px;
-  min-height:32px;
-  padding:7px 14px;
-  font-size:10.5px;
+.categoryDetailViewTabs button{
+  min-height:40px;
+  border:0;
+  border-radius:12px;
+  background:transparent;
+  color:#85888c;
+  font-size:12px;
   font-weight:850;
-  white-space:nowrap;
-  align-self:flex-start;
-  margin-top:2px;
 }
-.categoryGroupToggle.active{
-  background:#dff2ea;
-  border-color:#9fd6c1;
-  color:#12674f;
+.categoryDetailViewTabs button.active{
+  background:#fff;
+  color:#202322;
+  box-shadow:0 2px 8px rgba(0,0,0,.055);
 }
-.categoryGroupToggle:active{
-  background:#d7eee4;
+.categoryDetailViewTabs button:active{
+  background:#f8f8f6;
 }
 .categoryNoteSummary{
   background:#fff;
@@ -2723,7 +2723,7 @@ html,body{
   grid-template-columns:minmax(0,1fr) auto;
   gap:12px;
   align-items:center;
-  padding:14px 15px;
+  padding:15px 15px;
   border-bottom:1px solid var(--line);
 }
 .categoryNoteRow:last-child{border-bottom:0}
@@ -2736,7 +2736,7 @@ html,body{
   text-overflow:ellipsis;
 }
 .categoryNoteSub{
-  margin-top:3px;
+  margin-top:4px;
   color:var(--muted);
   font-size:10px;
   font-weight:700;
@@ -2749,7 +2749,6 @@ html,body{
 }
 .categoryNoteAmount.expense{color:var(--red)}
 .categoryNoteAmount.income{color:var(--green)}
-
 
 /* v5.17 Stats yearly overview */
 .statsYearOverviewSection{
@@ -2865,6 +2864,11 @@ html,body{
 @media(max-width:360px){
   .statsMonthBreakdown{grid-template-columns:1fr}
 }
+
+
+/* Keep the segmented control visually separate from the content list. */
+.categoryDetailTransactions{margin-top:0}
+.categoryDetailBars + .categoryDetailTransactions{margin-top:2px}
 
 </style>
 
@@ -3557,9 +3561,10 @@ html,body{
       <button class="close" id="closeCategoryDetail">×</button>
     </div>
     <div class="categoryDetailTotal" id="categoryDetailTotal">$0.00</div>
-    <div class="categoryDetailMetaRow">
-      <div class="categoryDetailCount" id="categoryDetailCount">0 transactions</div>
-      <button class="categoryGroupToggle" id="categoryGroupToggle" type="button">Group by note</button>
+    <div class="categoryDetailCount" id="categoryDetailCount">0 transactions</div>
+    <div class="categoryDetailViewTabs" id="categoryDetailViewTabs" aria-label="Category detail view">
+      <button class="active" type="button" data-category-view="transactions">Transactions</button>
+      <button type="button" data-category-view="notes">By note</button>
     </div>
     <div class="categoryDetailBars" id="categoryDetailBars"></div>
     <div class="categoryDetailTransactions" id="categoryDetailTransactions"></div>
@@ -3739,7 +3744,7 @@ var categoryDetailPeriod=document.getElementById("categoryDetailPeriod");
 var categoryDetailTitle=document.getElementById("categoryDetailTitle");
 var categoryDetailTotal=document.getElementById("categoryDetailTotal");
 var categoryDetailCount=document.getElementById("categoryDetailCount");
-var categoryGroupToggle=document.getElementById("categoryGroupToggle");
+var categoryDetailViewTabs=document.getElementById("categoryDetailViewTabs");
 var categoryDetailBars=document.getElementById("categoryDetailBars");
 var categoryDetailTransactions=document.getElementById("categoryDetailTransactions");
 var txAccount=document.getElementById("txAccount");
@@ -6145,9 +6150,11 @@ function renderCurrentCategoryDetailBody(){
   const rows=categoryDetailRows(categoryDetailCurrentType,categoryDetailCurrentCategory);
   if(categoryDetailGrouped)renderCategoryDetailGrouped(rows,categoryDetailCurrentType);
   else renderCategoryDetailTransactions(rows,categoryDetailCurrentType);
-  if(categoryGroupToggle){
-    categoryGroupToggle.classList.toggle("active",categoryDetailGrouped);
-    categoryGroupToggle.textContent=categoryDetailGrouped?"Show transactions":"Group by note";
+  if(categoryDetailViewTabs){
+    categoryDetailViewTabs.querySelectorAll("[data-category-view]").forEach(btn=>{
+      const shouldBeActive=categoryDetailGrouped ? btn.dataset.categoryView==="notes" : btn.dataset.categoryView==="transactions";
+      btn.classList.toggle("active",shouldBeActive);
+    });
   }
 }
 
@@ -6898,10 +6905,10 @@ if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{
   syncQuickDateDisplays();
 });
 if(txTransferNoteMirror)txTransferNoteMirror.addEventListener("input",()=>{txNote.value=txTransferNoteMirror.value});
-if(categoryGroupToggle)categoryGroupToggle.onclick=()=>{
-  categoryDetailGrouped=!categoryDetailGrouped;
+if(categoryDetailViewTabs)categoryDetailViewTabs.querySelectorAll("[data-category-view]").forEach(btn=>btn.onclick=()=>{
+  categoryDetailGrouped=btn.dataset.categoryView==="notes";
   renderCurrentCategoryDetailBody();
-};
+});
 if(closeCategoryDetail)closeCategoryDetail.onclick=closeCategoryDetailFn;
 if(categoryDetailModal)categoryDetailModal.onclick=e=>{if(e.target===categoryDetailModal)closeCategoryDetailFn()};
 
