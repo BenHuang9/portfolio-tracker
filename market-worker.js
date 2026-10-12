@@ -15,8 +15,8 @@ const ALLOWED_INTERVALS = new Set(["1m","2m","5m","15m","30m","60m","90m","1d","
 function cors(origin) {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization"
   };
 }
 function json(body,status=200,origin="",cacheSeconds=30){
@@ -623,12 +623,92 @@ async function fetchCibcMutualFundPrice(ticker){
   return {...parsed,name:cfg.name,sourceUrl};
 }
 
+
+const CLOUD_MAX_BODY_BYTES=1800000;
+function privateJson(body,status=200,origin=""){
+  return new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json;charset=UTF-8","Cache-Control":"no-store",...cors(origin)}});
+}
+function cloudAuthorized(request,env){
+  const configured=String(env.PORTFOLIO_SYNC_TOKEN||"");
+  if(!configured)return false;
+  const header=String(request.headers.get("Authorization")||"");
+  return header===`Bearer ${configured}`;
+}
+async function cloudStateRow(env){
+  return await env.DB.prepare("SELECT revision, payload_json, device_id, local_updated_at, updated_at FROM portfolio_state WHERE user_id = ?").bind("primary").first();
+}
+async function handleCloudRequest(request,env,origin,url){
+  if(!env.DB)return privateJson({error:"D1 binding DB is not configured"},503,origin);
+  if(!env.PORTFOLIO_SYNC_TOKEN)return privateJson({error:"PORTFOLIO_SYNC_TOKEN Worker secret is not configured"},503,origin);
+  if(!cloudAuthorized(request,env))return privateJson({error:"Unauthorized"},401,origin);
+
+  if(url.pathname==="/api/cloud/status" && request.method==="GET"){
+    const row=await cloudStateRow(env);
+    return privateJson({ok:true,configured:true,hasCloudState:Boolean(row),revision:Number(row?.revision||0),updatedAt:row?.updated_at||null,deviceId:row?.device_id||null},200,origin);
+  }
+
+  if(url.pathname==="/api/cloud/state" && request.method==="GET"){
+    const row=await cloudStateRow(env);
+    if(!row)return privateJson({error:"No cloud backup exists yet"},404,origin);
+    let payload=null;
+    try{payload=JSON.parse(row.payload_json)}catch(e){return privateJson({error:"Stored cloud backup is unreadable"},500,origin)}
+    return privateJson({revision:Number(row.revision||0),updatedAt:row.updated_at,deviceId:row.device_id||null,localUpdatedAt:row.local_updated_at||null,payload},200,origin);
+  }
+
+  if(url.pathname==="/api/cloud/state" && request.method==="PUT"){
+    const announced=Number(request.headers.get("Content-Length")||0);
+    if(announced>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
+    const raw=await request.text();
+    if(raw.length>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
+    let body;
+    try{body=JSON.parse(raw)}catch(e){return privateJson({error:"Invalid JSON"},400,origin)}
+    if(!body?.payload || typeof body.payload!=="object")return privateJson({error:"payload object is required"},400,origin);
+    const payloadJson=JSON.stringify(body.payload);
+    if(payloadJson.length>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
+
+    const current=await cloudStateRow(env);
+    const currentRevision=Number(current?.revision||0);
+    const baseRevision=Math.max(0,Number(body.baseRevision||0)||0);
+    const force=body.force===true;
+    if(current && !force && baseRevision!==currentRevision){
+      return privateJson({error:"Cloud state changed on another device",conflict:true,cloudRevision:currentRevision,updatedAt:current.updated_at},409,origin);
+    }
+
+    const now=new Date().toISOString();
+    const day=now.slice(0,10);
+    const nextRevision=currentRevision+1;
+    const deviceId=String(body.deviceId||"").slice(0,160);
+    const localUpdatedAt=String(body?.payload?.exportedAt||body.localUpdatedAt||"").slice(0,64);
+    const statements=[];
+    if(current?.payload_json){
+      statements.push(env.DB.prepare(`INSERT INTO portfolio_backups (user_id, backup_date, revision, payload_json, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, backup_date) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,created_at=excluded.created_at`)
+        .bind("primary",day,currentRevision,current.payload_json,now));
+    }
+    statements.push(env.DB.prepare(`INSERT INTO portfolio_state (user_id, revision, payload_json, device_id, local_updated_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,device_id=excluded.device_id,local_updated_at=excluded.local_updated_at,updated_at=excluded.updated_at`)
+      .bind("primary",nextRevision,payloadJson,deviceId,localUpdatedAt,now));
+    await env.DB.batch(statements);
+    return privateJson({ok:true,revision:nextRevision,updatedAt:now},200,origin);
+  }
+
+  if(url.pathname==="/api/cloud/backups" && request.method==="GET"){
+    const result=await env.DB.prepare("SELECT backup_date, revision, created_at FROM portfolio_backups WHERE user_id = ? ORDER BY backup_date DESC LIMIT 30").bind("primary").all();
+    return privateJson({backups:result?.results||[]},200,origin);
+  }
+
+  return privateJson({error:"Unsupported cloud sync operation"},404,origin);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const origin=request.headers.get("Origin")||"";
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors(origin)});
-    if(request.method!=="GET")return json({error:"GET only"},405,origin);
     const url=new URL(request.url);
+    if(url.pathname.startsWith("/api/cloud/"))return handleCloudRequest(request,env,origin,url);
+    if(request.method!=="GET")return json({error:"GET only"},405,origin);
 
     if(url.pathname==="/health"){
       return json({
@@ -638,6 +718,8 @@ export default {
         officialFundSources:["Harvest Portfolios","Purpose Investments","Hamilton ETFs","Vanguard Canada","Evolve ETFs","CIBC Global Asset Management"],
         cibcMutualFundNav:"CIBC public pages first; YCharts public price page fallback",
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
+        cloudDatabaseConfigured:Boolean(env.DB),
+        cloudSyncSecretConfigured:Boolean(env.PORTFOLIO_SYNC_TOKEN),
         dividendCache:"v5.2 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }

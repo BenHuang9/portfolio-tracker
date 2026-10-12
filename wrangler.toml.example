@@ -1,0 +1,13 @@
+name = "portfolio-market-data"
+main = "market-worker.js"
+compatibility_date = "2026-10-01"
+
+# Optional CLI example. If you configure through the Cloudflare Dashboard instead,
+# bind the database with variable name DB there.
+[[d1_databases]]
+binding = "DB"
+database_name = "portfolio-tracker"
+database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+
+# Never put PORTFOLIO_SYNC_TOKEN here as plaintext.
+# Use: wrangler secret put PORTFOLIO_SYNC_TOKEN
