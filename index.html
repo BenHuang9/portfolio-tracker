@@ -944,13 +944,14 @@ const DEFAULT_MARKET_API = "https://portfolio-market-data.benhuang011.workers.de
 let marketApiBase = DEFAULT_MARKET_API;
 let liveMode = false;
 let dividendEventsByTicker = {};
+let yahooDividendEventsByTicker = {};
 let dividendSourceByTicker = {};
 let fxHistory = [];
 let liveUpdatedAt = null;
 let currentPortfolioRange = "ALL";
 let dividendSyncInProgress = false;
 const chartCache = new Map();
-const DIVIDEND_META_KEY = "dividendFetchMetaV50";
+const DIVIDEND_META_KEY = "dividendFetchMetaV51";
 const DIVIDEND_ALPHA_TTL = 7 * 24 * 60 * 60 * 1000;
 const DIVIDEND_OFFICIAL_TTL = 24 * 60 * 60 * 1000;
 const DIVIDEND_FALLBACK_TTL = 60 * 60 * 1000;
@@ -1017,6 +1018,20 @@ function normalizeYahooDividendEvents(events){
     amount:Number(e.amount)||0,
     paymentDateEstimated:true
   })).filter(e=>e.exDate && e.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
+}
+
+function mergeDividendEvents(estimatedEvents, exactEvents){
+  const estimated=(estimatedEvents||[]).filter(e=>e && (e.exDate||e.date) && Number(e.amount)>0);
+  const exact=(exactEvents||[]).filter(e=>e && (e.exDate||e.date) && Number(e.amount)>0);
+
+  // Official/Alpha rows win for an ex-date because they contain the real payment date.
+  // Yahoo is kept for older dates that the issuer page no longer exposes, so ALL-time
+  // dividend history and Total Return do not disappear when an exact source is enabled.
+  const exactDates=new Set(exact.map(e=>e.exDate||e.date));
+  return [
+    ...estimated.filter(e=>!exactDates.has(e.exDate||e.date)),
+    ...exact
+  ].sort((a,b)=>(a.exDate||a.date).localeCompare(b.exDate||b.date));
 }
 function sharesHeldOn(ticker,dateStr){
   return lots.filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
@@ -1108,8 +1123,13 @@ async function syncDividendHistory(tickers){
         })).filter(e=>e.exDate && e.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
         const sourceCode=dividendSourceCode(data.source);
         if(isExactDividendSource(sourceCode)){
-          // Official issuer data and Alpha both contain real payment dates.
-          dividendEventsByTicker[ticker]=events;
+          // Official/Alpha rows provide real payment dates. Merge them over Yahoo
+          // rather than replacing Yahoo completely, because many issuer pages only
+          // expose recent distributions.
+          dividendEventsByTicker[ticker]=mergeDividendEvents(
+            yahooDividendEventsByTicker[ticker]||[],
+            events
+          );
           dividendSourceByTicker[ticker]=sourceCode;
           meta[ticker]={fetchedAt:Date.now(),source:sourceCode};
         }else if(!isExactDividendSource(dividendSourceByTicker[ticker]) || !Array.isArray(dividendEventsByTicker[ticker]) || !dividendEventsByTicker[ticker].length){
@@ -1123,7 +1143,12 @@ async function syncDividendHistory(tickers){
         }
         writeDividendMeta(meta);
         const activeEvents=dividendEventsByTicker[ticker]||events;
-        if(catalog[ticker])catalog[ticker].annualDiv=trailingAnnualDividendPerShare(activeEvents);
+        if(catalog[ticker] && !(Number(catalog[ticker].annualDiv)>0)){
+          const annualBase=yahooDividendEventsByTicker[ticker]?.length
+            ? yahooDividendEventsByTicker[ticker]
+            : activeEvents;
+          catalog[ticker].annualDiv=trailingAnnualDividendPerShare(annualBase);
+        }
         rebuildDividendPayments();
         saveMarketCache();
         renderHome();
@@ -1176,10 +1201,18 @@ async function refreshLiveData(silent=false){
       successCount++;
       const q=res.value;
       const yahooEvents=normalizeYahooDividendEvents(q.dividends||[]);
-      if(!isExactDividendSource(dividendSourceByTicker[ticker]) || !Array.isArray(dividendEventsByTicker[ticker])){
+      yahooDividendEventsByTicker[ticker]=yahooEvents;
+
+      if(isExactDividendSource(dividendSourceByTicker[ticker]) && Array.isArray(dividendEventsByTicker[ticker])){
+        // Existing cache may come from v5.0 where exact issuer history replaced older
+        // Yahoo history. Keep only truly exact cached rows, then restore older Yahoo rows.
+        const exactRows=dividendEventsByTicker[ticker].filter(e=>e && e.paymentDateEstimated===false);
+        dividendEventsByTicker[ticker]=mergeDividendEvents(yahooEvents,exactRows);
+      }else{
         dividendEventsByTicker[ticker]=yahooEvents;
         if(!dividendSourceByTicker[ticker])dividendSourceByTicker[ticker]="yahoo";
       }
+
       const events=dividendEventsByTicker[ticker]||yahooEvents;
       catalog[ticker]={
         ...(catalog[ticker]||{}),
@@ -1187,7 +1220,7 @@ async function refreshLiveData(silent=false){
         currency:q.currency||((ticker.endsWith(".TO")||ticker.endsWith(".NE"))?"CAD":"USD"),
         price:Number(q.price)||0,
         prev:Number(q.previousClose)||Number(q.price)||0,
-        annualDiv:trailingAnnualDividendPerShare(events),
+        annualDiv:trailingAnnualDividendPerShare(yahooEvents.length?yahooEvents:events),
         color:colorForTicker(ticker),
         exchange:q.exchange||"",
         marketState:q.marketState||"",
