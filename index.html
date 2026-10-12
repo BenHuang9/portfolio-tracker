@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.3 Chart scrub only: top Portfolio summary stays fixed while dragging -->
+<!-- v4.4 Chart gesture fix: no layout jump, iOS gesture capture, smoother scrubbing -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -563,15 +563,19 @@ input,button{touch-action:manipulation;}
   -webkit-user-select:none;
 }
 .chartScrubInfo{
-  display:none;
+  display:flex;
+  visibility:hidden;
+  opacity:0;
   margin:0 20px 4px;
   min-height:38px;
-}
-.chartScrubInfo.show{
-  display:flex;
   align-items:flex-end;
   justify-content:space-between;
   gap:12px;
+  pointer-events:none;
+}
+.chartScrubInfo.show{
+  visibility:visible;
+  opacity:1;
 }
 .chartScrubDate{
   color:var(--muted);
@@ -1337,19 +1341,33 @@ function renderLineChart(data,total){
     pendingClientX=null;
   }
 
+  let activePointerId=null;
+
   lineChart.onpointerdown=e=>{
     if(e.pointerType==="mouse" && e.button!==0)return;
+    if(activePointerId!==null)return;
+    activePointerId=e.pointerId;
     scrubbing=true;
+    e.preventDefault();
     try{lineChart.setPointerCapture(e.pointerId)}catch(_){}
-    selectAtClientX(e.clientX);
+    applyScrub(e.clientX);
   };
+
   lineChart.onpointermove=e=>{
-    if(!scrubbing)return;
+    if(!scrubbing || e.pointerId!==activePointerId)return;
+    e.preventDefault();
     selectAtClientX(e.clientX);
   };
-  lineChart.onpointerup=endScrub;
-  lineChart.onpointercancel=endScrub;
-  lineChart.onlostpointercapture=endScrub;
+
+  const finishPointer=e=>{
+    if(activePointerId!==null && e && e.pointerId!==undefined && e.pointerId!==activePointerId)return;
+    endScrub();
+    activePointerId=null;
+  };
+
+  lineChart.onpointerup=finishPointer;
+  lineChart.onpointercancel=finishPointer;
+  lineChart.onlostpointercapture=finishPointer;
 }
 function monthlySeries(range){
   const now=new Date(); const year=now.getFullYear();
