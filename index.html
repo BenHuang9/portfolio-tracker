@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16.2 Compact transaction date controls -->
+<!-- v5.16.3 Transaction sheet layout + date + scroll reset fix -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2421,6 +2421,84 @@ html,body{
   height:100%;
   opacity:0;
   cursor:pointer;
+}
+
+
+/* v5.16.3 transaction sheet layout fixes */
+
+/* Date controls must stay the same compact size as Account on iOS. */
+.quickField > .quickDateControl,
+#txTransferFields .quickDateControl{
+  width:100%!important;
+  height:45px!important;
+  min-height:45px!important;
+  max-height:45px!important;
+  margin:0!important;
+  padding:0 11px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  box-sizing:border-box!important;
+  border:1px solid #cfd1d4!important;
+  border-radius:13px!important;
+  overflow:hidden!important;
+}
+.quickField > .quickDateControl .quickDateText,
+#txTransferFields .quickDateControl .quickDateText{
+  display:block!important;
+  margin:0!important;
+  padding:0!important;
+  font-size:13px!important;
+  line-height:1!important;
+  font-weight:650!important;
+}
+.quickField > .quickDateControl .quickDateChevron,
+#txTransferFields .quickDateControl .quickDateChevron{
+  margin:0!important;
+  padding:0!important;
+}
+.quickField > .quickDateControl .quickDateNative,
+#txTransferFields .quickDateControl .quickDateNative{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+  opacity:0!important;
+}
+
+/* The Save button must never cover the keypad. */
+.quickSaveBtn{
+  position:static!important;
+  bottom:auto!important;
+  width:100%!important;
+  margin:10px 0 0!important;
+  box-shadow:none!important;
+}
+
+/* Leave enough real content space below the save button on iPhone. */
+#transactionModal .quickTxSheet{
+  padding-bottom:calc(24px + env(safe-area-inset-bottom))!important;
+}
+
+/* Consistent field geometry. */
+.quickMetaGrid .quickField,
+.quickTransferGrid .quickField{
+  margin:8px 0!important;
+}
+.quickField > select,
+.quickField > input:not(.quickDateNative){
+  height:45px!important;
+  min-height:45px!important;
+  max-height:45px!important;
+}
+
+/* Avoid inherited label margins making the inner date control taller. */
+.quickField > label.quickDateControl{
+  margin-bottom:0!important;
 }
 
 </style>
@@ -5393,6 +5471,7 @@ function setTransactionType(type){
   txNormalFields.classList.toggle("txHidden",transfer);
   txTransferFields.classList.toggle("txHidden",!transfer);
   if(!transfer)populateTransactionCategories(currentTransactionType);
+  if(!txDate.value)txDate.value=localDateISO();
   if(transfer){
     txTransferDateMirror.value=txDate.value||localDateISO();
     txTransferNoteMirror.value=txNote.value||"";
@@ -5413,6 +5492,7 @@ function openTransactionModal(id=null){
   setTransactionType(existing?.type||"expense");
   setQuickAmountValue(existing?Number(existing.amount).toFixed(2):"");
   txDate.value=existing?.date||ledgerSelectedDay||localDateISO();
+  if(!txDate.value)txDate.value=localDateISO();
   txDate.max=localDateISO();
   txNote.value=existing?.note||"";
   if(existing){
@@ -5440,6 +5520,11 @@ function openTransactionModal(id=null){
   renderQuickCategoryGrid();
   renderQuickNoteChips();
   transactionModal.classList.add("show");
+  const quickSheet=transactionModal.querySelector(".quickTxSheet");
+  if(quickSheet){
+    quickSheet.scrollTop=0;
+    requestAnimationFrame(()=>{quickSheet.scrollTop=0});
+  }
 }
 function closeTransactionModalFn(){
   transactionModal.classList.remove("show");
