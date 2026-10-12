@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.12.6 Holdings Add Lot button + compact mobile nav -->
+<!-- v5.13 Personal accounting: transactions, accounts, stats -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1608,6 +1608,208 @@ body.manualDetailOpen{padding-bottom:0!important}
   }
 }
 
+
+/* v5.13 Personal accounting */
+.bottom{
+  grid-template-columns:repeat(5,1fr)!important;
+  max-width:540px!important;
+}
+@media(max-width:430px){
+  .bottom{width:calc(100% - 16px)!important;gap:1px!important}
+  .navbtn{padding-left:0!important;padding-right:0!important}
+  .navLabel{font-size:8.5px!important}
+}
+
+.ledgerView,.statsView{padding-bottom:112px}
+.ledgerTopbar{
+  display:grid;
+  grid-template-columns:44px 1fr 44px;
+  align-items:center;
+  padding:18px 20px 8px;
+}
+.ledgerTopbar h1{
+  margin:0;
+  text-align:center;
+  font-size:21px;
+  font-weight:850;
+}
+.ledgerTopSpacer{width:44px;height:44px}
+.ledgerPeriodNav{
+  display:grid;
+  grid-template-columns:42px 1fr 42px;
+  align-items:center;
+  gap:8px;
+  margin:8px 20px 12px;
+}
+.ledgerPeriodBtn{
+  width:42px;height:42px;border:1px solid var(--line);background:var(--card);
+  border-radius:50%;font-size:24px;line-height:1;color:var(--text)
+}
+.ledgerPeriodLabel{
+  text-align:center;font-size:18px;font-weight:900;letter-spacing:-.02em
+}
+.ledgerSummary{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:0 20px 14px
+}
+.ledgerSummaryCard{
+  background:var(--card);border:1px solid var(--line);border-radius:18px;
+  padding:13px 10px;min-width:0
+}
+.ledgerSummaryCard .label{
+  color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em
+}
+.ledgerSummaryCard .value{
+  margin-top:6px;font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums
+}
+.ledgerSummaryCard.income .value{color:var(--green)}
+.ledgerSummaryCard.expense .value{color:var(--red)}
+.ledgerSummaryCard.net .value.pos{color:var(--green)}
+.ledgerSummaryCard.net .value.neg{color:var(--red)}
+
+.ledgerCalendarCard{
+  margin:0 20px 14px;background:var(--card);border:1px solid var(--line);
+  border-radius:22px;padding:14px;box-shadow:0 5px 18px rgba(0,0,0,.035)
+}
+.ledgerWeekdays,.ledgerCalendar{
+  display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px
+}
+.ledgerWeekdays{margin-bottom:6px}
+.ledgerWeekdays div{
+  text-align:center;color:var(--muted);font-size:9px;font-weight:850;text-transform:uppercase
+}
+.ledgerDay{
+  border:0;background:transparent;border-radius:12px;min-height:52px;padding:5px 2px;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;color:var(--text)
+}
+.ledgerDay.empty{pointer-events:none}
+.ledgerDay .dayNum{font-size:12px;font-weight:850;line-height:1.2}
+.ledgerDay .daySpend{
+  font-size:8px;font-weight:800;color:var(--red);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.ledgerDay .dayIncomeDot{
+  width:4px;height:4px;border-radius:50%;background:var(--green);opacity:0
+}
+.ledgerDay.hasIncome .dayIncomeDot{opacity:1}
+.ledgerDay.today .dayNum{
+  background:#111;color:#fff;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;margin-top:-3px
+}
+.ledgerDay.selected{
+  background:#ececea
+}
+.ledgerDay.selected.today .dayNum{background:#111}
+
+.ledgerAddBtn{
+  width:calc(100% - 40px);margin:0 20px 16px;min-height:52px;border:0;border-radius:17px;
+  background:#111;color:#fff;font-size:15px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:8px
+}
+.ledgerAddBtn span:first-child{font-size:22px;line-height:1}
+.ledgerListHead{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:4px 20px 9px
+}
+.ledgerListHead h2{margin:0;font-size:20px;letter-spacing:-.02em}
+.ledgerClearDay{
+  border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:800;padding:5px 0
+}
+.ledgerDayGroup{margin:0 20px 15px}
+.ledgerDayHeader{
+  display:flex;justify-content:space-between;gap:12px;align-items:flex-end;padding:0 2px 7px
+}
+.ledgerDayHeader strong{font-size:13px}
+.ledgerDayTotals{font-size:10px;color:var(--muted);font-weight:750;text-align:right}
+.ledgerRows{
+  background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden
+}
+.ledgerRow{
+  width:100%;border:0;background:var(--card);display:grid;
+  grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:11px;
+  padding:13px 14px;border-bottom:1px solid var(--line);text-align:left;color:var(--text)
+}
+.ledgerRow:last-child{border-bottom:0}
+.ledgerRow:active{background:#f3f3f1}
+.ledgerIcon{
+  width:38px;height:38px;border-radius:12px;background:#f0f0ee;display:grid;place-items:center;
+  font-size:13px;font-weight:900
+}
+.ledgerRowMain{min-width:0}
+.ledgerRowTitle{font-size:14px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ledgerRowMeta{margin-top:3px;color:var(--muted);font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ledgerAmount{text-align:right;font-size:14px;font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ledgerAmount.expense{color:var(--red)}
+.ledgerAmount.income{color:var(--green)}
+.ledgerAmount.transfer{color:var(--text)}
+.ledgerEmpty{
+  margin:0 20px;padding:28px 18px;text-align:center;color:var(--muted);
+  background:var(--card);border:1px solid var(--line);border-radius:20px;font-size:13px;font-weight:700
+}
+
+/* Transaction editor */
+.txTypeTabs{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:#ececeb;padding:4px;border-radius:18px;margin:2px 0 15px
+}
+.txTypeTabs button{
+  border:0;background:transparent;border-radius:14px;padding:10px 3px;font-size:12px;font-weight:850;color:var(--muted)
+}
+.txTypeTabs button.active{background:#fff;color:#111;box-shadow:0 3px 10px rgba(0,0,0,.05)}
+.txTypeTabs button[data-tx-type="expense"].active{color:var(--red)}
+.txTypeTabs button[data-tx-type="income"].active{color:var(--green)}
+.txTransferFields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.txHidden{display:none!important}
+.txDeleteBtn{
+  width:100%;border:0;background:transparent;color:var(--red);font-weight:850;padding:13px;margin-top:5px
+}
+#transactionModal .sheet{max-height:91dvh;overflow-y:auto}
+#transactionModal .field{margin:10px 0}
+
+/* Stats */
+.statsMode{
+  display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#ececeb;
+  border-radius:22px;margin:8px 20px 12px
+}
+.statsMode button{
+  border:0;background:transparent;padding:10px;border-radius:18px;font-size:13px;font-weight:850;color:var(--muted)
+}
+.statsMode button.active{background:#fff;color:#111;box-shadow:0 3px 10px rgba(0,0,0,.05)}
+.statsSection{padding:5px 20px 16px}
+.statsSectionHead{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:9px}
+.statsSectionHead h2{margin:0;font-size:19px}
+.statsSectionHead span{font-size:11px;color:var(--muted);font-weight:750}
+.statsCard{
+  background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px
+}
+.categoryRow{margin-bottom:15px}
+.categoryRow:last-child{margin-bottom:0}
+.categoryTop{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.categoryName{font-size:13px;font-weight:850}
+.categoryValue{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
+.categoryTrack{height:7px;background:#ececeb;border-radius:99px;overflow:hidden;margin-top:7px}
+.categoryFill{height:100%;background:#111;border-radius:99px}
+.categoryFill.income{background:var(--green)}
+.categoryFill.expense{background:var(--red)}
+.statsEmpty{padding:18px;text-align:center;color:var(--muted);font-size:12px;font-weight:700}
+.statsYearMonths{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:7px;align-items:end;min-height:150px
+}
+.statsMonthBarWrap{height:126px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px}
+.statsMonthBar{width:100%;max-width:28px;background:#d9d9d6;border-radius:7px 7px 2px 2px;min-height:2px}
+.statsMonthLabel{font-size:8px;color:var(--muted);font-weight:800}
+
+/* Account types */
+.accountTypeHint{
+  margin-top:7px;color:var(--muted);font-size:10px;font-weight:700;line-height:1.35
+}
+
+@media(max-width:430px){
+  .ledgerPeriodNav,.ledgerSummary,.ledgerCalendarCard,.ledgerAddBtn,.ledgerDayGroup,.statsMode{margin-left:12px;margin-right:12px}
+  .ledgerAddBtn{width:calc(100% - 24px)}
+  .ledgerListHead,.statsSection{padding-left:14px;padding-right:14px}
+  .ledgerSummary{gap:6px}
+  .ledgerSummaryCard{padding-left:8px;padding-right:8px}
+  .ledgerSummaryCard .value{font-size:14px}
+  .ledgerCalendarCard{padding:11px 8px}
+  .ledgerDay{min-height:49px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1832,6 +2034,80 @@ body.manualDetailOpen{padding-bottom:0!important}
     <div class="wealthHomeFoot">Daily Net Worth saves one snapshot per calendar day.</div>
   </section>
 
+
+  <section id="transactionsView" class="view ledgerView">
+    <div class="ledgerTopbar">
+      <div class="ledgerTopSpacer"></div>
+      <h1>Transactions</h1>
+      <div class="ledgerTopSpacer"></div>
+    </div>
+
+    <div class="ledgerPeriodNav">
+      <button class="ledgerPeriodBtn" id="txPrevMonth" aria-label="Previous month">‹</button>
+      <div class="ledgerPeriodLabel" id="txMonthLabel">—</div>
+      <button class="ledgerPeriodBtn" id="txNextMonth" aria-label="Next month">›</button>
+    </div>
+
+    <div class="ledgerSummary">
+      <div class="ledgerSummaryCard income"><div class="label">Income</div><div class="value" id="txMonthIncome">$0</div></div>
+      <div class="ledgerSummaryCard expense"><div class="label">Expense</div><div class="value" id="txMonthExpense">$0</div></div>
+      <div class="ledgerSummaryCard net"><div class="label">Net</div><div class="value" id="txMonthNet">$0</div></div>
+    </div>
+
+    <div class="ledgerCalendarCard">
+      <div class="ledgerWeekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+      <div class="ledgerCalendar" id="ledgerCalendar"></div>
+    </div>
+
+    <button class="ledgerAddBtn" id="addTransactionBtn" type="button"><span>＋</span><span>Add Transaction</span></button>
+
+    <div class="ledgerListHead">
+      <h2 id="ledgerListTitle">This month</h2>
+      <button class="ledgerClearDay" id="ledgerClearDay" type="button" style="display:none">Show month</button>
+    </div>
+    <div id="ledgerTransactionList"></div>
+  </section>
+
+  <section id="statsView" class="view statsView">
+    <div class="ledgerTopbar">
+      <div class="ledgerTopSpacer"></div>
+      <h1>Stats</h1>
+      <div class="ledgerTopSpacer"></div>
+    </div>
+
+    <div class="statsMode" id="statsMode">
+      <button class="active" data-stats-mode="month">Month</button>
+      <button data-stats-mode="year">Year</button>
+    </div>
+
+    <div class="ledgerPeriodNav">
+      <button class="ledgerPeriodBtn" id="statsPrevPeriod" aria-label="Previous period">‹</button>
+      <div class="ledgerPeriodLabel" id="statsPeriodLabel">—</div>
+      <button class="ledgerPeriodBtn" id="statsNextPeriod" aria-label="Next period">›</button>
+    </div>
+
+    <div class="ledgerSummary">
+      <div class="ledgerSummaryCard income"><div class="label">Income</div><div class="value" id="statsIncome">$0</div></div>
+      <div class="ledgerSummaryCard expense"><div class="label">Expense</div><div class="value" id="statsExpense">$0</div></div>
+      <div class="ledgerSummaryCard net"><div class="label">Net</div><div class="value" id="statsNet">$0</div></div>
+    </div>
+
+    <div class="statsSection" id="statsYearTrendSection" style="display:none">
+      <div class="statsSectionHead"><h2>Monthly spending</h2><span id="statsYearTrendTotal"></span></div>
+      <div class="statsCard"><div class="statsYearMonths" id="statsYearMonths"></div></div>
+    </div>
+
+    <div class="statsSection">
+      <div class="statsSectionHead"><h2>Expense by category</h2><span id="statsExpenseCount"></span></div>
+      <div class="statsCard" id="statsExpenseCategories"></div>
+    </div>
+
+    <div class="statsSection">
+      <div class="statsSectionHead"><h2>Income by category</h2><span id="statsIncomeCount"></span></div>
+      <div class="statsCard" id="statsIncomeCategories"></div>
+    </div>
+  </section>
+
   <section id="cibcFundView" class="view cibcFundDetailView">
     <div class="manualDetailTopbar">
       <button class="manualDetailIconBtn" id="cibcFundBackBtn" aria-label="Back">
@@ -2002,7 +2278,14 @@ body.manualDetailOpen{padding-bottom:0!important}
       <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2"/><path d="m4 7 6-4 6 7 5-4"/></svg></span>
       <span class="navLabel">Investment</span>
     </button>
-
+    <button class="navbtn" data-nav="transactions">
+      <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span>
+      <span class="navLabel">Transactions</span>
+    </button>
+    <button class="navbtn" data-nav="stats">
+      <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 20V12M12 20V5M19 20v-9"/></svg></span>
+      <span class="navLabel">Stats</span>
+    </button>
     <button class="navbtn" id="navSettings">
       <span class="navIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="M19.1 13.5a7.9 7.9 0 0 0 0-3l2-1.5-2-3.5-2.5 1a8.7 8.7 0 0 0-2.6-1.5L13.7 2h-4L9.4 5a8.7 8.7 0 0 0-2.6 1.5l-2.5-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 3l-2 1.5 2 3.5 2.5-1A8.7 8.7 0 0 0 9.4 19l.3 3h4l.3-3a8.7 8.7 0 0 0 2.6-1.5l2.5 1 2-3.5z"/></svg></span>
       <span class="navLabel">Settings</span>
@@ -2110,16 +2393,79 @@ body.manualDetailOpen{padding-bottom:0!important}
 
 
 
+
+<div class="modal" id="transactionModal">
+  <div class="sheet">
+    <div class="sheetHead">
+      <h2 id="transactionModalTitle">Add Transaction</h2>
+      <button class="close" id="closeTransactionModal">×</button>
+    </div>
+
+    <div class="txTypeTabs" id="txTypeTabs">
+      <button class="active" type="button" data-tx-type="expense">Expense</button>
+      <button type="button" data-tx-type="income">Income</button>
+      <button type="button" data-tx-type="transfer">Transfer</button>
+    </div>
+
+    <div class="field">
+      <label>Amount</label>
+      <input id="txAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"/>
+    </div>
+
+    <div class="field">
+      <label>Date</label>
+      <input id="txDate" type="date"/>
+    </div>
+
+    <div id="txNormalFields">
+      <div class="field">
+        <label>Category</label>
+        <select id="txCategory"></select>
+      </div>
+      <div class="field">
+        <label>Account</label>
+        <select id="txAccount"></select>
+      </div>
+    </div>
+
+    <div class="txTransferFields txHidden" id="txTransferFields">
+      <div class="field">
+        <label>From</label>
+        <select id="txFromAccount"></select>
+      </div>
+      <div class="field">
+        <label>To</label>
+        <select id="txToAccount"></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Note</label>
+      <input id="txNote" autocomplete="off" placeholder="Optional note"/>
+    </div>
+
+    <button class="primary" id="saveTransaction">Save Transaction</button>
+    <button class="txDeleteBtn" id="deleteTransaction" type="button" style="display:none">Delete Transaction</button>
+  </div>
+</div>
+
 <div class="modal" id="manualAccountModal">
   <div class="sheet">
     <div class="sheetHead"><h2 id="manualAccountTitle">Add Account</h2><button class="close" id="closeManualAccount">×</button></div>
     <div class="field"><label>Account Name</label><input id="manualAccountName" placeholder="CIBC Chequing" autocomplete="off"/></div>
-    <div class="field"><label>Account Type</label><select id="manualAccountType"><option value="cash">Cash / Bank</option><option value="other_asset">Other Asset</option><option value="liability">Liability</option></select></div>
+    <div class="field"><label>Account Type</label><select id="manualAccountType">
+      <option value="chequing">Chequing</option>
+      <option value="savings">Savings</option>
+      <option value="cash">Cash</option>
+      <option value="credit_card">Credit Card</option>
+      <option value="other_asset">Other Asset</option>
+      <option value="liability">Other Liability</option>
+    </select><div class="accountTypeHint">Credit Card balances are entered as the amount owed and are shown as negative on Home.</div></div>
     <div class="field"><label>Currency</label><select id="manualAccountCurrency"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
     <div class="field" id="manualAccountBalanceField"><label>Opening Balance</label><input id="manualAccountBalance" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/></div>
     <button class="primary" id="saveManualAccount">Save Account</button>
     <div class="manualDeleteRow"><button class="dangerTextBtn" id="deleteManualAccount" style="display:none">Delete Account</button></div>
-    <div class="note">Bank and liability balances are manual. USD balances are converted to CAD using the app's current USD/CAD rate.</div>
+    <div class="note">Chequing, savings, cash and credit-card balances can move automatically from Transactions. Manual “Update value” remains available for reconciliation.</div>
   </div>
 </div>
 
@@ -2225,6 +2571,48 @@ var questradeNetDepositsInput=document.getElementById("questradeNetDepositsInput
 var questradeCashAccountCashInput=document.getElementById("questradeCashAccountCashInput");
 var questradeCashAccountNetDepositsInput=document.getElementById("questradeCashAccountNetDepositsInput");
 var netWorthView=document.getElementById("netWorthView");
+var transactionsView=document.getElementById("transactionsView");
+var statsView=document.getElementById("statsView");
+var txPrevMonth=document.getElementById("txPrevMonth");
+var txNextMonth=document.getElementById("txNextMonth");
+var txMonthLabel=document.getElementById("txMonthLabel");
+var txMonthIncome=document.getElementById("txMonthIncome");
+var txMonthExpense=document.getElementById("txMonthExpense");
+var txMonthNet=document.getElementById("txMonthNet");
+var ledgerCalendar=document.getElementById("ledgerCalendar");
+var addTransactionBtn=document.getElementById("addTransactionBtn");
+var ledgerListTitle=document.getElementById("ledgerListTitle");
+var ledgerClearDay=document.getElementById("ledgerClearDay");
+var ledgerTransactionList=document.getElementById("ledgerTransactionList");
+var statsMode=document.getElementById("statsMode");
+var statsPrevPeriod=document.getElementById("statsPrevPeriod");
+var statsNextPeriod=document.getElementById("statsNextPeriod");
+var statsPeriodLabel=document.getElementById("statsPeriodLabel");
+var statsIncome=document.getElementById("statsIncome");
+var statsExpense=document.getElementById("statsExpense");
+var statsNet=document.getElementById("statsNet");
+var statsExpenseCategories=document.getElementById("statsExpenseCategories");
+var statsIncomeCategories=document.getElementById("statsIncomeCategories");
+var statsExpenseCount=document.getElementById("statsExpenseCount");
+var statsIncomeCount=document.getElementById("statsIncomeCount");
+var statsYearTrendSection=document.getElementById("statsYearTrendSection");
+var statsYearTrendTotal=document.getElementById("statsYearTrendTotal");
+var statsYearMonths=document.getElementById("statsYearMonths");
+var transactionModal=document.getElementById("transactionModal");
+var transactionModalTitle=document.getElementById("transactionModalTitle");
+var closeTransactionModal=document.getElementById("closeTransactionModal");
+var txTypeTabs=document.getElementById("txTypeTabs");
+var txAmount=document.getElementById("txAmount");
+var txDate=document.getElementById("txDate");
+var txCategory=document.getElementById("txCategory");
+var txAccount=document.getElementById("txAccount");
+var txNormalFields=document.getElementById("txNormalFields");
+var txTransferFields=document.getElementById("txTransferFields");
+var txFromAccount=document.getElementById("txFromAccount");
+var txToAccount=document.getElementById("txToAccount");
+var txNote=document.getElementById("txNote");
+var saveTransaction=document.getElementById("saveTransaction");
+var deleteTransaction=document.getElementById("deleteTransaction");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
 var netWorthReturn=document.getElementById("netWorthReturn");
@@ -3725,12 +4113,24 @@ function showView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
   if(name==="div"){
-    divView.classList.add("active");document.querySelector('[data-nav="div"]').classList.add("active");
+    divView.classList.add("active");
+    document.querySelector('[data-nav="div"]')?.classList.add("active");
     renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
   }else if(name==="networth"){
-    netWorthView.classList.add("active");document.querySelector('[data-nav="networth"]').classList.add("active");renderNetWorth();
+    netWorthView.classList.add("active");
+    document.querySelector('[data-nav="networth"]')?.classList.add("active");
+    renderNetWorth();
+  }else if(name==="transactions"){
+    transactionsView.classList.add("active");
+    document.querySelector('[data-nav="transactions"]')?.classList.add("active");
+    renderTransactions();
+  }else if(name==="stats"){
+    statsView.classList.add("active");
+    document.querySelector('[data-nav="stats"]')?.classList.add("active");
+    renderStats();
   }else{
-    homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");
+    homeView.classList.add("active");
+    document.querySelector('[data-nav="home"]')?.classList.add("active");
     renderHome();
     loadPortfolioHistory(currentPortfolioRange);
   }
@@ -3829,8 +4229,29 @@ function parseLocalDate(s){
   return new Date(y||1970,(m||1)-1,d||1,12,0,0,0);
 }
 function accountCategoryLabel(a){
-  if(a.type==="liability")return "Liability";
-  return a.category==="other_asset"?"Other Asset":"Cash / Bank";
+  const c=String(a?.category||"");
+  if(c==="chequing")return "Chequing";
+  if(c==="savings")return "Savings";
+  if(c==="cash")return "Cash";
+  if(c==="credit_card")return "Credit Card";
+  if(c==="other_asset")return "Other Asset";
+  if(a?.type==="liability")return "Liability";
+  return "Cash / Bank";
+}
+function accountCategoryIcon(a){
+  const c=String(a?.category||"");
+  if(c==="chequing")return "C";
+  if(c==="savings")return "S";
+  if(c==="cash")return "$";
+  if(c==="credit_card")return "▰";
+  if(c==="other_asset")return "◇";
+  return a?.type==="liability"?"−":"$";
+}
+function isTransactionAccount(a){
+  if(!a)return false;
+  if(a.type==="asset" && ["chequing","savings","cash"].includes(a.category))return true;
+  if(a.type==="liability" && a.category==="credit_card")return true;
+  return false;
 }
 function normalizeManualHistory(a){
   const raw=Array.isArray(a.history)?a.history:[];
@@ -3838,13 +4259,21 @@ function normalizeManualHistory(a){
   raw.forEach(h=>{
     const date=String(h?.date||"");
     const value=Math.abs(Number(h?.value));
-    if(/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(value))byDate.set(date,value);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value))return;
+    const row={
+      date,
+      value,
+      source:h?.source||"anchor",
+      at:Number.isFinite(Number(h?.at))?Number(h.at):0
+    };
+    const prev=byDate.get(date);
+    if(!prev || row.at>=prev.at)byDate.set(date,row);
   });
   if(!byDate.size && Number.isFinite(Number(a.balance))){
-    byDate.set(localDateISO(),Math.abs(Number(a.balance)||0));
+    byDate.set(localDateISO(),{date:localDateISO(),value:Math.abs(Number(a.balance)||0),source:"anchor",at:0});
   }
-  a.history=[...byDate.entries()].map(([date,value])=>({date,value})).sort((x,y)=>x.date.localeCompare(y.date));
-  if(a.history.length)a.balance=a.history[a.history.length-1].value;
+  a.history=[...byDate.values()].sort((x,y)=>x.date.localeCompare(y.date)||(x.at-y.at));
+  if(a.history.length && !Number.isFinite(Number(a.balance)))a.balance=a.history[a.history.length-1].value;
   return a;
 }
 function loadManualAccounts(){
@@ -3899,8 +4328,437 @@ let manualAccounts=loadManualAccounts();
 })();
 let netWorthHistory=loadNetWorthHistory();
 
+const LEDGER_TRANSACTIONS_KEY="personalLedgerTransactionsV513";
+const EXPENSE_CATEGORIES=[
+  "Food & Dining","Groceries","Shopping","Transportation","Bills","Home",
+  "Entertainment","Travel","Health","Education","Subscriptions","Other"
+];
+const INCOME_CATEGORIES=["Salary","Bonus","Refund","Interest","Other Income"];
+
+function loadLedgerTransactions(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(LEDGER_TRANSACTIONS_KEY)||"[]");
+    if(!Array.isArray(raw))return [];
+    return raw.map((t,i)=>({
+      id:String(t?.id||`tx_${Date.now()}_${i}`),
+      type:["expense","income","transfer"].includes(t?.type)?t.type:"expense",
+      date:/^\d{4}-\d{2}-\d{2}$/.test(String(t?.date||""))?String(t.date):localDateISO(),
+      amount:Math.abs(Number(t?.amount)||0),
+      category:String(t?.category||"Other"),
+      accountId:t?.accountId?String(t.accountId):"",
+      fromAccountId:t?.fromAccountId?String(t.fromAccountId):"",
+      toAccountId:t?.toAccountId?String(t.toAccountId):"",
+      note:String(t?.note||""),
+      createdAt:Number.isFinite(Number(t?.createdAt))?Number(t.createdAt):0
+    })).filter(t=>t.amount>0);
+  }catch(e){return []}
+}
+function saveLedgerTransactions(){
+  try{localStorage.setItem(LEDGER_TRANSACTIONS_KEY,JSON.stringify(ledgerTransactions))}catch(e){}
+}
+let ledgerTransactions=loadLedgerTransactions();
+let ledgerMonth=localDateISO().slice(0,7);
+let ledgerSelectedDay=null;
+let editingTransactionId=null;
+let currentTransactionType="expense";
+let statsCurrentMode="month";
+let statsMonth=localDateISO().slice(0,7);
+let statsYear=Number(localDateISO().slice(0,4));
+
+function ledgerAccountById(id){return manualAccounts.find(a=>a.id===id)||null}
+function accountSignedValue(a,value){
+  const n=Math.abs(Number(value)||0);
+  return a?.type==="liability"?-n:n;
+}
+function accountStoredValueFromSigned(a,signed){
+  const n=Number(signed)||0;
+  if(a?.type==="liability")return Math.max(0,-n);
+  return Math.max(0,n);
+}
+function txSignedDeltaForAccount(tx,accountId){
+  const amount=Math.abs(Number(tx?.amount)||0);
+  if(!(amount>0))return 0;
+  if(tx.type==="expense" && tx.accountId===accountId)return -amount;
+  if(tx.type==="income" && tx.accountId===accountId)return amount;
+  if(tx.type==="transfer"){
+    let d=0;
+    if(tx.fromAccountId===accountId)d-=amount;
+    if(tx.toAccountId===accountId)d+=amount;
+    return d;
+  }
+  return 0;
+}
+function accountLedgerRows(a){
+  normalizeManualHistory(a);
+  const anchors=(a.history||[]).map(h=>({
+    kind:"anchor",date:h.date,at:Number(h.at)||0,value:Math.abs(Number(h.value)||0)
+  }));
+  const txEvents=ledgerTransactions
+    .filter(t=>txSignedDeltaForAccount(t,a.id)!==0)
+    .map(t=>({kind:"tx",date:t.date,at:Number(t.createdAt)||0,tx:t}));
+  const events=anchors.concat(txEvents).sort((x,y)=>{
+    const dc=x.date.localeCompare(y.date);
+    if(dc)return dc;
+    if(x.at!==y.at)return x.at-y.at;
+    return x.kind==="anchor"?-1:1;
+  });
+  let hasAnchor=false;
+  let signed=0;
+  const byDate=new Map();
+  for(const e of events){
+    if(e.kind==="anchor"){
+      signed=accountSignedValue(a,e.value);
+      hasAnchor=true;
+    }else if(hasAnchor){
+      signed+=txSignedDeltaForAccount(e.tx,a.id);
+    }else{
+      continue;
+    }
+    signed=a.type==="liability"?Math.min(0,signed):Math.max(0,signed);
+    byDate.set(e.date,{date:e.date,value:accountStoredValueFromSigned(a,signed),signedValue:signed});
+  }
+  if(!byDate.size && Number.isFinite(Number(a.balance))){
+    const signedFallback=accountSignedValue(a,a.balance);
+    byDate.set(localDateISO(),{date:localDateISO(),value:Math.abs(Number(a.balance)||0),signedValue:signedFallback});
+  }
+  return [...byDate.values()].sort((x,y)=>x.date.localeCompare(y.date));
+}
+function recomputeManualAccountFromLedger(a){
+  if(!a)return 0;
+  normalizeManualHistory(a);
+  if(!isTransactionAccount(a)){
+    if(a.history.length)a.balance=Math.abs(Number(a.history[a.history.length-1].value)||0);
+    return Math.abs(Number(a.balance)||0);
+  }
+  const rows=accountLedgerRows(a);
+  if(rows.length)a.balance=Math.abs(Number(rows[rows.length-1].value)||0);
+  return Math.abs(Number(a.balance)||0);
+}
+function recomputeAllLedgerAccounts(){
+  manualAccounts.forEach(a=>recomputeManualAccountFromLedger(a));
+}
+function setManualAccountAnchor(a,date,value){
+  normalizeManualHistory(a);
+  const row={date,value:Math.abs(Number(value)||0),source:"anchor",at:Date.now()};
+  const ix=a.history.findIndex(h=>h.date===date);
+  if(ix>=0)a.history[ix]=row;
+  else a.history.push(row);
+  a.history.sort((x,y)=>x.date.localeCompare(y.date)||(Number(x.at||0)-Number(y.at||0)));
+  recomputeManualAccountFromLedger(a);
+}
+function transactionAccounts(){
+  return manualAccounts.filter(isTransactionAccount);
+}
+function transactionAmountCAD(tx){
+  const id=tx.type==="transfer"?(tx.fromAccountId||tx.toAccountId):tx.accountId;
+  const a=ledgerAccountById(id);
+  const amount=Math.abs(Number(tx.amount)||0);
+  return a?.currency==="USD"?amount*fx:amount;
+}
+function signedAccountDisplay(a){
+  const v=recomputeManualAccountFromLedger(a);
+  return a.type==="liability"?-v:v;
+}
+function accountSelectLabel(a){
+  const signed=signedAccountDisplay(a);
+  const amount=new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency,maximumFractionDigits:2}).format(Math.abs(signed));
+  return `${a.name} · ${signed<0?"−":""}${amount}`;
+}
+function txAccountName(id){
+  return ledgerAccountById(id)?.name||"Unknown account";
+}
+function txCategoryInitial(name){
+  const s=String(name||"");
+  return (s.match(/[A-Za-z0-9]/)?.[0]||"$").toUpperCase();
+}
+function monthLabel(ym){
+  const [y,m]=String(ym).split("-").map(Number);
+  return new Date(y,m-1,1,12).toLocaleDateString("en-CA",{month:"long",year:"numeric"});
+}
+function shiftMonth(ym,delta){
+  const [y,m]=String(ym).split("-").map(Number);
+  const d=new Date(y,m-1+delta,1,12);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+function txRowsForMonth(ym){
+  return ledgerTransactions.filter(t=>t.date.startsWith(ym));
+}
+function txTotals(rows){
+  let income=0,expense=0;
+  for(const t of rows){
+    const cad=transactionAmountCAD(t);
+    if(t.type==="income")income+=cad;
+    else if(t.type==="expense")expense+=cad;
+  }
+  return {income,expense,net:income-expense};
+}
+function periodRowsForStats(){
+  return statsCurrentMode==="month"
+    ? ledgerTransactions.filter(t=>t.date.startsWith(statsMonth))
+    : ledgerTransactions.filter(t=>t.date.startsWith(String(statsYear)+"-"));
+}
+function categoryTotals(rows,type){
+  const map=new Map();
+  rows.filter(t=>t.type===type).forEach(t=>{
+    const k=t.category|| (type==="expense"?"Other":"Other Income");
+    map.set(k,(map.get(k)||0)+transactionAmountCAD(t));
+  });
+  return [...map.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+}
+
+function populateTransactionAccounts(){
+  const accounts=transactionAccounts();
+  const options=accounts.map(a=>`<option value="${a.id}">${accountSelectLabel(a)}</option>`).join("");
+  txAccount.innerHTML=options;
+  txFromAccount.innerHTML=options;
+  txToAccount.innerHTML=options;
+  return accounts;
+}
+function populateTransactionCategories(type){
+  const rows=type==="income"?INCOME_CATEGORIES:EXPENSE_CATEGORIES;
+  txCategory.innerHTML=rows.map(x=>`<option value="${x}">${x}</option>`).join("");
+}
+function setTransactionType(type){
+  currentTransactionType=["expense","income","transfer"].includes(type)?type:"expense";
+  txTypeTabs.querySelectorAll("[data-tx-type]").forEach(b=>b.classList.toggle("active",b.dataset.txType===currentTransactionType));
+  const transfer=currentTransactionType==="transfer";
+  txNormalFields.classList.toggle("txHidden",transfer);
+  txTransferFields.classList.toggle("txHidden",!transfer);
+  if(!transfer)populateTransactionCategories(currentTransactionType);
+}
+function openTransactionModal(id=null){
+  const accounts=populateTransactionAccounts();
+  if(accounts.length<1){
+    alert("Add a Chequing, Savings, Cash or Credit Card account on Home first.");
+    showView("networth");
+    return;
+  }
+  editingTransactionId=id||null;
+  const existing=id?ledgerTransactions.find(t=>t.id===id):null;
+  transactionModalTitle.textContent=existing?"Edit Transaction":"Add Transaction";
+  deleteTransaction.style.display=existing?"block":"none";
+  setTransactionType(existing?.type||"expense");
+  txAmount.value=existing?Number(existing.amount).toFixed(2):"";
+  txDate.value=existing?.date||ledgerSelectedDay||localDateISO();
+  txDate.max=localDateISO();
+  txNote.value=existing?.note||"";
+  if(existing){
+    if(existing.type==="transfer"){
+      txFromAccount.value=existing.fromAccountId||accounts[0]?.id||"";
+      txToAccount.value=existing.toAccountId||accounts[1]?.id||accounts[0]?.id||"";
+    }else{
+      txAccount.value=existing.accountId||accounts[0]?.id||"";
+      populateTransactionCategories(existing.type);
+      if([...txCategory.options].some(o=>o.value===existing.category))txCategory.value=existing.category;
+      else{
+        const opt=document.createElement("option");opt.value=existing.category;opt.textContent=existing.category;txCategory.appendChild(opt);txCategory.value=existing.category;
+      }
+    }
+  }else{
+    txAccount.value=accounts[0]?.id||"";
+    txFromAccount.value=accounts[0]?.id||"";
+    txToAccount.value=accounts[1]?.id||accounts[0]?.id||"";
+  }
+  transactionModal.classList.add("show");
+  setTimeout(()=>txAmount.focus(),80);
+}
+function closeTransactionModalFn(){
+  transactionModal.classList.remove("show");
+  editingTransactionId=null;
+}
+function commitLedgerChange(){
+  recomputeAllLedgerAccounts();
+  saveManualAccounts();
+  saveLedgerTransactions();
+  renderNetWorth();
+  renderTransactions();
+  renderStats();
+  if(currentManualDetailId)renderManualAccountDetail();
+}
+function saveTransactionFromModal(){
+  const amount=Math.abs(Number(txAmount.value));
+  const date=txDate.value;
+  if(!(amount>0)){alert("Enter an amount greater than 0.");return}
+  if(!date){alert("Choose a date.");return}
+  if(date>localDateISO()){alert("The transaction date can’t be in the future.");return}
+
+  const existing=editingTransactionId?ledgerTransactions.find(t=>t.id===editingTransactionId):null;
+  const row={
+    id:existing?.id||`tx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+    type:currentTransactionType,
+    date,
+    amount,
+    category:currentTransactionType==="transfer"?"Transfer":txCategory.value,
+    accountId:currentTransactionType==="transfer"?"":txAccount.value,
+    fromAccountId:currentTransactionType==="transfer"?txFromAccount.value:"",
+    toAccountId:currentTransactionType==="transfer"?txToAccount.value:"",
+    note:txNote.value.trim(),
+    createdAt:existing?.createdAt||Date.now()
+  };
+
+  if(row.type==="transfer"){
+    if(!row.fromAccountId||!row.toAccountId){alert("Choose both accounts.");return}
+    if(row.fromAccountId===row.toAccountId){alert("From and To accounts must be different.");return}
+    const from=ledgerAccountById(row.fromAccountId),to=ledgerAccountById(row.toAccountId);
+    if(!from||!to){alert("Choose valid accounts.");return}
+    if(from.currency!==to.currency){alert("Transfers between different currencies are not supported yet.");return}
+  }else if(!ledgerAccountById(row.accountId)){
+    alert("Choose an account.");return;
+  }
+
+  if(existing){
+    const ix=ledgerTransactions.findIndex(t=>t.id===existing.id);
+    ledgerTransactions[ix]=row;
+  }else ledgerTransactions.push(row);
+
+  closeTransactionModalFn();
+  commitLedgerChange();
+}
+function deleteCurrentTransaction(){
+  if(!editingTransactionId)return;
+  const tx=ledgerTransactions.find(t=>t.id===editingTransactionId);
+  if(!tx||!confirm("Delete this transaction?"))return;
+  ledgerTransactions=ledgerTransactions.filter(t=>t.id!==editingTransactionId);
+  closeTransactionModalFn();
+  commitLedgerChange();
+}
+
+function renderLedgerCalendar(){
+  const [year,month]=ledgerMonth.split("-").map(Number);
+  const first=new Date(year,month-1,1,12);
+  const firstWeekday=first.getDay();
+  const days=new Date(year,month,0,12).getDate();
+  const rows=txRowsForMonth(ledgerMonth);
+  const daily=new Map();
+  rows.forEach(t=>{
+    if(!daily.has(t.date))daily.set(t.date,{expense:0,income:0});
+    const d=daily.get(t.date),cad=transactionAmountCAD(t);
+    if(t.type==="expense")d.expense+=cad;
+    if(t.type==="income")d.income+=cad;
+  });
+  let out="";
+  for(let i=0;i<firstWeekday;i++)out+='<div class="ledgerDay empty"></div>';
+  for(let day=1;day<=days;day++){
+    const date=`${ledgerMonth}-${String(day).padStart(2,"0")}`;
+    const d=daily.get(date)||{expense:0,income:0};
+    const cls=[
+      "ledgerDay",
+      date===localDateISO()?"today":"",
+      date===ledgerSelectedDay?"selected":"",
+      d.income>0?"hasIncome":""
+    ].filter(Boolean).join(" ");
+    out+=`<button class="${cls}" data-ledger-day="${date}" type="button">
+      <span class="dayNum">${day}</span>
+      <span class="daySpend">${d.expense>0?fmt0(d.expense):""}</span>
+      <span class="dayIncomeDot"></span>
+    </button>`;
+  }
+  ledgerCalendar.innerHTML=out;
+  ledgerCalendar.querySelectorAll("[data-ledger-day]").forEach(b=>b.onclick=()=>{
+    ledgerSelectedDay=ledgerSelectedDay===b.dataset.ledgerDay?null:b.dataset.ledgerDay;
+    renderTransactions();
+  });
+}
+function renderTransactions(){
+  if(!transactionsView)return;
+  txMonthLabel.textContent=monthLabel(ledgerMonth);
+  const monthRows=txRowsForMonth(ledgerMonth);
+  const totals=txTotals(monthRows);
+  txMonthIncome.textContent=fmt(totals.income);
+  txMonthExpense.textContent=fmt(totals.expense);
+  txMonthNet.textContent=(totals.net<0?"−":"")+fmt(Math.abs(totals.net));
+  txMonthNet.className="value "+(totals.net>=0?"pos":"neg");
+  renderLedgerCalendar();
+
+  let rows=monthRows.slice();
+  if(ledgerSelectedDay)rows=rows.filter(t=>t.date===ledgerSelectedDay);
+  rows.sort((a,b)=>b.date.localeCompare(a.date)||(Number(b.createdAt)-Number(a.createdAt)));
+
+  ledgerListTitle.textContent=ledgerSelectedDay
+    ? parseLocalDate(ledgerSelectedDay).toLocaleDateString("en-CA",{weekday:"long",month:"long",day:"numeric"})
+    : "This month";
+  ledgerClearDay.style.display=ledgerSelectedDay?"block":"none";
+
+  if(!rows.length){
+    ledgerTransactionList.innerHTML='<div class="ledgerEmpty">No transactions here yet.</div>';
+    return;
+  }
+  const groups=new Map();
+  rows.forEach(t=>{if(!groups.has(t.date))groups.set(t.date,[]);groups.get(t.date).push(t)});
+  ledgerTransactionList.innerHTML=[...groups.entries()].map(([date,items])=>{
+    const dt=txTotals(items);
+    const dayLabel=parseLocalDate(date).toLocaleDateString("en-CA",{weekday:"short",month:"short",day:"numeric"});
+    const dailyBits=[];
+    if(dt.expense>0)dailyBits.push(`Expense ${fmt(dt.expense)}`);
+    if(dt.income>0)dailyBits.push(`Income ${fmt(dt.income)}`);
+    return `<div class="ledgerDayGroup">
+      <div class="ledgerDayHeader"><strong>${dayLabel}</strong><div class="ledgerDayTotals">${dailyBits.join(" · ")||"Transfers"}</div></div>
+      <div class="ledgerRows">${items.map(t=>{
+        const cad=transactionAmountCAD(t);
+        const title=t.type==="transfer"?"Transfer":t.category;
+        const meta=t.type==="transfer"
+          ? `${txAccountName(t.fromAccountId)} → ${txAccountName(t.toAccountId)}${t.note?` · ${t.note}`:""}`
+          : `${txAccountName(t.accountId)}${t.note?` · ${t.note}`:""}`;
+        const amount=t.type==="expense"?`−${fmt(cad)}`:t.type==="income"?`+${fmt(cad)}`:fmt(cad);
+        return `<button class="ledgerRow" type="button" data-tx-id="${t.id}">
+          <span class="ledgerIcon">${t.type==="transfer"?"↔":txCategoryInitial(t.category)}</span>
+          <span class="ledgerRowMain"><span class="ledgerRowTitle">${title}</span><span class="ledgerRowMeta">${meta}</span></span>
+          <span class="ledgerAmount ${t.type}">${amount}</span>
+        </button>`;
+      }).join("")}</div>
+    </div>`;
+  }).join("");
+  ledgerTransactionList.querySelectorAll("[data-tx-id]").forEach(b=>b.onclick=()=>openTransactionModal(b.dataset.txId));
+}
+function renderCategoryStats(container,rows,type){
+  const cats=categoryTotals(rows,type);
+  if(!cats.length){container.innerHTML='<div class="statsEmpty">No '+type+' transactions in this period.</div>';return}
+  const max=Math.max(...cats.map(x=>x.value),1);
+  container.innerHTML=cats.map(c=>`<div class="categoryRow">
+    <div class="categoryTop"><div class="categoryName">${c.name}</div><div class="categoryValue">${fmt(c.value)}</div></div>
+    <div class="categoryTrack"><div class="categoryFill ${type}" style="width:${Math.max(2,c.value/max*100).toFixed(1)}%"></div></div>
+  </div>`).join("");
+}
+function renderStats(){
+  if(!statsView)return;
+  statsMode.querySelectorAll("[data-stats-mode]").forEach(b=>b.classList.toggle("active",b.dataset.statsMode===statsCurrentMode));
+  statsPeriodLabel.textContent=statsCurrentMode==="month"?monthLabel(statsMonth):String(statsYear);
+  const rows=periodRowsForStats();
+  const totals=txTotals(rows);
+  statsIncome.textContent=fmt(totals.income);
+  statsExpense.textContent=fmt(totals.expense);
+  statsNet.textContent=(totals.net<0?"−":"")+fmt(Math.abs(totals.net));
+  statsNet.className="value "+(totals.net>=0?"pos":"neg");
+
+  const expenseRows=rows.filter(t=>t.type==="expense");
+  const incomeRows=rows.filter(t=>t.type==="income");
+  statsExpenseCount.textContent=`${expenseRows.length} transaction${expenseRows.length===1?"":"s"}`;
+  statsIncomeCount.textContent=`${incomeRows.length} transaction${incomeRows.length===1?"":"s"}`;
+  renderCategoryStats(statsExpenseCategories,rows,"expense");
+  renderCategoryStats(statsIncomeCategories,rows,"income");
+
+  statsYearTrendSection.style.display=statsCurrentMode==="year"?"block":"none";
+  if(statsCurrentMode==="year"){
+    const months=Array.from({length:12},(_,i)=>{
+      const ym=`${statsYear}-${String(i+1).padStart(2,"0")}`;
+      const t=txTotals(ledgerTransactions.filter(x=>x.date.startsWith(ym)));
+      return {month:i,value:t.expense};
+    });
+    const max=Math.max(...months.map(x=>x.value),1);
+    statsYearTrendTotal.textContent=`${fmt(totals.expense)} total`;
+    statsYearMonths.innerHTML=months.map(m=>`<div class="statsMonthBarWrap">
+      <div class="statsMonthBar" style="height:${Math.max(2,m.value/max*110).toFixed(1)}px"></div>
+      <div class="statsMonthLabel">${new Date(2026,m.month,1).toLocaleDateString("en-CA",{month:"short"}).slice(0,1)}</div>
+    </div>`).join("");
+  }
+}
+
+recomputeAllLedgerAccounts();
+
+
 function manualCurrentValue(a){
   normalizeManualHistory(a);
+  recomputeManualAccountFromLedger(a);
   return Math.abs(Number(a.balance)||0);
 }
 function manualBalanceCAD(a){
@@ -4227,10 +5085,11 @@ function renderNetWorth(){
   const rowHtml=a=>{
     normalizeManualHistory(a);
     const cad=manualBalanceCAD(a);
-    const latest=a.history[a.history.length-1];
+    const activity=accountLedgerRows(a);
+    const latest=activity[activity.length-1]||a.history[a.history.length-1];
     const sub=a.currency==="USD"?`${a.currency} ${manualCurrentValue(a).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`:`Updated ${relativeUpdatedText(latest?.date).toLowerCase()}`;
     return `<div class="netWorthRow manualAccountRow" data-manual-id="${a.id}">
-      <div class="netWorthIcon">${a.type==="liability"?"−":"$"}</div>
+      <div class="netWorthIcon">${accountCategoryIcon(a)}</div>
       <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${accountCategoryLabel(a)} · ${a.currency}</div></div>
       <div class="netWorthAmount ${a.type==="liability"?"liability":""}">${a.type==="liability"?"−":""}${fmt(cad)}<span class="sub">${sub}</span></div>
     </div>`;
@@ -4295,7 +5154,7 @@ if(cibcFundBackBtn)cibcFundBackBtn.onclick=closeCibcFundDetail;
 function getManualAccount(id){return manualAccounts.find(a=>a.id===id)||null}
 function manualHistoryRangeRows(a,range){
   normalizeManualHistory(a);
-  const rows=a.history.slice();
+  const rows=accountLedgerRows(a);
   if(range==="ALL")return rows;
   const today=parseLocalDate(localDateISO());
   let cutoff=new Date(today);
@@ -4361,7 +5220,8 @@ function renderManualAccountDetail(){
   const a=getManualAccount(currentManualDetailId);
   if(!a)return;
   normalizeManualHistory(a);
-  const latest=a.history[a.history.length-1];
+  const activity=accountLedgerRows(a);
+  const latest=activity[activity.length-1]||a.history[a.history.length-1];
   const value=manualCurrentValue(a);
   manualDetailTitle.textContent=a.name;
   manualDetailBalance.textContent=(a.type==="liability"?"−":"")+new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
@@ -4393,9 +5253,12 @@ function openManualAccountModal(type="asset",id=null){
   editingManualAccountId=id||null;
   const existing=id?getManualAccount(id):null;
   const editMode=Boolean(existing);
-  manualAccountTitle.textContent=editMode?"Edit details":(type==="liability"?"Add Liability":"Add Account");
+  manualAccountTitle.textContent=editMode?"Edit details":(type==="liability"?"Add Credit Card / Liability":"Add Account");
   manualAccountName.value=existing?.name||"";
-  manualAccountType.value=existing?(existing.type==="liability"?"liability":(existing.category==="other_asset"?"other_asset":"cash")):(type==="liability"?"liability":"cash");
+  const existingCategory=existing?.category;
+  manualAccountType.value=existing
+    ? (["chequing","savings","cash","credit_card","other_asset","liability"].includes(existingCategory)?existingCategory:(existing.type==="liability"?"liability":"cash"))
+    : (type==="liability"?"credit_card":"chequing");
   manualAccountCurrency.value=existing?.currency||"CAD";
   manualAccountBalance.value=existing?manualCurrentValue(existing).toFixed(2):"";
   manualAccountBalanceField?.classList.toggle("isHidden",editMode);
@@ -4425,8 +5288,9 @@ saveManualAccount.onclick=()=>{
   const selectedType=manualAccountType.value;
   const currency=manualAccountCurrency.value;
   if(!name){alert('Enter an account name.');return}
-  const type=selectedType==="liability"?"liability":"asset";
-  const category=selectedType==="other_asset"?"other_asset":(type==="liability"?"liability":"cash");
+  const liabilityTypes=new Set(["credit_card","liability"]);
+  const type=liabilityTypes.has(selectedType)?"liability":"asset";
+  const category=selectedType;
   if(editingManualAccountId){
     const a=getManualAccount(editingManualAccountId);
     if(!a)return;
@@ -4441,7 +5305,8 @@ saveManualAccount.onclick=()=>{
   const balance=Number(manualAccountBalance.value);
   if(!Number.isFinite(balance)||balance<0){alert('Enter a valid opening balance.');return}
   const id='acct_'+Date.now();
-  const row={id,name,type,category,currency,balance:Math.abs(balance),history:[{date:localDateISO(),value:Math.abs(balance)}]};
+  const now=Date.now();
+  const row={id,name,type,category,currency,balance:Math.abs(balance),history:[{date:localDateISO(),value:Math.abs(balance),source:"anchor",at:now}]};
   manualAccounts.push(row);
   saveManualAccounts();
   closeManualAccountModal();
@@ -4454,7 +5319,10 @@ manualDetailEditBtn.onclick=()=>openManualAccountModal("asset",currentManualDeta
 manualDetailUpdateBtn.onclick=openManualUpdateModal;
 manualDetailDeleteBtn.onclick=()=>{
   const a=getManualAccount(currentManualDetailId);
-  if(!a||!confirm(`Delete ${a.name}?`))return;
+  if(!a)return;
+  const used=ledgerTransactions.some(t=>t.accountId===a.id||t.fromAccountId===a.id||t.toAccountId===a.id);
+  if(used){alert("This account has transactions. Delete or move those transactions first.");return}
+  if(!confirm(`Delete ${a.name}?`))return;
   manualAccounts=manualAccounts.filter(x=>x.id!==a.id);
   saveManualAccounts();
   currentManualDetailId=null;
@@ -4470,12 +5338,7 @@ saveManualUpdate.onclick=()=>{
   const date=manualUpdateDate.value;
   if(!Number.isFinite(value)||!date){alert("Enter a valid value and date.");return}
   if(date>localDateISO()){alert("The update date can’t be in the future.");return}
-  normalizeManualHistory(a);
-  const ix=a.history.findIndex(h=>h.date===date);
-  if(ix>=0)a.history[ix].value=value;
-  else a.history.push({date,value});
-  a.history.sort((x,y)=>x.date.localeCompare(y.date));
-  a.balance=a.history[a.history.length-1].value;
+  setManualAccountAnchor(a,date,value);
   saveManualAccounts();
   closeManualUpdateModalFn();
   renderManualAccountDetail();
@@ -4499,6 +5362,32 @@ closeNetWorthSnapshot.onclick=closeNetWorthSnapshotModalFn;
 netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWorthSnapshotModalFn()};
 saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
+
+
+// v5.13 accounting interactions
+if(addTransactionBtn)addTransactionBtn.onclick=()=>openTransactionModal();
+if(closeTransactionModal)closeTransactionModal.onclick=closeTransactionModalFn;
+if(transactionModal)transactionModal.onclick=e=>{if(e.target===transactionModal)closeTransactionModalFn()};
+if(txTypeTabs)txTypeTabs.querySelectorAll("[data-tx-type]").forEach(b=>b.onclick=()=>setTransactionType(b.dataset.txType));
+if(saveTransaction)saveTransaction.onclick=saveTransactionFromModal;
+if(deleteTransaction)deleteTransaction.onclick=deleteCurrentTransaction;
+if(ledgerClearDay)ledgerClearDay.onclick=()=>{ledgerSelectedDay=null;renderTransactions()};
+if(txPrevMonth)txPrevMonth.onclick=()=>{ledgerMonth=shiftMonth(ledgerMonth,-1);ledgerSelectedDay=null;renderTransactions()};
+if(txNextMonth)txNextMonth.onclick=()=>{ledgerMonth=shiftMonth(ledgerMonth,1);ledgerSelectedDay=null;renderTransactions()};
+if(statsMode)statsMode.querySelectorAll("[data-stats-mode]").forEach(b=>b.onclick=()=>{
+  statsCurrentMode=b.dataset.statsMode;
+  renderStats();
+});
+if(statsPrevPeriod)statsPrevPeriod.onclick=()=>{
+  if(statsCurrentMode==="month")statsMonth=shiftMonth(statsMonth,-1);
+  else statsYear-=1;
+  renderStats();
+};
+if(statsNextPeriod)statsNextPeriod.onclick=()=>{
+  if(statsCurrentMode==="month")statsMonth=shiftMonth(statsMonth,1);
+  else statsYear+=1;
+  renderStats();
+};
 
 let tickerSearchTimer=null;
 let tickerSearchSeq=0;
@@ -4763,6 +5652,8 @@ setSelectedPortfolioAccount(selectedPortfolioAccount,{refreshChart:false});
 bindHoldingRows();
 renderDividends("1M");
 renderNetWorth();
+renderTransactions();
+renderStats();
 if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
 setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&marketApiBase)refreshLiveData(true)});
