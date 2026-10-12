@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
+<!-- v5.18.1 Backdated manual transactions affect current balances -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v5.17.7 Hotfix restore Home rendering -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
@@ -5692,9 +5693,27 @@ function accountLedgerRows(a){
   const anchors=(a.history||[]).map(h=>({
     kind:"anchor",date:h.date,at:Number(h.at)||0,value:Math.abs(Number(h.value)||0)
   }));
+
+  // The newest balance update is the reconciliation baseline. A transaction entered
+  // AFTER that baseline must change the current balance even when its transaction
+  // date is earlier (for example, entering an Oct 4 purchase on Oct 12).
+  // Imported 2026 history has affectsBalance:false and is still history-only.
+  const latestAnchor=anchors.slice().sort((x,y)=>{
+    if(x.at!==y.at)return y.at-x.at;
+    return y.date.localeCompare(x.date);
+  })[0]||null;
+
   const txEvents=ledgerTransactions
     .filter(t=>txSignedDeltaForAccount(t,a.id)!==0)
-    .map(t=>({kind:"tx",date:t.date,at:Number(t.createdAt)||0,tx:t}));
+    .map(t=>{
+      const createdAt=Number(t.createdAt)||0;
+      let effectiveDate=t.date;
+      if(latestAnchor && createdAt>latestAnchor.at && String(t.date)<latestAnchor.date){
+        effectiveDate=latestAnchor.date;
+      }
+      return {kind:"tx",date:effectiveDate,originalDate:t.date,at:createdAt,tx:t};
+    });
+
   const events=anchors.concat(txEvents).sort((x,y)=>{
     const dc=x.date.localeCompare(y.date);
     if(dc)return dc;
