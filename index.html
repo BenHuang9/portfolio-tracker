@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16.1 Mobile quick-entry width + vertical-scroll fix -->
+<!-- v5.16.2 Compact transaction date controls -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2360,6 +2360,69 @@ html,body{
   }
 }
 
+
+/* v5.16.2 compact transaction date controls */
+.quickDateControl{
+  position:relative;
+  width:100%;
+  height:45px;
+  min-height:45px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:0 11px;
+  box-sizing:border-box;
+  border:1px solid #cfd1d4;
+  border-radius:13px;
+  background:#fff;
+  color:var(--text);
+  overflow:hidden;
+}
+.quickDateText{
+  min-width:0;
+  flex:1 1 auto;
+  font-size:13px;
+  font-weight:650;
+  line-height:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.quickDateChevron{
+  flex:0 0 auto;
+  color:#111;
+  font-size:15px;
+  font-weight:900;
+  line-height:1;
+  transform:translateY(-1px);
+}
+.quickDateNative{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:none!important;
+  opacity:0!important;
+  border:0!important;
+  padding:0!important;
+  margin:0!important;
+  cursor:pointer!important;
+  z-index:2!important;
+  -webkit-appearance:none!important;
+  appearance:none!important;
+}
+.quickDateNative::-webkit-calendar-picker-indicator{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -2985,7 +3048,11 @@ html,body{
         </div>
         <div class="field quickField">
           <label>Date</label>
-          <input id="txDate" type="date"/>
+          <label class="quickDateControl">
+            <span class="quickDateText" id="txDateText">—</span>
+            <span class="quickDateChevron" aria-hidden="true">⌄</span>
+            <input id="txDate" class="quickDateNative" type="date"/>
+          </label>
         </div>
       </div>
     </div>
@@ -3003,7 +3070,11 @@ html,body{
       </div>
       <div class="field quickField">
         <label>Date</label>
-        <input id="txTransferDateMirror" type="date"/>
+        <label class="quickDateControl">
+          <span class="quickDateText" id="txTransferDateText">—</span>
+          <span class="quickDateChevron" aria-hidden="true">⌄</span>
+          <input id="txTransferDateMirror" class="quickDateNative" type="date"/>
+        </label>
       </div>
       <input id="txTransferNoteMirror" class="quickNoteInput" autocomplete="off" placeholder="Optional transfer note"/>
     </div>
@@ -3205,6 +3276,8 @@ var txCategoryGrid=document.getElementById("txCategoryGrid");
 var txNoteChips=document.getElementById("txNoteChips");
 var txKeypad=document.getElementById("txKeypad");
 var txTransferDateMirror=document.getElementById("txTransferDateMirror");
+var txDateText=document.getElementById("txDateText");
+var txTransferDateText=document.getElementById("txTransferDateText");
 var txTransferNoteMirror=document.getElementById("txTransferNoteMirror");
 var categoryDetailModal=document.getElementById("categoryDetailModal");
 var closeCategoryDetail=document.getElementById("closeCategoryDetail");
@@ -5270,6 +5343,18 @@ function setQuickAmountValue(next){
   if(s.length>9)s=s.slice(0,9);
   txAmount.value=s;
 }
+
+function formatQuickDateLabel(value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))return "Choose date";
+  const d=parseLocalDate(value);
+  if(value===localDateISO())return "Today";
+  return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
+}
+function syncQuickDateDisplays(){
+  if(txDateText)txDateText.textContent=formatQuickDateLabel(txDate?.value);
+  if(txTransferDateText)txTransferDateText.textContent=formatQuickDateLabel(txTransferDateMirror?.value);
+}
+
 function quickAmountKey(key){
   let cur=String(txAmount.value||"");
   if(key==="back"){
@@ -5312,6 +5397,7 @@ function setTransactionType(type){
     txTransferDateMirror.value=txDate.value||localDateISO();
     txTransferNoteMirror.value=txNote.value||"";
   }
+  syncQuickDateDisplays();
 }
 function openTransactionModal(id=null){
   const accounts=populateTransactionAccounts();
@@ -5350,6 +5436,7 @@ function openTransactionModal(id=null){
   }
   txTransferDateMirror.value=txDate.value||localDateISO();
   txTransferNoteMirror.value=txNote.value||"";
+  syncQuickDateDisplays();
   renderQuickCategoryGrid();
   renderQuickNoteChips();
   transactionModal.classList.add("show");
@@ -6240,7 +6327,14 @@ saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
 if(txKeypad)txKeypad.querySelectorAll("[data-key]").forEach(btn=>btn.onclick=()=>quickAmountKey(btn.dataset.key));
 if(txNote)txNote.addEventListener("input",renderQuickNoteChips);
-if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{txDate.value=txTransferDateMirror.value});
+if(txDate)txDate.addEventListener("change",()=>{
+  if(currentTransactionType==="transfer")txTransferDateMirror.value=txDate.value;
+  syncQuickDateDisplays();
+});
+if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{
+  txDate.value=txTransferDateMirror.value;
+  syncQuickDateDisplays();
+});
 if(txTransferNoteMirror)txTransferNoteMirror.addEventListener("input",()=>{txNote.value=txTransferNoteMirror.value});
 if(closeCategoryDetail)closeCategoryDetail.onclick=closeCategoryDetailFn;
 if(categoryDetailModal)categoryDetailModal.onclick=e=>{if(e.target===categoryDetailModal)closeCategoryDetailFn()};
