@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.8 Multi-account Portfolio + Questrade holdings + Net Worth -->
+<!-- v5.8.1 Multi-account + Questrade current holdings prefilled -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1587,6 +1587,55 @@ try{
   }
 }catch(e){}
 
+// V5.8.1 one-time Questrade opening snapshot.
+// This preserves all existing Wealthsimple data and only seeds Questrade if that account has no lots yet.
+// Snapshot date = 2026-10-11. Current quantity + Questrade average price are used as the opening cost basis.
+(function seedQuestradeCurrentHoldingsV581(){
+  try{
+    const seedKey="questradeCurrentHoldingsSeedV581";
+    if(localStorage.getItem(seedKey))return;
+
+    const qLots=lots.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)==="questrade_tfsa");
+    if(qLots.length===0){
+      const snapshotDate="2026-10-11";
+      const snapshot=[
+        {ticker:"AMD",shares:6,cost:92.0182},
+        {ticker:"BABA",shares:2,cost:286.31},
+        {ticker:"FSLY",shares:7,cost:75.1362},
+        {ticker:"GOOG",shares:5,cost:175.9567},
+        {ticker:"GP",shares:3,cost:222.825},
+        {ticker:"NOK",shares:30,cost:16.8392},
+        {ticker:"NVDA",shares:13,cost:120.748},
+        {ticker:"SOFI",shares:63,cost:11.7855},
+        {ticker:"TDOC",shares:8,cost:138.2024},
+        {ticker:"TSLA",shares:4,cost:223.6575}
+      ];
+      snapshot.forEach(p=>lots.push({
+        ...p,
+        date:snapshotDate,
+        accountId:"questrade_tfsa",
+        openingPosition:true
+      }));
+      saveLotsSafe();
+      localStorage.setItem(seedKey,"seeded");
+    }else{
+      // Never duplicate positions if the user already started entering Questrade lots manually.
+      localStorage.setItem(seedKey,"skipped-existing");
+    }
+
+    const qCashRaw=localStorage.getItem("questradeAccountCashCAD");
+    if(qCashRaw===null || Number(qCashRaw)===0){
+      localStorage.setItem("questradeAccountCashCAD","2112.95");
+    }
+    const qDepRaw=localStorage.getItem("questradeNetDepositsCAD");
+    if(qDepRaw===null || Number(qDepRaw)===0){
+      localStorage.setItem("questradeNetDepositsCAD","10500");
+    }
+  }catch(e){
+    console.warn("Questrade snapshot seed failed",e);
+  }
+})();
+
 function loadNumberSetting(key, fallback){
   try{
     const raw=localStorage.getItem(key);
@@ -2897,8 +2946,10 @@ function openHoldingDetail(ticker){
   detailLotsEl.innerHTML = tickerLots.map(l=>`
     <div class="lotRow">
       <div>
-        <div class="lotDate">${new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
-        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}</div>
+        <div class="lotDate">${l.openingPosition
+          ? "Opening position · "+new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
+          : new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
+        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}${l.openingPosition?" avg cost":""}</div>
         <div class="accountBadge">${accountName(l.accountId)}</div>
       </div>
       <div class="lotRight">
@@ -2917,8 +2968,9 @@ function openHoldingDetail(ticker){
       const lot=lots[idx];
       if(!lot)return;
 
+      const lotLabel=lot.openingPosition?"Opening position":"Lot";
       const ok=window.confirm(
-        `Delete this lot?\n\n${lot.ticker}\n${lot.date}\n${Number(lot.shares).toLocaleString()} shares × ${Number(lot.cost).toFixed(2)}`
+        `Delete this ${lotLabel.toLowerCase()}?\n\n${lot.ticker}\n${lot.openingPosition?"Tracking start: ":""}${lot.date}\n${Number(lot.shares).toLocaleString()} shares × ${Number(lot.cost).toFixed(4)}`
       );
       if(!ok)return;
 
