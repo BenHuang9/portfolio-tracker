@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.8.1 Multi-account + Questrade current holdings prefilled -->
+<!-- v5.8.2 Add second Questrade Cash account -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1125,6 +1125,7 @@ body.chartScrubbing{
       <button class="active" data-account="all">All Accounts</button>
       <button data-account="wealthsimple_tfsa">Wealthsimple TFSA</button>
       <button data-account="questrade_tfsa">Questrade TFSA</button>
+      <button data-account="questrade_cash">Questrade Cash</button>
     </div>
 
     <div class="seg" id="portfolioRanges">
@@ -1194,6 +1195,7 @@ body.chartScrubbing{
       <button class="active" data-div-account="all">All Accounts</button>
       <button data-div-account="wealthsimple_tfsa">Wealthsimple TFSA</button>
       <button data-div-account="questrade_tfsa">Questrade TFSA</button>
+      <button data-div-account="questrade_cash">Questrade Cash</button>
     </div>
 
     <div class="seg" id="divRanges">
@@ -1387,6 +1389,7 @@ body.chartScrubbing{
       <select id="fAccount">
         <option value="wealthsimple_tfsa">Wealthsimple TFSA</option>
         <option value="questrade_tfsa">Questrade TFSA</option>
+        <option value="questrade_cash">Questrade Cash</option>
       </select>
     </div>
     <div class="field tickerSearchWrap">
@@ -1439,6 +1442,20 @@ body.chartScrubbing{
         <div class="field">
           <label>Net Deposits (CAD)</label>
           <input id="questradeNetDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+        </div>
+      </div>
+    </div>
+    <div class="accountSettingsBlock">
+      <div class="accountSettingsTitle">Questrade Cash</div>
+      <div class="accountSettingsSub">Second self-directed Questrade account. Currently cash only.</div>
+      <div class="settingsGrid">
+        <div class="field">
+          <label>Cash Balance (CAD)</label>
+          <input id="questradeCashAccountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="2976.76"/>
+        </div>
+        <div class="field">
+          <label>Net Deposits (CAD)</label>
+          <input id="questradeCashAccountNetDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="3000.00"/>
         </div>
       </div>
     </div>
@@ -1525,6 +1542,8 @@ var marketStatusText=document.getElementById("marketStatusText");
 var fxStatus=document.getElementById("fxStatus");
 var questradeCashInput=document.getElementById("questradeCashInput");
 var questradeNetDepositsInput=document.getElementById("questradeNetDepositsInput");
+var questradeCashAccountCashInput=document.getElementById("questradeCashAccountCashInput");
+var questradeCashAccountNetDepositsInput=document.getElementById("questradeCashAccountNetDepositsInput");
 var netWorthView=document.getElementById("netWorthView");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
@@ -1574,7 +1593,8 @@ let divPayments = [];
 
 const INVESTMENT_ACCOUNTS=[
   {id:"wealthsimple_tfsa",name:"Wealthsimple TFSA",short:"Wealthsimple",icon:"W"},
-  {id:"questrade_tfsa",name:"Questrade TFSA",short:"Questrade",icon:"Q"}
+  {id:"questrade_tfsa",name:"Questrade TFSA",short:"Questrade TFSA",icon:"Q"},
+  {id:"questrade_cash",name:"Questrade Cash",short:"Questrade Cash",icon:"Q"}
 ];
 const DEFAULT_INVESTMENT_ACCOUNT="wealthsimple_tfsa";
 
@@ -1636,6 +1656,21 @@ try{
   }
 })();
 
+// V5.8.2 one-time seed for the second Questrade self-directed cash account.
+// Screenshot balance on 2026-10-11: Total equity/cash CAD 2,976.76; Net deposits CAD 3,000.00.
+(function seedSecondQuestradeAccountV582(){
+  try{
+    if(localStorage.getItem("questradeCashAccountCashCAD")===null){
+      localStorage.setItem("questradeCashAccountCashCAD","2976.76");
+    }
+    if(localStorage.getItem("questradeCashAccountNetDepositsCAD")===null){
+      localStorage.setItem("questradeCashAccountNetDepositsCAD","3000");
+    }
+  }catch(e){
+    console.warn("Second Questrade account seed failed",e);
+  }
+})();
+
 function loadNumberSetting(key, fallback){
   try{
     const raw=localStorage.getItem(key);
@@ -1654,6 +1689,8 @@ let accountCash = loadNumberSetting("portfolioAccountCashCAD",406.21);
 let netDeposits = loadNumberSetting("portfolioNetDepositsCAD",30250.00);
 let questradeCash = loadNumberSetting("questradeAccountCashCAD",0);
 let questradeNetDeposits = loadNumberSetting("questradeNetDepositsCAD",0);
+let questradeCashAccountCash = loadNumberSetting("questradeCashAccountCashCAD",2976.76);
+let questradeCashAccountNetDeposits = loadNumberSetting("questradeCashAccountNetDepositsCAD",3000);
 function syncDateDisplay(){
   if(fDateDisplay) fDateDisplay.textContent = fDate.value || "YYYY-MM-DD";
 }
@@ -1695,12 +1732,14 @@ function accountName(id){return id==="all"?"All Accounts":accountInfo(id).name}
 function cashForAccount(id){
   if(id==="wealthsimple_tfsa")return Number(accountCash||0);
   if(id==="questrade_tfsa")return Number(questradeCash||0);
-  return Number(accountCash||0)+Number(questradeCash||0);
+  if(id==="questrade_cash")return Number(questradeCashAccountCash||0);
+  return Number(accountCash||0)+Number(questradeCash||0)+Number(questradeCashAccountCash||0);
 }
 function depositsForAccount(id){
   if(id==="wealthsimple_tfsa")return Number(netDeposits||0);
   if(id==="questrade_tfsa")return Number(questradeNetDeposits||0);
-  return Number(netDeposits||0)+Number(questradeNetDeposits||0);
+  if(id==="questrade_cash")return Number(questradeCashAccountNetDeposits||0);
+  return Number(netDeposits||0)+Number(questradeNetDeposits||0)+Number(questradeCashAccountNetDeposits||0);
 }
 function lotsForAccount(id="all"){
   return id==="all"?lots:lots.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)===id);
@@ -2598,6 +2637,8 @@ function openSettings(){
   if(netDepositsInput)netDepositsInput.value=Number(netDeposits||0).toFixed(2);
   if(questradeCashInput)questradeCashInput.value=Number(questradeCash||0).toFixed(2);
   if(questradeNetDepositsInput)questradeNetDepositsInput.value=Number(questradeNetDeposits||0).toFixed(2);
+  if(questradeCashAccountCashInput)questradeCashAccountCashInput.value=Number(questradeCashAccountCash||0).toFixed(2);
+  if(questradeCashAccountNetDepositsInput)questradeCashAccountNetDepositsInput.value=Number(questradeCashAccountNetDeposits||0).toFixed(2);
   apiBaseInput.value=DEFAULT_MARKET_API;
   apiBaseInput.readOnly=true;
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
@@ -2617,10 +2658,18 @@ saveSettings.onclick=async()=>{
   const nextQDeposits=Number(questradeNetDepositsInput?.value||0);
   questradeCash=Number.isFinite(nextQCash)?Math.max(0,nextQCash):0;
   questradeNetDeposits=Number.isFinite(nextQDeposits)?Math.max(0,nextQDeposits):0;
+
+  const nextQCashAccountCash=Number(questradeCashAccountCashInput?.value||0);
+  const nextQCashAccountDeposits=Number(questradeCashAccountNetDepositsInput?.value||0);
+  questradeCashAccountCash=Number.isFinite(nextQCashAccountCash)?Math.max(0,nextQCashAccountCash):0;
+  questradeCashAccountNetDeposits=Number.isFinite(nextQCashAccountDeposits)?Math.max(0,nextQCashAccountDeposits):0;
+
   saveNumberSetting("portfolioAccountCashCAD",accountCash);
   saveNumberSetting("portfolioNetDepositsCAD",netDeposits);
   saveNumberSetting("questradeAccountCashCAD",questradeCash);
   saveNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
+  saveNumberSetting("questradeCashAccountCashCAD",questradeCashAccountCash);
+  saveNumberSetting("questradeCashAccountNetDepositsCAD",questradeCashAccountNetDeposits);
 
   marketApiBase=DEFAULT_MARKET_API;
   try{localStorage.removeItem("marketApiBase")}catch(e){}
