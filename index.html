@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.8.2 Add second Questrade Cash account -->
+<!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1607,40 +1607,58 @@ try{
   }
 }catch(e){}
 
-// V5.8.1 one-time Questrade opening snapshot.
-// This preserves all existing Wealthsimple data and only seeds Questrade if that account has no lots yet.
-// Snapshot date = 2026-10-11. Current quantity + Questrade average price are used as the opening cost basis.
-(function seedQuestradeCurrentHoldingsV581(){
+// V5.8.4 Questrade history reconstruction.
+// Tracking starts Jan 1, 2025. Positions already held on that date are opening positions;
+// trades after that date use their real Questrade activity dates/prices.
+// This preserves the current quantity and current Questrade average price for every holding.
+(function migrateQuestradeHistoryV584(){
   try{
-    const seedKey="questradeCurrentHoldingsSeedV581";
-    if(localStorage.getItem(seedKey))return;
+    const migrationKey="questradeHistoryStartV584";
+    if(localStorage.getItem(migrationKey))return;
 
+    const oldSeedTickers=new Set(["AMD","BABA","FSLY","GOOG","GP","NOK","NVDA","SOFI","TDOC","TSLA"]);
     const qLots=lots.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)==="questrade_tfsa");
-    if(qLots.length===0){
-      const snapshotDate="2026-10-11";
-      const snapshot=[
-        {ticker:"AMD",shares:6,cost:92.0182},
-        {ticker:"BABA",shares:2,cost:286.31},
-        {ticker:"FSLY",shares:7,cost:75.1362},
-        {ticker:"GOOG",shares:5,cost:175.9567},
-        {ticker:"GP",shares:3,cost:222.825},
-        {ticker:"NOK",shares:30,cost:16.8392},
-        {ticker:"NVDA",shares:13,cost:120.748},
-        {ticker:"SOFI",shares:63,cost:11.7855},
-        {ticker:"TDOC",shares:8,cost:138.2024},
-        {ticker:"TSLA",shares:4,cost:223.6575}
+    const oldSeedRows=qLots.filter(l=>l.openingPosition && l.date==="2026-10-11" && oldSeedTickers.has(l.ticker));
+    const safeToRebuild=(qLots.length===0) || (oldSeedRows.length===qLots.length && oldSeedRows.length>=10);
+
+    if(safeToRebuild){
+      // Remove only the V5.8.1 generated snapshot rows. Wealthsimple and any other account stay untouched.
+      lots=lots.filter(l=>!((l.accountId||DEFAULT_INVESTMENT_ACCOUNT)==="questrade_tfsa" && l.openingPosition && l.date==="2026-10-11" && oldSeedTickers.has(l.ticker)));
+
+      const rebuilt=[
+        // Positions already owned at the start of 2025.
+        {ticker:"AMD", date:"2025-01-01", shares:3, cost:76.8076, openingPosition:true},
+        {ticker:"BABA",date:"2025-01-01", shares:2, cost:286.31,  openingPosition:true},
+        {ticker:"FSLY",date:"2025-01-01", shares:7, cost:75.1362, openingPosition:true},
+        {ticker:"GOOG",date:"2025-01-01", shares:2, cost:158.8393,openingPosition:true},
+        {ticker:"TDOC",date:"2025-01-01", shares:8, cost:138.2024,openingPosition:true},
+        {ticker:"TSLA",date:"2025-01-01", shares:3, cost:222.951, openingPosition:true},
+
+        // Real trades from the Questrade activity export after Jan 1, 2025.
+        {ticker:"GOOG",date:"2025-02-07", shares:3, cost:187.3684},
+        {ticker:"AMD", date:"2025-02-07", shares:3, cost:107.2288},
+        {ticker:"NVDA",date:"2025-02-07", shares:10,cost:128.4184},
+        {ticker:"SOFI",date:"2025-02-24", shares:20,cost:14.51},
+        {ticker:"SOFI",date:"2025-03-06", shares:3, cost:12.4566},
+        {ticker:"SOFI",date:"2025-03-10", shares:20,cost:11.2068},
+        {ticker:"TSLA",date:"2025-03-10", shares:1, cost:225.777},
+        {ticker:"NVDA",date:"2025-04-04", shares:3, cost:95.18},
+        {ticker:"SOFI",date:"2025-04-04", shares:20,cost:9.5391},
+
+        // GP underwent a 1:10 reverse split on Sep 9, 2025. Start its current-share representation
+        // on the split date instead of fabricating pre-split current-share history.
+        {ticker:"GP",  date:"2025-09-09", shares:3, cost:222.825, positionAdjustment:true},
+
+        {ticker:"NOK", date:"2026-06-02", shares:30,cost:16.8392}
       ];
-      snapshot.forEach(p=>lots.push({
-        ...p,
-        date:snapshotDate,
-        accountId:"questrade_tfsa",
-        openingPosition:true
-      }));
+
+      rebuilt.forEach(p=>lots.push({...p,accountId:"questrade_tfsa",source:"Questrade activity"}));
       saveLotsSafe();
-      localStorage.setItem(seedKey,"seeded");
+      localStorage.setItem(migrationKey,"rebuilt");
+      localStorage.setItem("questradeCurrentHoldingsSeedV581","migrated-v584");
     }else{
-      // Never duplicate positions if the user already started entering Questrade lots manually.
-      localStorage.setItem(seedKey,"skipped-existing");
+      // If the user already created their own Questrade lots, never overwrite them.
+      localStorage.setItem(migrationKey,"skipped-custom-lots");
     }
 
     const qCashRaw=localStorage.getItem("questradeAccountCashCAD");
@@ -1652,7 +1670,7 @@ try{
       localStorage.setItem("questradeNetDepositsCAD","10500");
     }
   }catch(e){
-    console.warn("Questrade snapshot seed failed",e);
+    console.warn("Questrade 2025 history migration failed",e);
   }
 })();
 
@@ -1715,6 +1733,7 @@ let liveUpdatedAt = null;
 let currentPortfolioRange = "ALL";
 let dividendSyncInProgress = false;
 const chartCache = new Map();
+let portfolioChartRequestSeq = 0;
 const DIVIDEND_META_KEY = "dividendFetchMetaV52";
 const DIVIDEND_ALPHA_TTL = 7 * 24 * 60 * 60 * 1000;
 const DIVIDEND_OFFICIAL_TTL = 24 * 60 * 60 * 1000;
@@ -1748,15 +1767,68 @@ function dividendPaymentsForAccount(id="all"){
   if(id==="all")return divPayments;
   return divPayments.filter(p=>(p.accountId||DEFAULT_INVESTMENT_ACCOUNT)===id);
 }
+
+function accountTrackingStart(id){
+  const starts=[];
+  if(id==="all"){
+    // Cash-only accounts do not shorten the investment chart history.
+    // They still count in current Portfolio Value / Net Worth.
+    for(const a of INVESTMENT_ACCOUNTS){
+      if(!lotsForAccount(a.id).length)continue;
+      const s=accountTrackingStart(a.id);
+      if(s)starts.push(s);
+    }
+  }else{
+    lotsForAccount(id).forEach(l=>{
+      if(l.openingPosition && l.date)starts.push(l.date);
+    });
+    // The second Questrade cash account was funded Jul 10, 2026.
+    if(id==="questrade_cash")starts.push("2026-07-10");
+  }
+  if(!starts.length)return null;
+  // For combined investment history, start when every included holdings account has known data.
+  return starts.sort().at(-1);
+}
+function chartPeriodLabelForAccount(accountId,requestedRange){
+  const tracking=accountTrackingStart(accountId);
+  if(!tracking)return portfolioReturnPeriodLabel(requestedRange);
+  const d=new Date(tracking+"T00:00:00");
+  return "since "+d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
+}
+function renderTrackingPlaceholder(accountId,requestedRange,message){
+  const summary=portfolioSummary(accountId);
+  const tracking=accountTrackingStart(accountId);
+  const trackingText=tracking
+    ? new Date(tracking+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
+    : null;
+  lineChart.innerHTML=`<div class="emptyChart">${message || (trackingText
+    ? `${accountName(accountId)} tracking starts ${trackingText}. The chart will build automatically from this point forward.`
+    : `Portfolio history is not available for ${accountName(accountId)}.`)}</div>`;
+  if(requestedRange==="ALL"){
+    portfolioGain.textContent=signedMoney(summary.total)+" all time";
+    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+  }else{
+    portfolioGain.textContent=trackingText ? `— since ${trackingText}` : "— history unavailable";
+    portfolioGain.style.color="var(--muted)";
+  }
+}
 function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
   if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(id))id="all";
   selectedPortfolioAccount=id;
   saveTextSafe("selectedPortfolioAccountV58",id);
   document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(b=>b.classList.toggle("active",b.dataset.account===id));
   document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(b=>b.classList.toggle("active",b.dataset.divAccount===id));
+
+  // Invalidate any in-flight request from the previously selected account.
+  portfolioChartRequestSeq++;
   renderHome();
   renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
-  if(refreshChart){chartCache.clear();loadPortfolioHistory(currentPortfolioRange)}
+
+  if(refreshChart){
+    lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(id)} history…</div>`;
+    chartCache.clear();
+    loadPortfolioHistory(currentPortfolioRange);
+  }
 }
 function normalizeApiBase(v){return String(v||"").trim().replace(/\/+$/,"")}
 function colorForTicker(t){
@@ -2114,40 +2186,74 @@ function valueAtOrBefore(hist,t){
 function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.length-1)/(max-1);return Array.from({length:max},(_,i)=>arr[Math.round(i*step)])}
 async function loadPortfolioHistory(label){
   currentPortfolioRange=label||"ALL";
-  const scopeLots=lotsForAccount(selectedPortfolioAccount);
-  const scopeDivs=dividendPaymentsForAccount(selectedPortfolioAccount);
+
+  // Capture the context at the moment this request starts.
+  // This prevents an older Wealthsimple request from repainting the chart
+  // after the user has already switched to Questrade / All Accounts.
+  const requestSeq=++portfolioChartRequestSeq;
+  const accountId=selectedPortfolioAccount;
+  const requestedRange=currentPortfolioRange;
+  const scopeLots=lotsForAccount(accountId);
+  const scopeDivs=dividendPaymentsForAccount(accountId);
+  const trackingStart=accountTrackingStart(accountId);
+
+  // Never leave the previous account's chart/return visible while loading.
+  lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(accountId)} history…</div>`;
+  if(requestedRange==="ALL"){
+    const s=portfolioSummary(accountId);
+    portfolioGain.textContent=signedMoney(s.total)+" all time";
+    portfolioGain.style.color=s.total>=0?"var(--green)":"var(--red)";
+  }else{
+    portfolioGain.textContent=trackingStart
+      ? `— ${chartPeriodLabelForAccount(accountId,requestedRange)}`
+      : "— loading";
+    portfolioGain.style.color="var(--muted)";
+  }
+
+  // Cash-only account: we only know the current snapshot, not prior history.
   if(!scopeLots.length){
-    lineChart.innerHTML='<div class="emptyChart">No holdings in '+accountName(selectedPortfolioAccount)+'.</div>';
-    const summary=portfolioSummary(selectedPortfolioAccount);
-    portfolioGain.textContent=signedMoney(summary.total)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+    if(requestSeq!==portfolioChartRequestSeq)return;
+    renderTrackingPlaceholder(accountId,requestedRange);
     return;
   }
-  if(!marketApiBase||!liveMode)return;
+  if(!marketApiBase||!liveMode){
+    if(requestSeq!==portfolioChartRequestSeq)return;
+    renderTrackingPlaceholder(accountId,requestedRange,"Market history is temporarily unavailable.");
+    return;
+  }
 
-  const lotKey=scopeLots.map(l=>`${l.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${l.ticker}:${l.date}:${l.shares}:${l.cost}`).join(";");
+  const lotKey=scopeLots.map(l=>`${l.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${l.ticker}:${l.date}:${l.shares}:${l.cost}:${l.openingPosition?1:0}`).join(";");
   const divKey=scopeDivs.map(p=>`${p.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
-  const key="twr|"+selectedPortfolioAccount+"|"+currentPortfolioRange+"|"+lotKey+"|"+divKey;
+  const key="acctchart|"+accountId+"|"+requestedRange+"|"+cashForAccount(accountId).toFixed(2)+"|"+depositsForAccount(accountId).toFixed(2)+"|"+lotKey+"|"+divKey;
 
   const applyPeriodReturn=(payload)=>{
-    if(currentPortfolioRange==="ALL"){
-      const summary=portfolioSummary(selectedPortfolioAccount);
+    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
+    if(requestedRange==="ALL"){
+      const summary=portfolioSummary(accountId);
       portfolioGain.textContent=signedMoney(summary.total)+" all time";
       portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
-    }else{
-      const periodReturn=Number(payload?.periodReturn)||0;
-      portfolioGain.textContent=signedMoney(periodReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+    }else if(payload?.hasHistory){
+      const periodReturn=Number(payload.periodReturn)||0;
+      const labelText=payload.truncatedByTracking
+        ? chartPeriodLabelForAccount(accountId,requestedRange)
+        : portfolioReturnPeriodLabel(requestedRange);
+      portfolioGain.textContent=signedMoney(periodReturn)+" "+labelText;
       portfolioGain.style.color=periodReturn>=0?"var(--green)":"var(--red)";
+    }else{
+      renderTrackingPlaceholder(accountId,requestedRange);
     }
   };
 
   if(chartCache.has(key)){
     const cached=chartCache.get(key);
-    renderLineChart(cached.data);
+    if(requestSeq!==portfolioChartRequestSeq)return;
+    if(cached.hasHistory)renderLineChart(cached.data);
+    else renderTrackingPlaceholder(accountId,requestedRange);
     applyPeriodReturn(cached);
     return;
   }
 
-  const cfg=currentPortfolioRange==="ALL"?allRangeConfig():(portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
+  const cfg=requestedRange==="ALL"?allRangeConfig():(portfolioRangeConfig[requestedRange]||portfolioRangeConfig.ALL);
 
   try{
     const tickers=[...new Set(scopeLots.map(l=>l.ticker))];
@@ -2157,12 +2263,30 @@ async function loadPortfolioHistory(label){
       ...(needsFx?[apiQuote("CAD=X",cfg.range,cfg.interval)]:[])
     ]);
 
+    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
+
     const qMap={};
     tickers.forEach((t,i)=>qMap[t]=responses[i]);
     const fxQ=needsFx?responses[responses.length-1]:null;
     const fxHist=fxQ?.history||fxHistory||[];
-    const timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
-    if(timeline.length<2)return;
+
+    let timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
+
+    // For snapshot/opening positions, do not invent pre-snapshot history.
+    let truncatedByTracking=false;
+    if(trackingStart){
+      const trackingTs=new Date(trackingStart+"T00:00:00").getTime()/1000;
+      const originalFirst=timeline[0]||0;
+      timeline=timeline.filter(t=>t>=trackingTs);
+      truncatedByTracking=Boolean(originalFirst && originalFirst<trackingTs);
+    }
+
+    if(!timeline.length){
+      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
+      chartCache.set(key,payload);
+      renderTrackingPlaceholder(accountId,requestedRange);
+      return;
+    }
 
     const pointDate=t=>new Date(t*1000).toISOString().slice(0,10);
     const cadPriceAt=(ticker,t)=>{
@@ -2177,48 +2301,114 @@ async function loadPortfolioHistory(label){
       const d=pointDate(timeline[i]);
       let v=0;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,d,selectedPortfolioAccount);
+        const sh=sharesHeldOn(ticker,d,accountId);
         if(!(sh>0))continue;
         const px=cadPriceAt(ticker,timeline[i]);
         if(px>0)v+=sh*px;
       }
       if(v>0){startIx=i;break;}
     }
-    if(startIx<0||startIx>=timeline.length-1)return;
+
+    if(startIx<0){
+      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
+      chartCache.set(key,payload);
+      renderTrackingPlaceholder(accountId,requestedRange);
+      return;
+    }
 
     let growth=1;
     const growthPoints=[{time:timeline[startIx],growth:1}];
+
     for(let i=startIx+1;i<timeline.length;i++){
       const prevT=timeline[i-1],currT=timeline[i];
       const prevDate=pointDate(prevT),currDate=pointDate(currT);
       let prevValue=0,sameSharesEndValue=0;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,prevDate,selectedPortfolioAccount);
+        const sh=sharesHeldOn(ticker,prevDate,accountId);
         if(!(sh>0))continue;
         const p0=cadPriceAt(ticker,prevT),p1=cadPriceAt(ticker,currT);
         if(!(p0>0)||!(p1>0))continue;
-        prevValue+=sh*p0;sameSharesEndValue+=sh*p1;
+        prevValue+=sh*p0;
+        sameSharesEndValue+=sh*p1;
       }
       if(prevValue>0){
-        const dividends=scopeDivs.filter(p=>p.date>prevDate&&p.date<=currDate).reduce((s,p)=>s+Number(p.amount||0),0);
+        const dividends=scopeDivs
+          .filter(p=>p.date>prevDate&&p.date<=currDate)
+          .reduce((s,p)=>s+Number(p.amount||0),0);
         let r=(sameSharesEndValue+dividends-prevValue)/prevValue;
-        if(Number.isFinite(r)){if(r<-0.95)r=-0.95;if(r>5)r=5;growth*=1+r;}
+        if(Number.isFinite(r)){
+          if(r<-0.95)r=-0.95;
+          if(r>5)r=5;
+          growth*=1+r;
+        }
       }
       growthPoints.push({time:currT,growth});
     }
-    if(growthPoints.length<2||!(growth>0))return;
 
-    const summary=portfolioSummary(selectedPortfolioAccount);
-    const currentMV=summary.accountValue;
-    const startEquivalent=currentMV/growth;
+    // On the first tracking day Yahoo daily history may contain only one point.
+    // Add the live current value as the second point so switching accounts still
+    // produces an account-specific chart instead of leaving the prior chart onscreen.
+    const summary=portfolioSummary(accountId);
+    const currentValue=summary.accountValue;
+    const nowSec=Math.floor(Date.now()/1000);
+
+    if(growthPoints.length===1){
+      const firstT=growthPoints[0].time;
+      const firstDate=pointDate(firstT);
+      let firstHoldings=0;
+      for(const ticker of tickers){
+        const sh=sharesHeldOn(ticker,firstDate,accountId);
+        const px=cadPriceAt(ticker,firstT);
+        if(sh>0 && px>0)firstHoldings+=sh*px;
+      }
+      const firstAccountValue=firstHoldings+cashForAccount(accountId);
+      const data=[
+        {time:firstT,value:firstAccountValue},
+        {time:Math.max(nowSec,firstT+60),value:currentValue}
+      ];
+      const payload={
+        data,
+        periodReturn:currentValue-firstAccountValue,
+        periodPct:firstAccountValue?((currentValue/firstAccountValue)-1)*100:0,
+        hasHistory:true,
+        truncatedByTracking:true
+      };
+      chartCache.set(key,payload);
+      renderLineChart(data);
+      applyPeriodReturn(payload);
+      return;
+    }
+
+    if(!(growth>0)){
+      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
+      chartCache.set(key,payload);
+      renderTrackingPlaceholder(accountId,requestedRange);
+      return;
+    }
+
+    const startEquivalent=currentValue/growth;
     let adjusted=growthPoints.map(p=>({time:p.time,value:startEquivalent*p.growth}));
     adjusted=sampleArray(adjusted,220);
-    if(adjusted.length)adjusted[adjusted.length-1].value=currentMV;
-    const payload={data:adjusted,periodReturn:currentMV-startEquivalent,periodPct:(growth-1)*100};
+    if(adjusted.length)adjusted[adjusted.length-1].value=currentValue;
+
+    const payload={
+      data:adjusted,
+      periodReturn:currentValue-startEquivalent,
+      periodPct:(growth-1)*100,
+      hasHistory:adjusted.length>=2,
+      truncatedByTracking
+    };
     chartCache.set(key,payload);
+
+    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
     renderLineChart(adjusted);
     applyPeriodReturn(payload);
-  }catch(e){console.warn("history",e);}
+  }catch(e){
+    console.warn("history",e);
+    if(requestSeq===portfolioChartRequestSeq && accountId===selectedPortfolioAccount){
+      renderTrackingPlaceholder(accountId,requestedRange,"Unable to load account history right now.");
+    }
+  }
 }
 function market(t){
   if(!catalog[t]){
@@ -2608,7 +2798,9 @@ function showView(name){
   }else if(name==="networth"){
     netWorthView.classList.add("active");document.querySelector('[data-nav="networth"]').classList.add("active");renderNetWorth();
   }else{
-    homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");renderHome();
+    homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");
+    renderHome();
+    loadPortfolioHistory(currentPortfolioRange);
   }
   window.scrollTo(0,0);
 }
@@ -2997,8 +3189,10 @@ function openHoldingDetail(ticker){
       <div>
         <div class="lotDate">${l.openingPosition
           ? "Opening position · "+new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
-          : new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
-        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}${l.openingPosition?" avg cost":""}</div>
+          : l.positionAdjustment
+            ? "Position adjustment · "+new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
+            : new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
+        <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}${l.openingPosition||l.positionAdjustment?" avg cost":""}</div>
         <div class="accountBadge">${accountName(l.accountId)}</div>
       </div>
       <div class="lotRight">
