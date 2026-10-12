@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
+<!-- v5.8 Multi-account Portfolio + Questrade holdings + Net Worth -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -995,6 +996,102 @@ body.chartScrubbing{
   color:var(--red)!important;
 }
 
+
+
+/* v5.8 Multi-account + Net Worth */
+.bottom{grid-template-columns:repeat(5,1fr)!important;}
+@media(max-width:430px){
+  .bottom{width:calc(100% - 16px)!important;gap:2px!important;}
+  .navbtn{padding-left:1px!important;padding-right:1px!important;}
+  .navLabel{font-size:8.6px!important;}
+}
+
+.accountSwitcher{
+  display:flex;gap:8px;overflow-x:auto;padding:8px 20px 2px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.accountSwitcher::-webkit-scrollbar{display:none}
+.accountSwitcher button{
+  flex:0 0 auto;border:1px solid var(--line);background:#fff;color:#73767b;
+  border-radius:999px;padding:9px 13px;font-size:12px;font-weight:800;
+  box-shadow:0 3px 10px rgba(0,0,0,.035);
+}
+.accountSwitcher button.active{
+  background:#111;color:#fff;border-color:#111;box-shadow:none;
+}
+.accountSwitcher.compact{padding-top:0;padding-bottom:12px}
+
+.field select{
+  width:100%;padding:14px;border:1px solid #cfd1d4;border-radius:14px;
+  font-size:17px;background:#fff;color:var(--text);appearance:auto;
+}
+.accountBadge{
+  display:inline-flex;align-items:center;max-width:100%;margin-top:5px;
+  padding:3px 7px;border-radius:999px;background:#f0f0ee;color:#707277;
+  font-size:10px;font-weight:800;white-space:nowrap;
+}
+
+.netWorthHero{padding:20px 20px 8px}
+.netWorthMeta{margin-top:8px;color:var(--muted);font-size:14px;font-weight:700}
+.netWorthChart{
+  height:180px;margin:12px 20px 6px;background:#fff;border:1px solid var(--line);
+  border-radius:20px;box-shadow:var(--shadow);overflow:hidden;position:relative;
+}
+.netWorthChart svg{width:100%;height:100%;display:block}
+.netWorthChartEmpty{
+  height:100%;display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:22px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.45;
+}
+.netWorthSummary{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 20px 4px;
+}
+.netWorthSummaryCard{
+  background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;
+  box-shadow:var(--shadow);text-align:center;
+}
+.netWorthSummaryCard .label{font-size:12px;color:var(--muted);font-weight:750}
+.netWorthSummaryCard .value{font-size:19px;font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
+.netWorthList{
+  background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.netWorthRow{
+  display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;
+  padding:14px;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.netWorthRow:last-child{border-bottom:0}
+.netWorthRow:active{background:#f5f5f3}
+.netWorthIcon{
+  width:40px;height:40px;border-radius:13px;display:grid;place-items:center;
+  background:#f0f0ee;color:#222;font-size:18px;font-weight:900;
+}
+.netWorthAccountName{font-size:15px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.netWorthAccountMeta{font-size:11px;color:var(--muted);font-weight:700;margin-top:3px}
+.netWorthAmount{text-align:right;font-size:16px;font-weight:850;font-variant-numeric:tabular-nums}
+.netWorthAmount .sub{display:block;color:var(--muted);font-size:10px;font-weight:700;margin-top:3px}
+.netWorthAmount.liability{color:var(--red)}
+.addAccountBtn{width:auto!important;padding:9px 13px!important;margin:0!important;font-size:12px!important;border-radius:999px!important;}
+.emptyAccount{padding:22px 16px;text-align:center;color:var(--muted);font-size:13px;font-weight:700}
+.accountSectionHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.accountSectionHead h2{margin:0;font-size:22px}
+
+.netWorthRange{grid-template-columns:repeat(5,minmax(0,1fr))!important;}
+.manualDeleteRow{display:flex;justify-content:center;margin-top:12px}
+.dangerTextBtn{border:0;background:transparent;color:var(--red);font-weight:800;padding:10px 14px}
+
+.accountSettingsBlock{
+  background:#fafaf8;border:1px solid var(--line);border-radius:18px;padding:12px 12px 4px;margin:10px 0;
+}
+.accountSettingsTitle{font-size:14px;font-weight:850;margin-bottom:2px}
+.accountSettingsSub{font-size:11px;color:var(--muted);font-weight:700}
+
+@media(max-width:430px){
+  .accountSwitcher{padding-left:16px;padding-right:16px}
+  .netWorthHero{padding-left:16px;padding-right:16px}
+  .netWorthChart{margin-left:16px;margin-right:16px}
+  .netWorthSummary{padding-left:16px;padding-right:16px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1022,6 +1119,12 @@ body.chartScrubbing{
           <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Connecting market data…</span></div>
         </div>
       </div>
+    </div>
+
+    <div class="accountSwitcher" id="portfolioAccountSwitcher" aria-label="Investment account">
+      <button class="active" data-account="all">All Accounts</button>
+      <button data-account="wealthsimple_tfsa">Wealthsimple TFSA</button>
+      <button data-account="questrade_tfsa">Questrade TFSA</button>
     </div>
 
     <div class="seg" id="portfolioRanges">
@@ -1087,6 +1190,12 @@ body.chartScrubbing{
       <div class="subtitle" id="divSubtitle">Dividend distributions · Past 1 month</div>
     </div>
 
+    <div class="accountSwitcher compact" id="dividendAccountSwitcher" aria-label="Dividend account">
+      <button class="active" data-div-account="all">All Accounts</button>
+      <button data-div-account="wealthsimple_tfsa">Wealthsimple TFSA</button>
+      <button data-div-account="questrade_tfsa">Questrade TFSA</button>
+    </div>
+
     <div class="seg" id="divRanges">
       <button>1D</button><button>1W</button><button class="active">1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button>ALL</button>
     </div>
@@ -1101,6 +1210,52 @@ body.chartScrubbing{
     <div class="dataFootnote">Dividend eligibility uses ex-dividend date. Payment dates use official issuer data when available (Harvest, Purpose, Hamilton, Vanguard, Evolve), then Alpha Vantage; Yahoo ex-date is only a fallback.</div>
   </section>
 
+
+  <section id="netWorthView" class="view">
+    <div class="topbar homeTopbar">
+      <div class="topbarSpacer" aria-hidden="true"></div>
+      <h1>Net Worth</h1>
+      <div class="topbarSpacer" aria-hidden="true"></div>
+    </div>
+
+    <div class="netWorthHero">
+      <div><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
+      <div class="netWorthMeta" id="netWorthMeta">Investments + cash − liabilities</div>
+    </div>
+
+    <div class="seg netWorthRange" id="netWorthRanges">
+      <button>1M</button><button>3M</button><button>6M</button><button>1Y</button><button class="active">ALL</button>
+    </div>
+    <div class="netWorthChart" id="netWorthChart">
+      <div class="netWorthChartEmpty">Net worth history starts when you begin using this page.</div>
+    </div>
+
+    <div class="netWorthSummary">
+      <div class="netWorthSummaryCard"><div class="label">Total Assets</div><div class="value" id="netWorthAssets">$0</div></div>
+      <div class="netWorthSummaryCard"><div class="label">Liabilities</div><div class="value" id="netWorthLiabilities">$0</div></div>
+    </div>
+
+    <div class="section">
+      <div class="accountSectionHead"><h2>Investments</h2><div class="small">From holdings</div></div>
+      <div class="netWorthList" id="investmentAccountsList"></div>
+    </div>
+
+    <div class="section">
+      <div class="accountSectionHead">
+        <h2>Cash & Bank</h2>
+        <button class="secondaryBtn addAccountBtn" id="addAssetAccountBtn">+ Add Account</button>
+      </div>
+      <div class="netWorthList" id="manualAssetList"></div>
+    </div>
+
+    <div class="section" style="padding-bottom:18px">
+      <div class="accountSectionHead">
+        <h2>Liabilities</h2>
+        <button class="secondaryBtn addAccountBtn" id="addLiabilityAccountBtn">+ Add Liability</button>
+      </div>
+      <div class="netWorthList" id="manualLiabilityList"></div>
+    </div>
+  </section>
 
   <section id="detailView" class="view">
     <div class="topbar">
@@ -1205,6 +1360,12 @@ body.chartScrubbing{
       </span>
       <span class="navLabel">Add Lot</span>
     </button>
+    <button class="navbtn" data-nav="networth">
+      <span class="navIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2"/><path d="m4 7 6-4 6 7 5-4"/></svg>
+      </span>
+      <span class="navLabel">Net Worth</span>
+    </button>
     <button class="navbtn" id="navSettings">
       <span class="navIcon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="M19.1 13.5a7.9 7.9 0 0 0 0-3l2-1.5-2-3.5-2.5 1a8.7 8.7 0 0 0-2.6-1.5L13.7 2h-4L9.4 5a8.7 8.7 0 0 0-2.6 1.5l-2.5-1-2 3.5 2 1.5a7.9 7.9 0 0 0 0 3l-2 1.5 2 3.5 2.5-1A8.7 8.7 0 0 0 9.4 19l.3 3h4l.3-3a8.7 8.7 0 0 0 2.6-1.5l2.5 1 2-3.5z"/></svg>
@@ -1220,6 +1381,13 @@ body.chartScrubbing{
       <button class="close" id="closeModal" aria-label="Close">×</button>
       <h2>Add New Lot</h2>
       <div class="sheetHeadSpacer" aria-hidden="true"></div>
+    </div>
+    <div class="field">
+      <label>Account</label>
+      <select id="fAccount">
+        <option value="wealthsimple_tfsa">Wealthsimple TFSA</option>
+        <option value="questrade_tfsa">Questrade TFSA</option>
+      </select>
     </div>
     <div class="field tickerSearchWrap">
       <label>Ticker</label>
@@ -1245,18 +1413,36 @@ body.chartScrubbing{
 <div class="modal" id="settingsModal">
   <div class="sheet">
     <div class="sheetHead"><h2>Settings</h2><button class="close" id="closeSettings">×</button></div>
-    <div class="settingsSectionTitle">Account</div>
-    <div class="settingsGrid">
-      <div class="field">
-        <label>Cash Balance (CAD)</label>
-        <input id="accountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="406.21"/>
-      </div>
-      <div class="field">
-        <label>Net Deposits (CAD)</label>
-        <input id="netDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="30250.00"/>
+    <div class="settingsSectionTitle">Investment Accounts</div>
+    <div class="accountSettingsBlock">
+      <div class="accountSettingsTitle">Wealthsimple TFSA</div>
+      <div class="accountSettingsSub">Existing lots are automatically assigned here.</div>
+      <div class="settingsGrid">
+        <div class="field">
+          <label>Cash Balance (CAD)</label>
+          <input id="accountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="406.21"/>
+        </div>
+        <div class="field">
+          <label>Net Deposits (CAD)</label>
+          <input id="netDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="30250.00"/>
+        </div>
       </div>
     </div>
-    <div class="settingsNote">Portfolio Value includes cash. Total Return uses Portfolio Value − Net Deposits, matching the account-level calculation shown by Wealthsimple.</div>
+    <div class="accountSettingsBlock">
+      <div class="accountSettingsTitle">Questrade TFSA</div>
+      <div class="accountSettingsSub">Holdings are calculated from Questrade lots you add.</div>
+      <div class="settingsGrid">
+        <div class="field">
+          <label>Cash Balance (CAD)</label>
+          <input id="questradeCashInput" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+        </div>
+        <div class="field">
+          <label>Net Deposits (CAD)</label>
+          <input id="questradeNetDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+        </div>
+      </div>
+    </div>
+    <div class="settingsNote">Portfolio Value includes each account's cash. Account-level Total Return uses Portfolio Value − Net Deposits when Net Deposits is entered.</div>
 
     <div class="settingsSectionTitle">Market Data</div>
     <div class="field">
@@ -1269,6 +1455,21 @@ body.chartScrubbing{
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
+  </div>
+</div>
+
+
+
+<div class="modal" id="manualAccountModal">
+  <div class="sheet">
+    <div class="sheetHead"><h2 id="manualAccountTitle">Add Account</h2><button class="close" id="closeManualAccount">×</button></div>
+    <div class="field"><label>Account Name</label><input id="manualAccountName" placeholder="CIBC Chequing" autocomplete="off"/></div>
+    <div class="field"><label>Type</label><select id="manualAccountType"><option value="asset">Cash / Bank</option><option value="liability">Liability</option></select></div>
+    <div class="field"><label>Currency</label><select id="manualAccountCurrency"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
+    <div class="field"><label>Balance</label><input id="manualAccountBalance" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/></div>
+    <button class="primary" id="saveManualAccount">Save Account</button>
+    <div class="manualDeleteRow"><button class="dangerTextBtn" id="deleteManualAccount" style="display:none">Delete Account</button></div>
+    <div class="note">Bank and liability balances are manual. USD balances are converted to CAD using the app's current USD/CAD rate.</div>
   </div>
 </div>
 
@@ -1301,6 +1502,7 @@ var addBtn=document.getElementById("addBtn");
 var navAdd=document.getElementById("navAdd");
 var closeModal=document.getElementById("closeModal");
 var saveLot=document.getElementById("saveLot");
+var fAccount=document.getElementById("fAccount");
 var fTicker=document.getElementById("fTicker");
 var fDateDisplay=document.getElementById("fDateDisplay");
 var tickerResults=document.getElementById("tickerResults");
@@ -1321,6 +1523,28 @@ var refreshData=document.getElementById("refreshData");
 var marketStatus=document.getElementById("marketStatus");
 var marketStatusText=document.getElementById("marketStatusText");
 var fxStatus=document.getElementById("fxStatus");
+var questradeCashInput=document.getElementById("questradeCashInput");
+var questradeNetDepositsInput=document.getElementById("questradeNetDepositsInput");
+var netWorthView=document.getElementById("netWorthView");
+var netWorthValue=document.getElementById("netWorthValue");
+var netWorthMeta=document.getElementById("netWorthMeta");
+var netWorthAssets=document.getElementById("netWorthAssets");
+var netWorthLiabilities=document.getElementById("netWorthLiabilities");
+var netWorthChart=document.getElementById("netWorthChart");
+var investmentAccountsList=document.getElementById("investmentAccountsList");
+var manualAssetList=document.getElementById("manualAssetList");
+var manualLiabilityList=document.getElementById("manualLiabilityList");
+var addAssetAccountBtn=document.getElementById("addAssetAccountBtn");
+var addLiabilityAccountBtn=document.getElementById("addLiabilityAccountBtn");
+var manualAccountModal=document.getElementById("manualAccountModal");
+var manualAccountTitle=document.getElementById("manualAccountTitle");
+var closeManualAccount=document.getElementById("closeManualAccount");
+var manualAccountName=document.getElementById("manualAccountName");
+var manualAccountType=document.getElementById("manualAccountType");
+var manualAccountCurrency=document.getElementById("manualAccountCurrency");
+var manualAccountBalance=document.getElementById("manualAccountBalance");
+var saveManualAccount=document.getElementById("saveManualAccount");
+var deleteManualAccount=document.getElementById("deleteManualAccount");
 
 const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
 (function resetOldPortfolioDataOnce(){
@@ -1348,7 +1572,20 @@ const defaultLots = [];
 const demoDivPayments = [];
 let divPayments = [];
 
-let lots = loadLotsSafe() || [];
+const INVESTMENT_ACCOUNTS=[
+  {id:"wealthsimple_tfsa",name:"Wealthsimple TFSA",short:"Wealthsimple",icon:"W"},
+  {id:"questrade_tfsa",name:"Questrade TFSA",short:"Questrade",icon:"Q"}
+];
+const DEFAULT_INVESTMENT_ACCOUNT="wealthsimple_tfsa";
+
+let lots = (loadLotsSafe() || []).map(l=>({...l,accountId:l.accountId||DEFAULT_INVESTMENT_ACCOUNT}));
+try{
+  // One-way, non-destructive migration: legacy V5.7 lots become Wealthsimple TFSA lots.
+  if(lots.length && !localStorage.getItem("multiAccountMigrationV58")){
+    saveLotsSafe();
+    localStorage.setItem("multiAccountMigrationV58","1");
+  }
+}catch(e){}
 
 function loadNumberSetting(key, fallback){
   try{
@@ -1366,6 +1603,8 @@ function saveNumberSetting(key,value){
 // They are intentionally separate from holdings so cash does not distort Book Value or Yield.
 let accountCash = loadNumberSetting("portfolioAccountCashCAD",406.21);
 let netDeposits = loadNumberSetting("portfolioNetDepositsCAD",30250.00);
+let questradeCash = loadNumberSetting("questradeAccountCashCAD",0);
+let questradeNetDeposits = loadNumberSetting("questradeNetDepositsCAD",0);
 function syncDateDisplay(){
   if(fDateDisplay) fDateDisplay.textContent = fDate.value || "YYYY-MM-DD";
 }
@@ -1398,6 +1637,39 @@ const DIVIDEND_REQUEST_GAP = 1250; // protects Alpha's per-second limit for non-
 
 function loadTextSafe(key, fallback){try{return localStorage.getItem(key)||fallback}catch(e){return fallback}}
 function saveTextSafe(key, value){try{localStorage.setItem(key,value)}catch(e){}}
+
+let selectedPortfolioAccount=loadTextSafe("selectedPortfolioAccountV58","all");
+if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(selectedPortfolioAccount))selectedPortfolioAccount="all";
+
+function accountInfo(id){return INVESTMENT_ACCOUNTS.find(a=>a.id===id)||INVESTMENT_ACCOUNTS[0]}
+function accountName(id){return id==="all"?"All Accounts":accountInfo(id).name}
+function cashForAccount(id){
+  if(id==="wealthsimple_tfsa")return Number(accountCash||0);
+  if(id==="questrade_tfsa")return Number(questradeCash||0);
+  return Number(accountCash||0)+Number(questradeCash||0);
+}
+function depositsForAccount(id){
+  if(id==="wealthsimple_tfsa")return Number(netDeposits||0);
+  if(id==="questrade_tfsa")return Number(questradeNetDeposits||0);
+  return Number(netDeposits||0)+Number(questradeNetDeposits||0);
+}
+function lotsForAccount(id="all"){
+  return id==="all"?lots:lots.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)===id);
+}
+function dividendPaymentsForAccount(id="all"){
+  if(id==="all")return divPayments;
+  return divPayments.filter(p=>(p.accountId||DEFAULT_INVESTMENT_ACCOUNT)===id);
+}
+function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
+  if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(id))id="all";
+  selectedPortfolioAccount=id;
+  saveTextSafe("selectedPortfolioAccountV58",id);
+  document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(b=>b.classList.toggle("active",b.dataset.account===id));
+  document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(b=>b.classList.toggle("active",b.dataset.divAccount===id));
+  renderHome();
+  renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+  if(refreshChart){chartCache.clear();loadPortfolioHistory(currentPortfolioRange)}
+}
 function normalizeApiBase(v){return String(v||"").trim().replace(/\/+$/,"")}
 function colorForTicker(t){
   if(catalog[t] && catalog[t].color) return catalog[t].color;
@@ -1472,8 +1744,8 @@ function mergeDividendEvents(estimatedEvents, exactEvents){
     ...exact
   ].sort((a,b)=>(a.exDate||a.date).localeCompare(b.exDate||b.date));
 }
-function sharesHeldOn(ticker,dateStr){
-  return lots.filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
+function sharesHeldOn(ticker,dateStr,accountId="all"){
+  return lotsForAccount(accountId).filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
 }
 function fxAtDate(dateStr){
   if(!fxHistory.length)return fx;
@@ -1489,20 +1761,19 @@ function rebuildDividendPayments(){
     for(const ev of (events||[])){
       const exDate=ev.exDate||ev.date;
       const paymentDate=ev.paymentDate||exDate;
-      if(!exDate || !paymentDate || paymentDate>today)continue; // future declared dividend is not received yet
-      const sh=sharesHeldOn(ticker,exDate); // eligibility is determined at ex-date
-      if(!(sh>0) || !(Number(ev.amount)>0))continue;
-      const rate=q.currency==="USD"?fxAtDate(paymentDate):1; // cash is converted near payment date
-      out.push({
-        date:paymentDate,
-        exDate,
-        paymentDate,
-        ticker,
-        amount:sh*Number(ev.amount)*rate,
-        perShare:Number(ev.amount),
-        paymentDateEstimated:Boolean(ev.paymentDateEstimated),
-        source:dividendSourceByTicker[ticker]||"yahoo"
-      });
+      if(!exDate || !paymentDate || paymentDate>today)continue;
+      for(const acct of INVESTMENT_ACCOUNTS){
+        const sh=sharesHeldOn(ticker,exDate,acct.id);
+        if(!(sh>0) || !(Number(ev.amount)>0))continue;
+        const rate=q.currency==="USD"?fxAtDate(paymentDate):1;
+        out.push({
+          date:paymentDate,exDate,paymentDate,ticker,accountId:acct.id,
+          amount:sh*Number(ev.amount)*rate,
+          perShare:Number(ev.amount),
+          paymentDateEstimated:Boolean(ev.paymentDateEstimated),
+          source:dividendSourceByTicker[ticker]||"yahoo"
+        });
+      }
     }
   }
   divPayments=out.sort((a,b)=>a.date.localeCompare(b.date));
@@ -1682,6 +1953,7 @@ async function refreshLiveData(silent=false){
     if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · Yahoo market data${failed.length ? ` · unavailable: ${failed.join(", ")}` : ""}`;
     renderHome();
     renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+    renderNetWorth();
     if(currentDetailTicker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(currentDetailTicker);
     loadPortfolioHistory(currentPortfolioRange);
     // Dividend history is intentionally refreshed separately and slowly so the free Alpha Vantage key is not rate-limited.
@@ -1734,8 +2006,9 @@ function lotCostAtDateCAD(lot, fxHist){
 }
 
 function allRangeConfig(){
-  if(!lots.length)return portfolioRangeConfig.ALL;
-  const earliest=lots.reduce((m,l)=>!m||l.date<m?l.date:m,null);
+  const scopeLots=lotsForAccount(selectedPortfolioAccount);
+  if(!scopeLots.length)return portfolioRangeConfig.ALL;
+  const earliest=scopeLots.reduce((m,l)=>!m||l.date<m?l.date:m,null);
   if(!earliest)return portfolioRangeConfig.ALL;
   const years=(Date.now()-new Date(earliest+"T00:00:00").getTime())/(365.25*24*3600*1000);
   if(years<=1)return {range:"1y",interval:"1d"};
@@ -1753,23 +2026,25 @@ function valueAtOrBefore(hist,t){
 function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.length-1)/(max-1);return Array.from({length:max},(_,i)=>arr[Math.round(i*step)])}
 async function loadPortfolioHistory(label){
   currentPortfolioRange=label||"ALL";
+  const scopeLots=lotsForAccount(selectedPortfolioAccount);
+  const scopeDivs=dividendPaymentsForAccount(selectedPortfolioAccount);
+  if(!scopeLots.length){
+    lineChart.innerHTML='<div class="emptyChart">No holdings in '+accountName(selectedPortfolioAccount)+'.</div>';
+    const summary=portfolioSummary(selectedPortfolioAccount);
+    portfolioGain.textContent=signedMoney(summary.total)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+    return;
+  }
   if(!marketApiBase||!liveMode)return;
 
-  const lotKey=lots.map(l=>`${l.ticker}:${l.date}:${l.shares}:${l.cost}`).join(";");
-  const divKey=divPayments.map(p=>`${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
-  const key="twr|"+currentPortfolioRange+"|"+lotKey+"|"+divKey;
+  const lotKey=scopeLots.map(l=>`${l.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${l.ticker}:${l.date}:${l.shares}:${l.cost}`).join(";");
+  const divKey=scopeDivs.map(p=>`${p.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
+  const key="twr|"+selectedPortfolioAccount+"|"+currentPortfolioRange+"|"+lotKey+"|"+divKey;
 
   const applyPeriodReturn=(payload)=>{
     if(currentPortfolioRange==="ALL"){
-      const ps=positions();
-      const mv=ps.reduce((s,p)=>s+p.mv,0);
-      const accountValue=mv+Number(accountCash||0);
-      const bv=ps.reduce((s,p)=>s+p.bv,0);
-      const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
-      const holdingsTotal=(mv-bv)+divAll;
-      const total=netDeposits>0 ? accountValue-netDeposits : holdingsTotal;
-      portfolioGain.textContent=signedMoney(total)+" all time";
-      portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+      const summary=portfolioSummary(selectedPortfolioAccount);
+      portfolioGain.textContent=signedMoney(summary.total)+" all time";
+      portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
     }else{
       const periodReturn=Number(payload?.periodReturn)||0;
       portfolioGain.textContent=signedMoney(periodReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
@@ -1784,12 +2059,10 @@ async function loadPortfolioHistory(label){
     return;
   }
 
-  const cfg=currentPortfolioRange==="ALL"
-    ? allRangeConfig()
-    : (portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
+  const cfg=currentPortfolioRange==="ALL"?allRangeConfig():(portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
 
   try{
-    const tickers=[...new Set(lots.map(l=>l.ticker))];
+    const tickers=[...new Set(scopeLots.map(l=>l.ticker))];
     const needsFx=tickers.some(t=>market(t).currency==="USD");
     const responses=await Promise.all([
       ...tickers.map(t=>apiQuote(t,cfg.range,cfg.interval)),
@@ -1800,13 +2073,7 @@ async function loadPortfolioHistory(label){
     tickers.forEach((t,i)=>qMap[t]=responses[i]);
     const fxQ=needsFx?responses[responses.length-1]:null;
     const fxHist=fxQ?.history||fxHistory||[];
-
-    // Use the full timeline for the return calculation. We only thin the final
-    // rendered series, so purchases inside the selected period do not create jumps.
-    const timeline=[...new Set(
-      tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time))
-    )].sort((a,b)=>a-b);
-
+    const timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
     if(timeline.length<2)return;
 
     const pointDate=t=>new Date(t*1000).toISOString().slice(0,10);
@@ -1814,102 +2081,57 @@ async function loadPortfolioHistory(label){
       const px=valueAtOrBefore(qMap[ticker].history,t);
       if(!(px>0))return null;
       if(market(ticker).currency!=="USD")return px;
-      const rate=valueAtOrBefore(fxHist,t)||fx;
-      return px*rate;
+      return px*(valueAtOrBefore(fxHist,t)||fx);
     };
 
-    // Find the first point where the portfolio actually has value.
     let startIx=-1;
     for(let i=0;i<timeline.length;i++){
       const d=pointDate(timeline[i]);
       let v=0;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,d);
+        const sh=sharesHeldOn(ticker,d,selectedPortfolioAccount);
         if(!(sh>0))continue;
         const px=cadPriceAt(ticker,timeline[i]);
         if(px>0)v+=sh*px;
       }
       if(v>0){startIx=i;break;}
     }
-    if(startIx<0 || startIx>=timeline.length-1)return;
+    if(startIx<0||startIx>=timeline.length-1)return;
 
     let growth=1;
     const growthPoints=[{time:timeline[startIx],growth:1}];
-
-    // Link sub-period returns. This is a time-weighted style calculation:
-    // - shares already held at the start of an interval participate in that interval
-    // - new buys are external cash flows, so they do not create fake investment gains
-    // - dividends paid during the interval are included as investment return
     for(let i=startIx+1;i<timeline.length;i++){
-      const prevT=timeline[i-1];
-      const currT=timeline[i];
-      const prevDate=pointDate(prevT);
-      const currDate=pointDate(currT);
-
-      let prevValue=0;
-      let sameSharesEndValue=0;
-
+      const prevT=timeline[i-1],currT=timeline[i];
+      const prevDate=pointDate(prevT),currDate=pointDate(currT);
+      let prevValue=0,sameSharesEndValue=0;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,prevDate);
+        const sh=sharesHeldOn(ticker,prevDate,selectedPortfolioAccount);
         if(!(sh>0))continue;
-
-        const p0=cadPriceAt(ticker,prevT);
-        const p1=cadPriceAt(ticker,currT);
-        if(!(p0>0) || !(p1>0))continue;
-
-        prevValue+=sh*p0;
-        sameSharesEndValue+=sh*p1;
+        const p0=cadPriceAt(ticker,prevT),p1=cadPriceAt(ticker,currT);
+        if(!(p0>0)||!(p1>0))continue;
+        prevValue+=sh*p0;sameSharesEndValue+=sh*p1;
       }
-
       if(prevValue>0){
-        const dividends=divPayments
-          .filter(p=>p.date>prevDate && p.date<=currDate)
-          .reduce((s,p)=>s+Number(p.amount||0),0);
-
-        let r=(sameSharesEndValue + dividends - prevValue)/prevValue;
-
-        // Ignore only obviously corrupt upstream spikes; normal market moves remain untouched.
-        if(Number.isFinite(r)){
-          if(r<-0.95)r=-0.95;
-          if(r>5)r=5;
-          growth*=1+r;
-        }
+        const dividends=scopeDivs.filter(p=>p.date>prevDate&&p.date<=currDate).reduce((s,p)=>s+Number(p.amount||0),0);
+        let r=(sameSharesEndValue+dividends-prevValue)/prevValue;
+        if(Number.isFinite(r)){if(r<-0.95)r=-0.95;if(r>5)r=5;growth*=1+r;}
       }
-
       growthPoints.push({time:currT,growth});
     }
+    if(growthPoints.length<2||!(growth>0))return;
 
-    if(growthPoints.length<2 || !(growth>0))return;
-
-    const currentMV=positions().reduce((s,p)=>s+p.mv,0)+Number(accountCash||0);
-
-    // Convert the TWR growth path into a dollar-valued performance line that ends at
-    // the current holdings market value. This makes the shape comparable to a broker
-    // performance chart without pretending we know the user's historical cash balance.
+    const summary=portfolioSummary(selectedPortfolioAccount);
+    const currentMV=summary.accountValue;
     const startEquivalent=currentMV/growth;
-    let adjusted=growthPoints.map(p=>({
-      time:p.time,
-      value:startEquivalent*p.growth
-    }));
-
+    let adjusted=growthPoints.map(p=>({time:p.time,value:startEquivalent*p.growth}));
     adjusted=sampleArray(adjusted,220);
     if(adjusted.length)adjusted[adjusted.length-1].value=currentMV;
-
-    const periodReturn=currentMV-startEquivalent;
-    const payload={
-      data:adjusted,
-      periodReturn,
-      periodPct:(growth-1)*100
-    };
-
+    const payload={data:adjusted,periodReturn:currentMV-startEquivalent,periodPct:(growth-1)*100};
     chartCache.set(key,payload);
     renderLineChart(adjusted);
     applyPeriodReturn(payload);
-  }catch(e){
-    console.warn("history",e);
-  }
+  }catch(e){console.warn("history",e);}
 }
-
 function market(t){
   if(!catalog[t]){
     catalog[t]={title:t,currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:0,prev:0,annualDiv:0,color:colorForTicker(t)};
@@ -1918,9 +2140,9 @@ function market(t){
 }
 function toCAD(value,currency){return currency==="USD"?value*fx:value}
 
-function positions(){
+function positions(accountId="all"){
   const m={};
-  lots.forEach(l=>{
+  lotsForAccount(accountId).forEach(l=>{
     if(!m[l.ticker])m[l.ticker]={ticker:l.ticker,shares:0,costTotal:0};
     m[l.ticker].shares+=Number(l.shares);
     m[l.ticker].costTotal+=Number(l.shares)*Number(l.cost);
@@ -1937,40 +2159,54 @@ function positions(){
   });
 }
 
-function renderHome(){
-  const ps=positions().sort((a,b)=>a.ticker.localeCompare(b.ticker, undefined, {numeric:true, sensitivity:"base"}));
+function portfolioSummary(accountId="all"){
+  const ps=positions(accountId);
   const mv=ps.reduce((s,p)=>s+p.mv,0);
-  const accountValue=mv+Number(accountCash||0);
   const bv=ps.reduce((s,p)=>s+p.bv,0);
-  const capital=mv-bv;
-  const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
-  const holdingsTotal=capital+divAll;
-  const total=netDeposits>0 ? accountValue-netDeposits : holdingsTotal;
-  const totalPct=netDeposits>0 ? total/netDeposits*100 : (bv?total/bv*100:0);
   const annual=ps.reduce((s,p)=>s+p.annual,0);
-  const monthly=annual/12;
-  const yieldPct=mv?annual/mv*100:0;
-  const now=new Date(); const y=String(now.getFullYear()); const ym=`${y}-${String(now.getMonth()+1).padStart(2,"0")}`;
-  const ytd=divPayments.filter(x=>x.date.startsWith(y+"-")).reduce((s,p)=>s+p.amount,0);
-  const october=divPayments.filter(x=>x.date.startsWith(ym)).reduce((s,p)=>s+p.amount,0);
+  const divs=dividendPaymentsForAccount(accountId);
+  const divAll=divs.reduce((s,p)=>s+Number(p.amount||0),0);
+  const accountValue=mv+cashForAccount(accountId);
+  const capital=mv-bv;
 
-  portfolioValue.textContent=fmt(accountValue);
-  if(currentPortfolioRange==="ALL"){
-    portfolioGain.textContent=signedMoney(total)+" all time";
-    portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+  let total;
+  if(accountId==="all"){
+    total=INVESTMENT_ACCOUNTS.reduce((sum,a)=>sum+portfolioSummary(a.id).total,0);
+  }else{
+    const dep=depositsForAccount(accountId);
+    total=dep>0?accountValue-dep:capital+divAll;
   }
-  mvMetric.textContent=fmt0(bv);
-  retMetric.textContent=(total>=0?"+":"-")+fmt0(Math.abs(total));
-  retMetric.style.color=total>=0?"var(--green)":"var(--red)";
-  yieldMetric.textContent=yieldPct.toFixed(2)+"%";
-  ytdReceived.textContent=fmt0(ytd);
-  monthReceived.textContent=fmt0(october);
-  annualIncome.textContent=fmt0(annual);
-  monthlyIncome.textContent=fmt0(monthly);
-  incomeProgress.style.width=Math.min(100,annual?ytd/annual*100:0)+"%";
-  holdingCount.textContent=ps.length+" holdings";
+  const dep=depositsForAccount(accountId);
+  const totalPct=dep>0?total/dep*100:(bv?total/bv*100:0);
+  return {ps,mv,bv,annual,divAll,accountValue,capital,total,totalPct,yieldPct:mv?annual/mv*100:0};
+}
+function renderHome(){
+  const summary=portfolioSummary(selectedPortfolioAccount);
+  const ps=summary.ps.sort((a,b)=>a.ticker.localeCompare(b.ticker,undefined,{numeric:true,sensitivity:"base"}));
+  const divs=dividendPaymentsForAccount(selectedPortfolioAccount);
+  const now=new Date();
+  const y=String(now.getFullYear());
+  const ym=`${y}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const ytd=divs.filter(x=>x.date.startsWith(y+"-")).reduce((s,p)=>s+p.amount,0);
+  const month=divs.filter(x=>x.date.startsWith(ym)).reduce((s,p)=>s+p.amount,0);
 
-  holdingsRows.innerHTML=ps.length ? ps.map(p=>`
+  portfolioValue.textContent=fmt(summary.accountValue);
+  if(currentPortfolioRange==="ALL"){
+    portfolioGain.textContent=signedMoney(summary.total)+" all time";
+    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+  }
+  mvMetric.textContent=fmt0(summary.bv);
+  retMetric.textContent=(summary.total>=0?"+":"-")+fmt0(Math.abs(summary.total));
+  retMetric.style.color=summary.total>=0?"var(--green)":"var(--red)";
+  yieldMetric.textContent=summary.yieldPct.toFixed(2)+"%";
+  ytdReceived.textContent=fmt0(ytd);
+  monthReceived.textContent=fmt0(month);
+  annualIncome.textContent=fmt0(summary.annual);
+  monthlyIncome.textContent=fmt0(summary.annual/12);
+  incomeProgress.style.width=Math.min(100,summary.annual?ytd/summary.annual*100:0)+"%";
+  holdingCount.textContent=ps.length+" holding"+(ps.length===1?"":"s");
+
+  holdingsRows.innerHTML=ps.length?ps.map(p=>`
     <div class="row" data-ticker="${p.ticker}">
       <div class="stock">
         <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
@@ -1982,22 +2218,16 @@ function renderHome(){
       <div class="num">${p.shares.toLocaleString()}</div>
       <div class="num">${fmt(toCAD(p.price,p.currency))}</div>
       <div class="num today ${p.today>=0?"pos":"neg"}">${p.today>=0?"+":"-"}${fmt(Math.abs(p.today))}<span class="pct">${pct(p.todayPct)}</span></div>
-    </div>
-  `).join("") : `<div class="emptyHolding">No holdings yet. Tap “Add lot” to add your first position.</div>`;
+    </div>`).join(""):`<div class="emptyHolding">No holdings in ${accountName(selectedPortfolioAccount)}. Tap “Add Lot” to add one.</div>`;
 
-  const monthVals = monthlySeries("YTD");
+  const monthVals=monthlySeries("YTD");
   const max=Math.max(...monthVals.map(x=>x.amount),1);
   const hasIncome=monthVals.some(x=>x.amount>0);
-  homeMonthStrip.innerHTML=hasIncome ? monthVals.map(x=>`
-    <div class="monthMini">
-      <div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div>
-      <div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div>
-    </div>`).join("") : `<div class="emptyIncome">No dividend income yet.</div>`;
-
-  renderLineChart(mv,total);
+  homeMonthStrip.innerHTML=hasIncome?monthVals.map(x=>`
+    <div class="monthMini"><div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div><div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div></div>`).join(""):`<div class="emptyIncome">No dividend income yet.</div>`;
   bindHoldingRows();
+  if(netWorthView?.classList.contains("active"))renderNetWorth();
 }
-
 function renderLineChart(data,total){
   const w=520,h=220,pad=8;
   if(!Array.isArray(data) || data.length<2){
@@ -2163,7 +2393,7 @@ function monthlySeries(range){
   const now=new Date(); const year=now.getFullYear();
   const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const m=Array.from({length:12},(_,i)=>({label:months[i],amount:0,key:`${year}-${String(i+1).padStart(2,"0")}`}));
-  divPayments.forEach(p=>{
+  dividendPaymentsForAccount(selectedPortfolioAccount).forEach(p=>{
     if(p.date.startsWith(String(year)+"-")){
       const ix=Number(p.date.slice(5,7))-1;
       if(ix>=0&&ix<12)m[ix].amount+=p.amount;
@@ -2193,7 +2423,7 @@ function inRange(dateStr,range){
   return d>=new Date(now.getTime()-days*86400000);
 }
 function aggregateForChart(range){
-  const filtered=divPayments.filter(p=>inRange(p.date,range)).sort((a,b)=>a.date.localeCompare(b.date));
+  const filtered=dividendPaymentsForAccount(selectedPortfolioAccount).filter(p=>inRange(p.date,range)).sort((a,b)=>a.date.localeCompare(b.date));
   if(["1D","1W","1M"].includes(range)){
     const map={};
     filtered.forEach(p=>map[p.date]=(map[p.date]||0)+p.amount);
@@ -2218,10 +2448,10 @@ function aggregateForChart(range){
 }
 
 function renderDividends(range="1M"){
-  const filtered=divPayments.filter(p=>inRange(p.date,range)).sort((a,b)=>b.date.localeCompare(a.date));
+  const filtered=dividendPaymentsForAccount(selectedPortfolioAccount).filter(p=>inRange(p.date,range)).sort((a,b)=>b.date.localeCompare(a.date));
   const total=filtered.reduce((s,p)=>s+p.amount,0);
   divTotal.textContent=fmt(total);
-  divSubtitle.textContent="Dividend distributions · "+rangeMap[range].label;
+  divSubtitle.textContent=accountName(selectedPortfolioAccount)+" · "+rangeMap[range].label;
   {
     const headingPeriod = range==="YTD"
       ? "YTD"
@@ -2284,11 +2514,16 @@ function renderDividends(range="1M"){
 function showView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
-  if(name==="div"){divView.classList.add("active");document.querySelector('[data-nav="div"]').classList.add("active");renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");}
-  else{homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");}
+  if(name==="div"){
+    divView.classList.add("active");document.querySelector('[data-nav="div"]').classList.add("active");
+    renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+  }else if(name==="networth"){
+    netWorthView.classList.add("active");document.querySelector('[data-nav="networth"]').classList.add("active");renderNetWorth();
+  }else{
+    homeView.classList.add("active");document.querySelector('[data-nav="home"]').classList.add("active");renderHome();
+  }
   window.scrollTo(0,0);
 }
-
 document.querySelectorAll("#portfolioRanges button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
   currentPortfolioRange=b.textContent; loadPortfolioHistory(currentPortfolioRange);
@@ -2297,15 +2532,23 @@ document.querySelectorAll("#divRanges button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#divRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderDividends(b.textContent);
 });
 document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showView(b.dataset.nav));
+document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(b=>b.onclick=()=>setSelectedPortfolioAccount(b.dataset.account));
+document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(b=>b.onclick=()=>setSelectedPortfolioAccount(b.dataset.divAccount));
 incomeCard.onclick=()=>showView("div");
 backBtn.onclick=()=>showView("home");
 document.getElementById("detailBackBtn").onclick=()=>showView("home");
 document.getElementById("detailHomeBtn").onclick=()=>showView("home");
-document.getElementById("detailAddLotBtn").onclick=()=>{ if(currentDetailTicker) document.getElementById("fTicker").value=currentDetailTicker; openModal(); };
+document.getElementById("detailAddLotBtn").onclick=()=>{
+  if(currentDetailTicker)document.getElementById("fTicker").value=currentDetailTicker;
+  openModal();
+  if(fAccount && selectedPortfolioAccount!=="all")fAccount.value=selectedPortfolioAccount;
+};
 
 function openSettings(){
   if(accountCashInput)accountCashInput.value=Number(accountCash||0).toFixed(2);
   if(netDepositsInput)netDepositsInput.value=Number(netDeposits||0).toFixed(2);
+  if(questradeCashInput)questradeCashInput.value=Number(questradeCash||0).toFixed(2);
+  if(questradeNetDepositsInput)questradeNetDepositsInput.value=Number(questradeNetDeposits||0).toFixed(2);
   apiBaseInput.value=DEFAULT_MARKET_API;
   apiBaseInput.readOnly=true;
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
@@ -2321,18 +2564,165 @@ saveSettings.onclick=async()=>{
   const nextDeposits=Number(netDepositsInput?.value||0);
   accountCash=Number.isFinite(nextCash)?Math.max(0,nextCash):0;
   netDeposits=Number.isFinite(nextDeposits)?Math.max(0,nextDeposits):0;
+  const nextQCash=Number(questradeCashInput?.value||0);
+  const nextQDeposits=Number(questradeNetDepositsInput?.value||0);
+  questradeCash=Number.isFinite(nextQCash)?Math.max(0,nextQCash):0;
+  questradeNetDeposits=Number.isFinite(nextQDeposits)?Math.max(0,nextQDeposits):0;
   saveNumberSetting("portfolioAccountCashCAD",accountCash);
   saveNumberSetting("portfolioNetDepositsCAD",netDeposits);
+  saveNumberSetting("questradeAccountCashCAD",questradeCash);
+  saveNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
 
   marketApiBase=DEFAULT_MARKET_API;
   try{localStorage.removeItem("marketApiBase")}catch(e){}
 
   chartCache.clear();
   renderHome();
+  renderNetWorth();
   closeSettingsFn();
   await refreshLiveData(false);
 };
 refreshData.onclick=async()=>{await refreshLiveData(false)};
+
+
+const NET_WORTH_ACCOUNTS_KEY="netWorthManualAccountsV58";
+const NET_WORTH_HISTORY_KEY="netWorthHistoryV58";
+let currentNetWorthRange="ALL";
+let editingManualAccountId=null;
+
+function loadManualAccounts(){
+  try{const v=JSON.parse(localStorage.getItem(NET_WORTH_ACCOUNTS_KEY)||"[]");return Array.isArray(v)?v:[]}catch(e){return []}
+}
+function saveManualAccounts(){try{localStorage.setItem(NET_WORTH_ACCOUNTS_KEY,JSON.stringify(manualAccounts))}catch(e){}}
+function loadNetWorthHistory(){
+  try{const v=JSON.parse(localStorage.getItem(NET_WORTH_HISTORY_KEY)||"[]");return Array.isArray(v)?v:[]}catch(e){return []}
+}
+function saveNetWorthHistory(){try{localStorage.setItem(NET_WORTH_HISTORY_KEY,JSON.stringify(netWorthHistory.slice(-730)))}catch(e){}}
+let manualAccounts=loadManualAccounts();
+let netWorthHistory=loadNetWorthHistory();
+
+function manualBalanceCAD(a){
+  const n=Math.abs(Number(a.balance)||0);
+  return a.currency==="USD"?n*fx:n;
+}
+function netWorthTotals(){
+  const investments=INVESTMENT_ACCOUNTS.reduce((s,a)=>s+portfolioSummary(a.id).accountValue,0);
+  const manualAssets=manualAccounts.filter(a=>a.type==="asset").reduce((s,a)=>s+manualBalanceCAD(a),0);
+  const liabilities=manualAccounts.filter(a=>a.type==="liability").reduce((s,a)=>s+manualBalanceCAD(a),0);
+  const assets=investments+manualAssets;
+  return {investments,manualAssets,liabilities,assets,total:assets-liabilities};
+}
+function recordNetWorthSnapshot(total){
+  if(!Number.isFinite(total))return;
+  const date=new Date().toISOString().slice(0,10);
+  const last=netWorthHistory[netWorthHistory.length-1];
+  if(last?.date===date)last.value=total;
+  else netWorthHistory.push({date,value:total});
+  netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).slice(-730);
+  saveNetWorthHistory();
+}
+function renderNetWorthChart(){
+  if(!netWorthChart)return;
+  const now=new Date();
+  const daysMap={"1M":31,"3M":93,"6M":186,"1Y":365};
+  let rows=netWorthHistory.slice();
+  if(currentNetWorthRange!=="ALL"){
+    const cutoff=new Date(now.getTime()-daysMap[currentNetWorthRange]*86400000).toISOString().slice(0,10);
+    rows=rows.filter(x=>x.date>=cutoff);
+  }
+  if(rows.length<2){
+    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first snapshot.<br>Today’s value is already saved automatically.</div>';
+    return;
+  }
+  const w=520,h=180,padX=14,padY=18;
+  const vals=rows.map(x=>Number(x.value));
+  let min=Math.min(...vals),max=Math.max(...vals);
+  if(max===min){max+=1;min-=1}
+  const x=i=>padX+(w-padX*2)*(i/(rows.length-1));
+  const y=v=>padY+(h-padY*2)*(1-(v-min)/(max-min));
+  const pts=rows.map((r,i)=>`${x(i).toFixed(2)},${y(Number(r.value)).toFixed(2)}`).join(' ');
+  const first=rows[0],last=rows[rows.length-1];
+  const delta=Number(last.value)-Number(first.value);
+  netWorthChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Net worth history">
+    <polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(rows.length-1)}" cy="${y(Number(last.value))}" r="4" fill="var(--teal)"/>
+    <text x="14" y="22" fill="#777a7f" font-size="12" font-weight="700">${signedMoney(delta)} ${currentNetWorthRange.toLowerCase()}</text>
+  </svg>`;
+}
+function renderNetWorth(){
+  if(!netWorthValue)return;
+  const totals=netWorthTotals();
+  netWorthValue.textContent=fmt(totals.total);
+  netWorthAssets.textContent=fmt0(totals.assets);
+  netWorthLiabilities.textContent=fmt0(totals.liabilities);
+  netWorthMeta.textContent=`Investments ${fmt0(totals.investments)} · Cash/Bank ${fmt0(totals.manualAssets)}`;
+
+  investmentAccountsList.innerHTML=INVESTMENT_ACCOUNTS.map(a=>{
+    const s=portfolioSummary(a.id);
+    return `<div class="netWorthRow investmentAccountRow" data-investment-account="${a.id}">
+      <div class="netWorthIcon">${a.icon}</div>
+      <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${s.ps.length} holding${s.ps.length===1?"":"s"} · Cash ${fmt0(cashForAccount(a.id))}</div></div>
+      <div class="netWorthAmount">${fmt(s.accountValue)}<span class="sub">Auto from portfolio</span></div>
+    </div>`;
+  }).join('');
+
+  const assets=manualAccounts.filter(a=>a.type==="asset");
+  const liabilities=manualAccounts.filter(a=>a.type==="liability");
+  const rowHtml=a=>{
+    const cad=manualBalanceCAD(a);
+    const sub=a.currency==="USD"?`${a.currency} ${Number(a.balance||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`:"Manual balance";
+    return `<div class="netWorthRow manualAccountRow" data-manual-id="${a.id}">
+      <div class="netWorthIcon">${a.type==="liability"?"−":"$"}</div>
+      <div><div class="netWorthAccountName">${a.name}</div><div class="netWorthAccountMeta">${a.currency} · ${a.type==="liability"?"Liability":"Cash / Bank"}</div></div>
+      <div class="netWorthAmount ${a.type==="liability"?"liability":""}">${a.type==="liability"?"−":""}${fmt(cad)}<span class="sub">${sub}</span></div>
+    </div>`;
+  };
+  manualAssetList.innerHTML=assets.length?assets.map(rowHtml).join(''):'<div class="emptyAccount">Add your chequing, savings, or other cash accounts.</div>';
+  manualLiabilityList.innerHTML=liabilities.length?liabilities.map(rowHtml).join(''):'<div class="emptyAccount">No liabilities added.</div>';
+
+  recordNetWorthSnapshot(totals.total);
+  renderNetWorthChart();
+
+  document.querySelectorAll('.investmentAccountRow').forEach(row=>row.onclick=()=>{setSelectedPortfolioAccount(row.dataset.investmentAccount);showView('home')});
+  document.querySelectorAll('.manualAccountRow').forEach(row=>row.onclick=()=>openManualAccountModal(null,row.dataset.manualId));
+}
+function openManualAccountModal(type="asset",id=null){
+  editingManualAccountId=id||null;
+  const existing=id?manualAccounts.find(a=>a.id===id):null;
+  manualAccountTitle.textContent=existing?"Edit Account":(type==="liability"?"Add Liability":"Add Account");
+  manualAccountName.value=existing?.name||"";
+  manualAccountType.value=existing?.type||type||"asset";
+  manualAccountCurrency.value=existing?.currency||"CAD";
+  manualAccountBalance.value=existing?Number(existing.balance||0).toFixed(2):"";
+  deleteManualAccount.style.display=existing?"inline-block":"none";
+  manualAccountModal.classList.add('show');
+  setTimeout(()=>manualAccountName.focus(),80);
+}
+function closeManualAccountModal(){manualAccountModal.classList.remove('show');editingManualAccountId=null}
+addAssetAccountBtn.onclick=()=>openManualAccountModal('asset');
+addLiabilityAccountBtn.onclick=()=>openManualAccountModal('liability');
+closeManualAccount.onclick=closeManualAccountModal;
+manualAccountModal.onclick=e=>{if(e.target===manualAccountModal)closeManualAccountModal()};
+saveManualAccount.onclick=()=>{
+  const name=manualAccountName.value.trim();
+  const balance=Number(manualAccountBalance.value);
+  if(!name||!Number.isFinite(balance)||balance<0){alert('Enter an account name and a valid balance.');return}
+  const row={id:editingManualAccountId||('acct_'+Date.now()),name,type:manualAccountType.value,currency:manualAccountCurrency.value,balance};
+  const ix=manualAccounts.findIndex(a=>a.id===row.id);
+  if(ix>=0)manualAccounts[ix]=row;else manualAccounts.push(row);
+  saveManualAccounts();closeManualAccountModal();renderNetWorth();
+};
+deleteManualAccount.onclick=()=>{
+  if(!editingManualAccountId)return;
+  const a=manualAccounts.find(x=>x.id===editingManualAccountId);
+  if(!a||!confirm(`Delete ${a.name}?`))return;
+  manualAccounts=manualAccounts.filter(x=>x.id!==editingManualAccountId);
+  saveManualAccounts();closeManualAccountModal();renderNetWorth();
+};
+document.querySelectorAll('#netWorthRanges button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#netWorthRanges button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');currentNetWorthRange=b.textContent;renderNetWorthChart();
+});
 
 
 let tickerSearchTimer=null;
@@ -2417,14 +2807,18 @@ document.addEventListener("click",(e)=>{
   if(!e.target.closest(".tickerSearchWrap"))hideTickerResults();
 });
 
-function openModal(){addModal.classList.add("show")}
+function openModal(){
+  if(fAccount)fAccount.value=selectedPortfolioAccount!=="all"?selectedPortfolioAccount:DEFAULT_INVESTMENT_ACCOUNT;
+  addModal.classList.add("show");
+}
 function closeModalFn(){addModal.classList.remove("show");hideTickerResults()}
 if(addBtn) addBtn.onclick=openModal; if(navAdd) navAdd.onclick=openModal; if(closeModal) closeModal.onclick=closeModalFn;
 addModal.onclick=e=>{if(e.target===addModal)closeModalFn()};
 saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
   if(!ticker||!date||!(shares>0)||!(cost>=0)){alert("Enter ticker, date, shares and cost/share.");return}
-  lots.push({ticker,date,shares,cost});
+  const accountId=fAccount?.value||DEFAULT_INVESTMENT_ACCOUNT;
+  lots.push({ticker,date,shares,cost,accountId});
   if(selectedTickerResult){
     catalog[ticker]={
       ...(catalog[ticker]||{}),
@@ -2444,20 +2838,20 @@ saveLot.onclick=()=>{
 
 let currentDetailTicker = null;
 
-function tickerDivReceived(ticker){
-  return divPayments.filter(x=>x.ticker===ticker).reduce((s,x)=>s+x.amount,0);
+function tickerDivReceived(ticker,accountId=selectedPortfolioAccount){
+  return dividendPaymentsForAccount(accountId).filter(x=>x.ticker===ticker).reduce((s,x)=>s+x.amount,0);
 }
 
 function openHoldingDetail(ticker){
-  const ps = positions();
+  const ps = positions(selectedPortfolioAccount);
   const p = ps.find(x=>x.ticker===ticker);
   if(!p) return;
 
   currentDetailTicker = ticker;
-  const received = tickerDivReceived(ticker);
+  const received = tickerDivReceived(ticker,selectedPortfolioAccount);
   const capital = p.mv - p.bv;
   const total = capital + received;
-  const totalBookValue = positions().reduce((s,x)=>s+x.bv,0);
+  const totalBookValue = positions(selectedPortfolioAccount).reduce((s,x)=>s+x.bv,0);
   const bookWeight = totalBookValue ? p.bv / totalBookValue * 100 : 0;
   const pricePrefix = "$";
 
@@ -2495,8 +2889,8 @@ function openHoldingDetail(ticker){
   document.getElementById("detailReceived").textContent = fmt(received);
 
   const tickerLots = lots
-    .map((l,index)=>({...l,_lotIndex:index}))
-    .filter(l=>l.ticker===ticker)
+    .map((l,index)=>({...l,_lotIndex:index,accountId:l.accountId||DEFAULT_INVESTMENT_ACCOUNT}))
+    .filter(l=>l.ticker===ticker && (selectedPortfolioAccount==="all" || l.accountId===selectedPortfolioAccount))
     .sort((a,b)=>b.date.localeCompare(a.date));
 
   const detailLotsEl=document.getElementById("detailLots");
@@ -2505,6 +2899,7 @@ function openHoldingDetail(ticker){
       <div>
         <div class="lotDate">${new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
         <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}</div>
+        <div class="accountBadge">${accountName(l.accountId)}</div>
       </div>
       <div class="lotRight">
         <div class="lotCost">${fmt(toCAD(Number(l.shares)*Number(l.cost),p.currency))}</div>
@@ -2534,7 +2929,7 @@ function openHoldingDetail(ticker){
       renderHome();
       renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
 
-      if(lots.some(x=>x.ticker===ticker)){
+      if(lotsForAccount(selectedPortfolioAccount).some(x=>x.ticker===ticker)){
         openHoldingDetail(ticker);
       }else{
         currentDetailTicker=null;
@@ -2574,9 +2969,10 @@ if(marketApiBase && loadMarketCache()){
   setMarketStatus("live",`Cached market data · ${tm}`);
   if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · cached`;
 }
-renderHome();
+setSelectedPortfolioAccount(selectedPortfolioAccount,{refreshChart:false});
 bindHoldingRows();
 renderDividends("1M");
+renderNetWorth();
 if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
 setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&marketApiBase)refreshLiveData(true)});
