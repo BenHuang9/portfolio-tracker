@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.6 Dividend payment-date engine: Alpha Vantage + Yahoo fallback -->
+<!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -712,7 +712,7 @@ body.chartScrubbing{
       <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
-    <div class="dataFootnote">Dividend eligibility uses ex-dividend date. YTD and monthly income use payment date when available from Alpha Vantage; Yahoo ex-date is used only as a fallback.</div>
+    <div class="dataFootnote">Dividend eligibility uses ex-dividend date. Payment dates come from official Harvest/Purpose data when available, then Alpha Vantage; Yahoo ex-date is only a fallback.</div>
   </section>
 
 
@@ -950,10 +950,11 @@ let liveUpdatedAt = null;
 let currentPortfolioRange = "ALL";
 let dividendSyncInProgress = false;
 const chartCache = new Map();
-const DIVIDEND_META_KEY = "dividendFetchMetaV46";
+const DIVIDEND_META_KEY = "dividendFetchMetaV48";
 const DIVIDEND_ALPHA_TTL = 7 * 24 * 60 * 60 * 1000;
-const DIVIDEND_FALLBACK_TTL = 6 * 60 * 60 * 1000;
-const DIVIDEND_REQUEST_GAP = 13000; // protects the free Alpha Vantage per-minute quota
+const DIVIDEND_OFFICIAL_TTL = 24 * 60 * 60 * 1000;
+const DIVIDEND_FALLBACK_TTL = 60 * 60 * 1000;
+const DIVIDEND_REQUEST_GAP = 1250; // protects Alpha's per-second limit for non-official tickers
 
 function loadTextSafe(key, fallback){try{return localStorage.getItem(key)||fallback}catch(e){return fallback}}
 function saveTextSafe(key, value){try{localStorage.setItem(key,value)}catch(e){}}
@@ -1069,9 +1070,20 @@ function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 function dividendNeedsRefresh(ticker,meta){
   const row=meta[ticker];
   if(!row?.fetchedAt)return true;
-  const ttl=row.source==="alpha"?DIVIDEND_ALPHA_TTL:DIVIDEND_FALLBACK_TTL;
+  const ttl=row.source==="alpha"
+    ? DIVIDEND_ALPHA_TTL
+    : (row.source==="harvest" || row.source==="purpose")
+    ? DIVIDEND_OFFICIAL_TTL
+    : DIVIDEND_FALLBACK_TTL;
   return Date.now()-Number(row.fetchedAt)>ttl;
 }
+function dividendSourceCode(source){
+  if(source==="Harvest official")return "harvest";
+  if(source==="Purpose official")return "purpose";
+  if(source==="Alpha Vantage")return "alpha";
+  return "yahoo";
+}
+function isExactDividendSource(code){return code==="harvest" || code==="purpose" || code==="alpha";}
 async function syncDividendHistory(tickers){
   if(dividendSyncInProgress || !marketApiBase || !tickers.length)return;
   const meta=readDividendMeta();
@@ -1091,12 +1103,24 @@ async function syncDividendHistory(tickers){
           amount:Number(e.amount)||0,
           paymentDateEstimated:Boolean(e.paymentDateEstimated)
         })).filter(e=>e.exDate && e.amount>0).sort((a,b)=>a.exDate.localeCompare(b.exDate));
-        const isAlpha=data.source==="Alpha Vantage";
-        dividendEventsByTicker[ticker]=events;
-        dividendSourceByTicker[ticker]=isAlpha?"alpha":"yahoo";
-        meta[ticker]={fetchedAt:Date.now(),source:isAlpha?"alpha":"yahoo"};
+        const sourceCode=dividendSourceCode(data.source);
+        if(isExactDividendSource(sourceCode)){
+          // Official issuer data and Alpha both contain real payment dates.
+          dividendEventsByTicker[ticker]=events;
+          dividendSourceByTicker[ticker]=sourceCode;
+          meta[ticker]={fetchedAt:Date.now(),source:sourceCode};
+        }else if(!isExactDividendSource(dividendSourceByTicker[ticker]) || !Array.isArray(dividendEventsByTicker[ticker]) || !dividendEventsByTicker[ticker].length){
+          // New installs may temporarily use Yahoo ex-date history. Never downgrade previously exact data.
+          dividendEventsByTicker[ticker]=events;
+          dividendSourceByTicker[ticker]="yahoo";
+          meta[ticker]={fetchedAt:Date.now(),source:"yahoo",warning:data.warning||""};
+        }else{
+          const keepSource=dividendSourceByTicker[ticker];
+          meta[ticker]={...(meta[ticker]||{}),source:keepSource,lastAttempt:Date.now(),lastWarning:data.warning||"Exact dividend source temporarily unavailable"};
+        }
         writeDividendMeta(meta);
-        if(catalog[ticker])catalog[ticker].annualDiv=trailingAnnualDividendPerShare(events);
+        const activeEvents=dividendEventsByTicker[ticker]||events;
+        if(catalog[ticker])catalog[ticker].annualDiv=trailingAnnualDividendPerShare(activeEvents);
         rebuildDividendPayments();
         saveMarketCache();
         renderHome();
@@ -1149,7 +1173,7 @@ async function refreshLiveData(silent=false){
       successCount++;
       const q=res.value;
       const yahooEvents=normalizeYahooDividendEvents(q.dividends||[]);
-      if(dividendSourceByTicker[ticker]!=="alpha" || !Array.isArray(dividendEventsByTicker[ticker])){
+      if(!isExactDividendSource(dividendSourceByTicker[ticker]) || !Array.isArray(dividendEventsByTicker[ticker])){
         dividendEventsByTicker[ticker]=yahooEvents;
         if(!dividendSourceByTicker[ticker])dividendSourceByTicker[ticker]="yahoo";
       }
