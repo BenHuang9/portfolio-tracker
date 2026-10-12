@@ -738,6 +738,53 @@ body.chartScrubbing{
   }
 }
 
+
+/* v5.4 refinements */
+.metrics .metric{
+  text-align:center;
+  align-items:center;
+}
+.metrics .metric .label,
+.metrics .metric .value{
+  width:100%;
+  text-align:center;
+}
+
+.bottom{
+  width:min(510px,calc(100% - 28px));
+  min-height:58px;
+  padding:5px;
+  border-radius:23px;
+}
+.navbtn{
+  min-height:48px;
+  border-radius:17px;
+  gap:2px;
+}
+.navbtn.active{
+  background:rgba(255,255,255,.88);
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.navIcon{
+  width:21px;
+  height:21px;
+}
+.navIcon svg{
+  width:20px;
+  height:20px;
+}
+.navLabel{
+  font-size:9.5px;
+}
+@media(max-width:430px){
+  .bottom{
+    width:calc(100% - 24px);
+    min-height:58px;
+  }
+  .metric .label{font-size:10.5px}
+  .metric .value{font-size:16px}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -776,7 +823,7 @@ body.chartScrubbing{
         <div class="chartScrubDate" id="chartScrubDate"></div>
         <div class="chartScrubValue" id="chartScrubValue"></div>
       </div>
-      <div class="chartScrubHint">Portfolio Value</div>
+      <div class="chartScrubHint">Performance Value</div>
     </div>
 
     <div class="chartWrap">
@@ -1312,6 +1359,8 @@ async function syncDividendHistory(tickers){
     }
   }finally{
     dividendSyncInProgress=false;
+    chartCache.clear();
+    loadPortfolioHistory(currentPortfolioRange);
   }
 }
 async function refreshLiveData(silent=false){
@@ -1411,6 +1460,36 @@ const portfolioRangeConfig={
   "ALL":{range:"max",interval:"1wk"}
 };
 
+
+function portfolioReturnPeriodLabel(label){
+  const labels={
+    "1D":"past day",
+    "1W":"past week",
+    "1M":"past month",
+    "3M":"past 3 months",
+    "6M":"past 6 months",
+    "YTD":"YTD",
+    "1Y":"past year",
+    "ALL":"all time"
+  };
+  return labels[label]||"all time";
+}
+
+function signedMoney(value){
+  const n=Number(value)||0;
+  return (n>=0?"+":"-")+fmt(Math.abs(n));
+}
+
+function lotCostAtDateCAD(lot, fxHist){
+  const amount=Number(lot.shares||0)*Number(lot.cost||0);
+  if(!(amount>0))return 0;
+  const q=market(lot.ticker);
+  if(q.currency!=="USD")return amount;
+  const t=new Date(lot.date+"T23:59:59").getTime()/1000;
+  const rate=valueAtOrBefore(fxHist,t)||fxAtDate(lot.date)||fx;
+  return amount*rate;
+}
+
 function allRangeConfig(){
   if(!lots.length)return portfolioRangeConfig.ALL;
   const earliest=lots.reduce((m,l)=>!m||l.date<m?l.date:m,null);
@@ -1432,9 +1511,31 @@ function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.
 async function loadPortfolioHistory(label){
   currentPortfolioRange=label||"ALL";
   if(!marketApiBase||!liveMode)return;
-  const key=currentPortfolioRange+"|"+lots.map(l=>`${l.ticker}:${l.date}:${l.shares}`).join(";");
-  if(chartCache.has(key)){renderLineChart(chartCache.get(key));return;}
+
+  const lotKey=lots.map(l=>`${l.ticker}:${l.date}:${l.shares}:${l.cost}`).join(";");
+  const divKey=divPayments.map(p=>`${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
+  const key=currentPortfolioRange+"|"+lotKey+"|"+divKey;
+
+  if(chartCache.has(key)){
+    const cached=chartCache.get(key);
+    renderLineChart(cached.data);
+    if(currentPortfolioRange==="ALL"){
+      const ps=positions();
+      const mv=ps.reduce((s,p)=>s+p.mv,0);
+      const bv=ps.reduce((s,p)=>s+p.bv,0);
+      const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
+      const total=(mv-bv)+divAll;
+      portfolioGain.textContent=signedMoney(total)+" all time";
+      portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+    }else{
+      portfolioGain.textContent=signedMoney(cached.periodReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+      portfolioGain.style.color=cached.periodReturn>=0?"var(--green)":"var(--red)";
+    }
+    return;
+  }
+
   const cfg=currentPortfolioRange==="ALL" ? allRangeConfig() : (portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
+
   try{
     const tickers=[...new Set(lots.map(l=>l.ticker))];
     const needsFx=tickers.some(t=>market(t).currency==="USD");
@@ -1442,25 +1543,107 @@ async function loadPortfolioHistory(label){
       ...tickers.map(t=>apiQuote(t,cfg.range,cfg.interval)),
       ...(needsFx?[apiQuote("CAD=X",cfg.range,cfg.interval)]:[])
     ]);
-    const qMap={}; tickers.forEach((t,i)=>qMap[t]=responses[i]);
+
+    const qMap={};
+    tickers.forEach((t,i)=>qMap[t]=responses[i]);
     const fxQ=needsFx?responses[responses.length-1]:null;
+    const fxHist=fxQ?.history||fxHistory||[];
+
     let timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
     timeline=sampleArray(timeline,220);
-    const values=[];
+
+    // Raw historical holdings market value.
+    const rawValues=[];
     for(const t of timeline){
       const date=new Date(t*1000).toISOString().slice(0,10);
       let total=0,has=false;
       for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,date); if(!(sh>0))continue;
-        const px=valueAtOrBefore(qMap[ticker].history,t); if(!(px>0))continue;
+        const sh=sharesHeldOn(ticker,date);
+        if(!(sh>0))continue;
+
+        const px=valueAtOrBefore(qMap[ticker].history,t);
+        if(!(px>0))continue;
+
         let rate=1;
-        if(market(ticker).currency==="USD") rate=valueAtOrBefore(fxQ&&fxQ.history,t)||fx;
-        total+=sh*px*rate; has=true;
+        if(market(ticker).currency==="USD"){
+          rate=valueAtOrBefore(fxHist,t)||fx;
+        }
+        total+=sh*px*rate;
+        has=true;
       }
-      if(has)values.push({time:t,value:total});
+      if(has)rawValues.push({time:t,value:total,date});
     }
-    if(values.length>1){chartCache.set(key,values);renderLineChart(values);}
-  }catch(e){console.warn("history",e)}
+
+    if(rawValues.length<2)return;
+
+    const startDate=rawValues[0].date;
+    const endDate=rawValues.at(-1).date;
+    const startRaw=rawValues[0].value;
+
+    // Purchases after the first plotted day are external cash flows, not investment return.
+    const purchaseFlows=lots
+      .filter(l=>l.date>startDate && l.date<=endDate)
+      .map(l=>({date:l.date,amount:lotCostAtDateCAD(l,fxHist)}))
+      .filter(x=>x.amount>0)
+      .sort((a,b)=>a.date.localeCompare(b.date));
+
+    // Dividends are investment return. Add them back on their payment dates.
+    const dividendFlows=divPayments
+      .filter(p=>p.date>startDate && p.date<=endDate)
+      .map(p=>({date:p.date,amount:Number(p.amount)||0}))
+      .filter(x=>x.amount>0)
+      .sort((a,b)=>a.date.localeCompare(b.date));
+
+    let purchaseIx=0,divIx=0,cumPurchases=0,cumDividends=0;
+    const performancePoints=[];
+
+    for(const p of rawValues){
+      while(purchaseIx<purchaseFlows.length && purchaseFlows[purchaseIx].date<=p.date){
+        cumPurchases+=purchaseFlows[purchaseIx].amount;
+        purchaseIx++;
+      }
+      while(divIx<dividendFlows.length && dividendFlows[divIx].date<=p.date){
+        cumDividends+=dividendFlows[divIx].amount;
+        divIx++;
+      }
+
+      const returnDelta=(p.value-startRaw)-cumPurchases+cumDividends;
+      performancePoints.push({...p,returnDelta});
+    }
+
+    const finalReturn=performancePoints.at(-1).returnDelta;
+
+    // Anchor the synthetic performance series to today's real holdings market value.
+    // This keeps the endpoint meaningful while removing fake jumps caused by new buys.
+    const currentMV=positions().reduce((s,p)=>s+p.mv,0);
+    const baseline=currentMV-finalReturn;
+    const adjusted=performancePoints.map(p=>({
+      time:p.time,
+      value:baseline+p.returnDelta
+    }));
+
+    // Make the last plotted point match the current market value.
+    adjusted[adjusted.length-1].value=currentMV;
+
+    const payload={data:adjusted,periodReturn:finalReturn};
+    chartCache.set(key,payload);
+    renderLineChart(adjusted);
+
+    if(currentPortfolioRange==="ALL"){
+      const ps=positions();
+      const mv=ps.reduce((s,p)=>s+p.mv,0);
+      const bv=ps.reduce((s,p)=>s+p.bv,0);
+      const divAll=divPayments.reduce((s,p)=>s+p.amount,0);
+      const total=(mv-bv)+divAll;
+      portfolioGain.textContent=signedMoney(total)+" all time";
+      portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+    }else{
+      portfolioGain.textContent=signedMoney(finalReturn)+" "+portfolioReturnPeriodLabel(currentPortfolioRange);
+      portfolioGain.style.color=finalReturn>=0?"var(--green)":"var(--red)";
+    }
+  }catch(e){
+    console.warn("history",e);
+  }
 }
 
 function market(t){
@@ -1506,8 +1689,10 @@ function renderHome(){
   const october=divPayments.filter(x=>x.date.startsWith(ym)).reduce((s,p)=>s+p.amount,0);
 
   portfolioValue.textContent=fmt(mv);
-  portfolioGain.textContent=(total>=0?"+":"")+fmt(Math.abs(total))+" all time ("+pct(totalPct)+")";
-  portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+  if(currentPortfolioRange==="ALL"){
+    portfolioGain.textContent=signedMoney(total)+" all time";
+    portfolioGain.style.color=total>=0?"var(--green)":"var(--red)";
+  }
   mvMetric.textContent=fmt0(bv);
   retMetric.textContent=(total>=0?"+":"-")+fmt0(Math.abs(total));
   retMetric.style.color=total>=0?"var(--green)":"var(--red)";
