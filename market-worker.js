@@ -4,7 +4,7 @@
 //   1) Official fund issuer pages for supported Harvest / Purpose ETFs
 //   2) Alpha Vantage corporate actions
 //   3) Yahoo ex-date fallback
-// v4.8: official issuer data removes most Alpha quota pressure and keeps real payment dates.
+// v4.9: Purpose history is supplemented from official monthly distribution announcements so YTD includes older payments, not only the few rows visible on the fund page.
 // ALPHAVANTAGE_API_KEY is stored as a Cloudflare Worker Secret.
 
 const ALLOWED_RANGES = new Set(["1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"]);
@@ -66,6 +66,72 @@ function rowText(html){
     .trim());
 }
 function normDate(v){return String(v||"").replaceAll("/","-")}
+
+function parseFlexibleDate(v){
+  const s=String(v||"").trim();
+  let m=s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(m)return `${m[3]}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  return null;
+}
+function escapeRegex(s){return String(s||"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+function uniqueByDividendKey(rows){
+  const map=new Map();
+  for(const d of (rows||[])){
+    if(!d?.exDate || !(Number(d.amount)>0))continue;
+    const key=`${d.exDate}|${d.paymentDate||""}|${Number(d.amount).toFixed(6)}`;
+    if(!map.has(key))map.set(key,d);
+  }
+  return [...map.values()].sort((a,b)=>a.exDate.localeCompare(b.exDate));
+}
+function extractPurposeAnnouncementRows(html,ticker){
+  const out=[];
+  const rows=String(html||"").match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[];
+  const tickerRe=new RegExp(`(?:^|[^A-Z0-9.])${escapeRegex(ticker)}(?:[^A-Z0-9.]|$)`,`i`);
+  for(const rawRow of rows){
+    const text=rowText(rawRow);
+    const tm=text.match(tickerRe);
+    if(!tm)continue;
+    const dates=text.match(/\b(?:\d{4}[\/-]\d{1,2}[\/-]\d{1,2}|\d{1,2}[\/-]\d{1,2}[\/-]\d{4})\b/g)||[];
+    if(dates.length<2)continue;
+    const recordDate=parseFlexibleDate(dates[0]);
+    const paymentDate=parseFlexibleDate(dates[1]);
+    if(!recordDate || !paymentDate)continue;
+    const tickerPos=text.toUpperCase().indexOf(ticker.toUpperCase());
+    const firstDatePos=text.indexOf(dates[0]);
+    const middle=tickerPos>=0 && firstDatePos>tickerPos ? text.slice(tickerPos+ticker.length,firstDatePos) : text;
+    const am=middle.match(/(?:US\s*)?\$\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if(!am)continue;
+    const amount=Number(am[1]);
+    if(!(amount>0))continue;
+    out.push({
+      exDate:recordDate, // Purpose open-end ETF announcements use the same ex-distribution and record date.
+      paymentDate,
+      declarationDate:null,
+      recordDate,
+      amount,
+      paymentDateEstimated:false
+    });
+  }
+  return uniqueByDividendKey(out);
+}
+function purposeAnnouncementLinks(html){
+  const links=[];
+  const seen=new Set();
+  const re=/href=["']([^"']+)["']/gi;
+  let m;
+  while((m=re.exec(String(html||"")))){
+    let href=htmlDecode(m[1]);
+    if(!/announces-(?:january|february|march|april|may|june|july|august|september|october|november|december)-\d{4}-distributions(?:[?#/]|$)/i.test(href))continue;
+    if(href.startsWith("/"))href=`https://www.purposeinvest.com${href}`;
+    if(!/^https:\/\/www\.purposeinvest\.com\//i.test(href))continue;
+    href=href.split("#")[0].split("?")[0];
+    if(seen.has(href))continue;
+    seen.add(href);links.push(href);
+  }
+  return links.slice(0,18); // enough to cover current YTD plus prior December payment crossover without excessive subrequests
+}
 function extractDistributionRows(html, mode){
   const out=[];
   const seen=new Set();
@@ -148,12 +214,40 @@ async function purposeDividendHistory(symbol){
   const ticker=baseTicker(symbol);
   const slug=PURPOSE_FUND_SLUGS[ticker];
   if(!slug)return null;
-  const url=`https://www.purposeinvest.com/funds/${slug}/performance`;
-  const html=await fetchOfficialHtml(url);
-  if(!html)return null;
-  const dividends=extractDistributionRows(html,"purpose");
+
+  const performanceUrl=`https://www.purposeinvest.com/funds/${slug}/performance`;
+  const newsUrl=`https://www.purposeinvest.com/funds/${slug}/news`;
+
+  const [performanceHtml,newsHtml]=await Promise.all([
+    fetchOfficialHtml(performanceUrl),
+    fetchOfficialHtml(newsUrl).catch(()=>null)
+  ]);
+
+  const currentRows=performanceHtml?extractDistributionRows(performanceHtml,"purpose"):[];
+  let announcementRows=[];
+  let announcementLinks=[];
+
+  if(newsHtml){
+    announcementLinks=purposeAnnouncementLinks(newsHtml);
+    if(announcementLinks.length){
+      const pages=await Promise.allSettled(announcementLinks.map(u=>fetchOfficialHtml(u)));
+      for(const page of pages){
+        if(page.status!=="fulfilled" || !page.value)continue;
+        announcementRows.push(...extractPurposeAnnouncementRows(page.value,ticker));
+      }
+    }
+  }
+
+  const dividends=uniqueByDividendKey([...currentRows,...announcementRows]);
   if(!dividends.length)return null;
-  return {providerSymbol:ticker,source:"Purpose official",sourceUrl:url,dividends};
+  return {
+    providerSymbol:ticker,
+    source:"Purpose official",
+    sourceUrl:performanceUrl,
+    historySourceUrl:newsUrl,
+    officialAnnouncementPages:announcementLinks.length,
+    dividends
+  };
 }
 
 async function officialDividendHistory(symbol){
@@ -247,10 +341,10 @@ export default {
       return json({
         ok:true,
         priceSource:"Yahoo Finance chart proxy",
-        dividendSource:"Official fund issuer pages, then Alpha Vantage, then Yahoo fallback",
-        officialFundSources:["Harvest Portfolios","Purpose Investments"],
+        dividendSource:"Official issuer history (including Purpose monthly announcements), then Alpha Vantage, then Yahoo fallback",
+        officialFundSources:["Harvest Portfolios","Purpose Investments fund pages + monthly distribution announcements"],
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
-        dividendCache:"official/exact responses cached; Yahoo fallback is not cached"
+        dividendCache:"v4.9 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }
 
@@ -293,7 +387,7 @@ export default {
       // Versioned cache key prevents older fallback/estimated-payment data from being reused.
       // Only exact payment-date responses (official issuer or Alpha) are cached here.
       const cache=caches.default;
-      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v48/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
+      const cacheKey=new Request(`${url.origin}/__portfolio_cache/v49/dividends?symbol=${encodeURIComponent(symbol)}`,{method:"GET"});
       const cached=await cache.match(cacheKey);
       if(cached){
         const h=new Headers(cached.headers);
@@ -311,6 +405,8 @@ export default {
             providerSymbol:official.providerSymbol,
             source:official.source,
             sourceUrl:official.sourceUrl,
+            ...(official.historySourceUrl?{historySourceUrl:official.historySourceUrl}:{}),
+            ...(Number.isFinite(official.officialAnnouncementPages)?{officialAnnouncementPages:official.officialAnnouncementPages}:{}),
             dividends:official.dividends
           };
           const resp=json(body,200,origin,21600); // 6h: issuer pages update only when new distributions are declared
