@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.9 Home Holdings aligned with fixed grid tracks -->
+<!-- v4.0 Lots can be deleted from Holding detail -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -525,6 +525,34 @@ input,button{touch-action:manipulation;}
 .holdings .ticker,
 .holdings .title{
   text-align:left;
+}
+
+
+/* v4.0 Lot deletion */
+.lotRow{
+  grid-template-columns:minmax(0,1fr) auto !important;
+  align-items:center;
+}
+.lotRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.deleteLotBtn{
+  border:0;
+  background:#fff0f0;
+  color:#d63f3f;
+  border-radius:12px;
+  min-width:38px;
+  height:38px;
+  padding:0 10px;
+  font-size:13px;
+  font-weight:850;
+  cursor:pointer;
+}
+.deleteLotBtn:active{
+  background:#f9dddd;
+  transform:scale(.97);
 }
 
 </style>
@@ -1483,16 +1511,59 @@ function openHoldingDetail(ticker){
   document.getElementById("detailMonthlyDiv").textContent = fmt(p.annual/12);
   document.getElementById("detailReceived").textContent = fmt(received);
 
-  const tickerLots = lots.filter(l=>l.ticker===ticker).sort((a,b)=>b.date.localeCompare(a.date));
-  document.getElementById("detailLots").innerHTML = tickerLots.map(l=>`
+  const tickerLots = lots
+    .map((l,index)=>({...l,_lotIndex:index}))
+    .filter(l=>l.ticker===ticker)
+    .sort((a,b)=>b.date.localeCompare(a.date));
+
+  const detailLotsEl=document.getElementById("detailLots");
+  detailLotsEl.innerHTML = tickerLots.map(l=>`
     <div class="lotRow">
       <div>
         <div class="lotDate">${new Date(l.date+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div>
         <div class="lotMeta">${Number(l.shares).toLocaleString()} shares × ${fmt(toCAD(Number(l.cost),p.currency))}</div>
       </div>
-      <div class="lotCost">${fmt(toCAD(Number(l.shares)*Number(l.cost),p.currency))}</div>
+      <div class="lotRight">
+        <div class="lotCost">${fmt(toCAD(Number(l.shares)*Number(l.cost),p.currency))}</div>
+        <button class="deleteLotBtn" type="button" data-lot-index="${l._lotIndex}" aria-label="Delete lot">Delete</button>
+      </div>
     </div>
   `).join("") || `<div style="padding:18px;color:var(--muted)">No lots found.</div>`;
+
+  detailLotsEl.querySelectorAll(".deleteLotBtn").forEach(btn=>{
+    btn.addEventListener("click",(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+
+      const idx=Number(btn.dataset.lotIndex);
+      const lot=lots[idx];
+      if(!lot)return;
+
+      const ok=window.confirm(
+        `Delete this lot?\n\n${lot.ticker}\n${lot.date}\n${Number(lot.shares).toLocaleString()} shares × ${Number(lot.cost).toFixed(2)}`
+      );
+      if(!ok)return;
+
+      lots.splice(idx,1);
+      saveLotsSafe();
+      rebuildDividendPayments();
+      chartCache.clear();
+      renderHome();
+      renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+
+      if(lots.some(x=>x.ticker===ticker)){
+        openHoldingDetail(ticker);
+      }else{
+        currentDetailTicker=null;
+        document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+        document.getElementById("homeView").classList.add("active");
+        document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
+        document.querySelector('.navbtn[data-nav="home"]')?.classList.add("active");
+        loadPortfolioHistory(currentPortfolioRange);
+        window.scrollTo(0,0);
+      }
+    });
+  });
 
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("detailView").classList.add("active");
