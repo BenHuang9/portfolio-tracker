@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.12.2 Investment tab + CIBC integration -->
+<!-- v5.12.3 Disable scrub when chart unavailable -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2513,7 +2513,32 @@ function chartPeriodLabelForAccount(accountId,requestedRange){
   const d=new Date(tracking+"T00:00:00");
   return "since "+d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
 }
+function clearPortfolioChartInteraction(){
+  if(!lineChart)return;
+
+  // Old scrub handlers remain attached to the same chart container even after
+  // its SVG is replaced with an empty/loading message. Remove them explicitly.
+  lineChart.onpointerdown=null;
+  lineChart.onpointermove=null;
+  lineChart.onpointerup=null;
+  lineChart.onpointercancel=null;
+  lineChart.onlostpointercapture=null;
+
+  if(chartScrubInfo)chartScrubInfo.classList.remove("show");
+  if(chartScrubDate)chartScrubDate.textContent="";
+  if(chartScrubValue)chartScrubValue.textContent="";
+
+  // Safety cleanup if the user switched accounts while a chart was being scrubbed.
+  if(document.body.classList.contains("chartScrubbing") || document.documentElement.classList.contains("chartScrubbing")){
+    const top=parseInt(document.body.style.top||"0",10);
+    document.documentElement.classList.remove("chartScrubbing");
+    document.body.classList.remove("chartScrubbing");
+    document.body.style.top="";
+    if(Number.isFinite(top) && top!==0)window.scrollTo(0,Math.abs(top));
+  }
+}
 function resetPortfolioChartUI(accountId,requestedRange){
+  clearPortfolioChartInteraction();
   const summary=portfolioSummary(accountId);
   lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(accountId)} history…</div>`;
   if(requestedRange==="ALL"){
@@ -2525,6 +2550,7 @@ function resetPortfolioChartUI(accountId,requestedRange){
   }
 }
 function renderTrackingPlaceholder(accountId,requestedRange,message){
+  clearPortfolioChartInteraction();
   const summary=portfolioSummary(accountId);
   const tracking=accountTrackingStart(accountId);
   const trackingText=tracking
@@ -2995,6 +3021,7 @@ async function loadPortfolioHistory(label){
   }catch(e){
     console.warn("portfolio chart context",e);
     if(requestSeq===portfolioChartRequestSeq && accountId===selectedPortfolioAccount && requestedRange===currentPortfolioRange){
+      clearPortfolioChartInteraction();
       lineChart.innerHTML=`<div class="emptyChart">Unable to prepare ${accountName(accountId)} history.</div>`;
       portfolioGain.textContent="— history unavailable";
       portfolioGain.style.color="var(--muted)";
@@ -3343,8 +3370,8 @@ function renderHome(){
 function renderLineChart(data,total){
   const w=520,h=220,pad=8;
   if(!Array.isArray(data) || data.length<2){
+    clearPortfolioChartInteraction();
     lineChart.innerHTML=`<div class="emptyChart">${lots.length ? "Loading investment history…" : "Add your first holding to start tracking your investments."}</div>`;
-    if(chartScrubInfo)chartScrubInfo.classList.remove("show");
     return;
   }
 
@@ -3353,7 +3380,8 @@ function renderLineChart(data,total){
     .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.value));
 
   if(cleanData.length<2){
-    lineChart.innerHTML=`<div class="emptyChart">Portfolio history unavailable.</div>`;
+    clearPortfolioChartInteraction();
+    lineChart.innerHTML=`<div class="emptyChart">Investment history unavailable.</div>`;
     return;
   }
 
@@ -3369,6 +3397,7 @@ function renderLineChart(data,total){
 
   const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 
+  clearPortfolioChartInteraction();
   lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
