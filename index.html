@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.9.3 Net Worth return UI polish -->
+<!-- v5.9.4 Home-style interactive Net Worth chart -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1306,6 +1306,40 @@ body.manualDetailOpen{padding-bottom:0!important}
   .netWorthReturn{font-size:16px}
 }
 
+
+/* v5.9.4 Home-style interactive Net Worth chart */
+.netWorthChart{
+  height:220px!important;
+  margin:0 20px 6px!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  overflow:hidden;
+  position:relative;
+  touch-action:pan-y;
+  user-select:none;
+  -webkit-user-select:none;
+}
+.netWorthChart svg{
+  width:100%;
+  height:100%;
+  display:block;
+}
+.netWorthScrubInfo{
+  margin-top:0!important;
+  margin-bottom:2px!important;
+}
+.netWorthRange{
+  margin-bottom:2px!important;
+}
+.netWorthReturn{
+  transition:none;
+}
+@media(max-width:430px){
+  .netWorthChart{margin-left:12px!important;margin-right:12px!important}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1441,8 +1475,16 @@ body.manualDetailOpen{padding-bottom:0!important}
     </div>
 
     <div class="seg netWorthRange" id="netWorthRanges">
-      <button>1M</button><button>3M</button><button>6M</button><button>1Y</button><button class="active">ALL</button>
+      <button>1W</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button class="active">ALL</button>
     </div>
+    <div class="chartScrubInfo netWorthScrubInfo" id="netWorthScrubInfo">
+      <div>
+        <div class="chartScrubDate" id="netWorthScrubDate"></div>
+        <div class="chartScrubValue" id="netWorthScrubValue"></div>
+      </div>
+      <div class="chartScrubHint">Net Worth</div>
+    </div>
+
     <div class="netWorthChart" id="netWorthChart">
       <div class="netWorthChartEmpty">Net worth history starts when you begin using this page.</div>
     </div>
@@ -1861,6 +1903,9 @@ var netWorthView=document.getElementById("netWorthView");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
 var netWorthReturn=document.getElementById("netWorthReturn");
+var netWorthScrubInfo=document.getElementById("netWorthScrubInfo");
+var netWorthScrubDate=document.getElementById("netWorthScrubDate");
+var netWorthScrubValue=document.getElementById("netWorthScrubValue");
 var netWorthAssets=document.getElementById("netWorthAssets");
 var netWorthLiabilities=document.getElementById("netWorthLiabilities");
 var netWorthChart=document.getElementById("netWorthChart");
@@ -3375,58 +3420,227 @@ function saveManualNetWorthSnapshot(){
 
 function netWorthRangeLabel(range){
   return ({
+    "1W":"past week",
     "1M":"past month",
     "3M":"past 3 months",
     "6M":"past 6 months",
+    "YTD":"YTD",
     "1Y":"past year",
     "ALL":"all time"
   })[range]||String(range||"").toLowerCase();
 }
+function netWorthRowsForRange(range){
+  let rows=netWorthHistory.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  if(range==="ALL")return rows;
+
+  const now=parseLocalDate(localDateISO());
+  let cutoff=new Date(now);
+
+  if(range==="1W")cutoff.setDate(cutoff.getDate()-7);
+  else if(range==="1M")cutoff.setMonth(cutoff.getMonth()-1);
+  else if(range==="3M")cutoff.setMonth(cutoff.getMonth()-3);
+  else if(range==="6M")cutoff.setMonth(cutoff.getMonth()-6);
+  else if(range==="1Y")cutoff.setFullYear(cutoff.getFullYear()-1);
+  else if(range==="YTD")cutoff=new Date(now.getFullYear(),0,1,12);
+
+  const cutoffISO=localDateISO(cutoff);
+  const inRange=rows.filter(x=>x.date>=cutoffISO);
+  const before=rows.filter(x=>x.date<cutoffISO);
+
+  // Carry the last known Net Worth into the left edge so longer ranges
+  // don't visually start at zero when there was no snapshot exactly on cutoff.
+  if(before.length && inRange.length){
+    inRange.unshift({
+      date:cutoffISO,
+      value:Number(before[before.length-1].value),
+      carried:true
+    });
+  }
+  return inRange;
+}
+function setNetWorthReturn(delta,range=currentNetWorthRange){
+  if(!netWorthReturn)return;
+  if(!Number.isFinite(delta)){
+    netWorthReturn.textContent="— history building";
+    netWorthReturn.classList.remove("pos","neg");
+    return;
+  }
+  netWorthReturn.textContent=`${signedMoney(delta)} ${netWorthRangeLabel(range)}`;
+  netWorthReturn.classList.toggle("pos",delta>=0);
+  netWorthReturn.classList.toggle("neg",delta<0);
+}
 function renderNetWorthChart(){
   if(!netWorthChart)return;
 
-  const now=new Date();
-  const daysMap={"1M":31,"3M":93,"6M":186,"1Y":365};
-  let rows=netWorthHistory.slice();
-
-  if(currentNetWorthRange!=="ALL"){
-    const cutoffDate=new Date(now);
-    cutoffDate.setDate(cutoffDate.getDate()-daysMap[currentNetWorthRange]);
-    const cutoff=localDateISO(cutoffDate);
-    rows=rows.filter(x=>x.date>=cutoff);
-  }
+  const rows=netWorthRowsForRange(currentNetWorthRange)
+    .map(x=>({date:x.date,value:Number(x.value),carried:Boolean(x.carried)}))
+    .filter(x=>x.date&&Number.isFinite(x.value));
 
   if(rows.length<2){
     netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first snapshot.<br>Today’s value is saved automatically — or add a dated snapshot below.</div>';
-    if(netWorthReturn){
-      netWorthReturn.textContent="— history building";
-      netWorthReturn.classList.remove("pos","neg");
-    }
+    setNetWorthReturn(NaN);
+    if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
+    netWorthChart.onpointerdown=null;
+    netWorthChart.onpointermove=null;
+    netWorthChart.onpointerup=null;
+    netWorthChart.onpointercancel=null;
+    netWorthChart.onlostpointercapture=null;
     return;
   }
 
-  const first=rows[0],last=rows[rows.length-1];
-  const delta=Number(last.value)-Number(first.value);
+  const firstValue=Number(rows[0].value);
+  const lastValue=Number(rows[rows.length-1].value);
+  setNetWorthReturn(lastValue-firstValue);
 
-  if(netWorthReturn){
-    netWorthReturn.textContent=`${signedMoney(delta)} ${netWorthRangeLabel(currentNetWorthRange)}`;
-    netWorthReturn.classList.toggle("pos",delta>=0);
-    netWorthReturn.classList.toggle("neg",delta<0);
-  }
-
-  const w=520,h=180,padX=14,padY=18;
-  const vals=rows.map(x=>Number(x.value));
+  const w=520,h=220,pad=8;
+  const vals=rows.map(x=>x.value);
   let min=Math.min(...vals),max=Math.max(...vals);
-  if(max===min){max+=1;min-=1}
+  if(max===min){max=min+1}
 
-  const x=i=>padX+(w-padX*2)*(i/(rows.length-1));
-  const y=v=>padY+(h-padY*2)*(1-(v-min)/(max-min));
-  const pts=rows.map((r,i)=>`${x(i).toFixed(2)},${y(Number(r.value)).toFixed(2)}`).join(' ');
+  // Give the line breathing room like the Home chart.
+  const spread=max-min;
+  min-=spread*.06;
+  max+=spread*.06;
+
+  const times=rows.map(r=>parseLocalDate(r.date).getTime()/1000);
+  const pointXY=rows.map((p,i)=>({
+    ...p,
+    time:times[i],
+    x:pad+i*(w-pad*2)/(rows.length-1),
+    y:h-pad-(p.value-min)/(max-min)*(h-pad*2)
+  }));
+
+  const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 
   netWorthChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Net worth history">
-    <polyline points="${pts}" fill="none" stroke="var(--teal)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-    <circle cx="${x(rows.length-1)}" cy="${y(Number(last.value))}" r="4" fill="var(--teal)"/>
+    <defs>
+      <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#159447" stop-opacity=".25"/>
+        <stop offset="100%" stop-color="#159447" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#netWorthGradient)"/>
+    <path d="${d}" fill="none" stroke="#159447" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <g id="netWorthCrosshair" style="display:none;pointer-events:none">
+      <line id="netWorthVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
+      <line id="netWorthHLine" x1="${pad}" x2="${w-pad}" y1="0" y2="0" stroke="#a7aaa8" stroke-width="1" stroke-dasharray="4 4"/>
+      <circle id="netWorthPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#159447" stroke-width="3"/>
+    </g>
   </svg>`;
+
+  const svg=netWorthChart.querySelector("svg");
+  const cross=svg.querySelector("#netWorthCrosshair");
+  const vLine=svg.querySelector("#netWorthVLine");
+  const hLine=svg.querySelector("#netWorthHLine");
+  const dot=svg.querySelector("#netWorthPoint");
+
+  const currentNetWorth=netWorthTotals().total;
+  const currentMeta=netWorthMeta.textContent;
+  let scrubbing=false;
+  let scrubScrollY=0;
+  let activePointerId=null;
+  let rafId=0;
+  let pendingClientX=null;
+
+  function lockPageScroll(){
+    scrubScrollY=window.scrollY || window.pageYOffset || 0;
+    document.documentElement.classList.add("chartScrubbing");
+    document.body.classList.add("chartScrubbing");
+    document.body.style.top=`-${scrubScrollY}px`;
+  }
+  function unlockPageScroll(){
+    document.documentElement.classList.remove("chartScrubbing");
+    document.body.classList.remove("chartScrubbing");
+    document.body.style.top="";
+    window.scrollTo(0,scrubScrollY);
+  }
+  function formatNetWorthScrubDate(sec){
+    return new Date(sec*1000).toLocaleDateString("en-CA",{
+      month:"short",day:"numeric",year:"numeric"
+    });
+  }
+  function applyScrub(clientX){
+    const rect=netWorthChart.getBoundingClientRect();
+    if(!rect.width)return;
+
+    let ratio=(clientX-rect.left)/rect.width;
+    ratio=Math.max(0,Math.min(1,ratio));
+
+    const floatIndex=ratio*(pointXY.length-1);
+    const i0=Math.floor(floatIndex);
+    const i1=Math.min(pointXY.length-1,i0+1);
+    const f=floatIndex-i0;
+
+    const a=pointXY[i0], b=pointXY[i1];
+    const x=a.x+(b.x-a.x)*f;
+    const y=a.y+(b.y-a.y)*f;
+    const value=a.value+(b.value-a.value)*f;
+    const time=a.time+(b.time-a.time)*f;
+
+    vLine.setAttribute("x1",x);vLine.setAttribute("x2",x);
+    hLine.setAttribute("y1",y);hLine.setAttribute("y2",y);
+    dot.setAttribute("cx",x);dot.setAttribute("cy",y);
+    cross.style.display="";
+
+    // Home-style scrub info.
+    netWorthScrubDate.textContent=formatNetWorthScrubDate(time);
+    netWorthScrubValue.textContent=fmt(value);
+    netWorthScrubInfo.classList.add("show");
+
+    // Also temporarily scrub the main headline and range return.
+    netWorthValue.textContent=fmt(value);
+    netWorthMeta.textContent=formatNetWorthScrubDate(time);
+    setNetWorthReturn(value-firstValue,currentNetWorthRange);
+  }
+  function selectAtClientX(clientX){
+    pendingClientX=clientX;
+    if(rafId)return;
+    rafId=requestAnimationFrame(()=>{
+      rafId=0;
+      if(pendingClientX!=null)applyScrub(pendingClientX);
+    });
+  }
+  function endScrub(){
+    if(!scrubbing)return;
+    scrubbing=false;
+    cross.style.display="none";
+    netWorthScrubInfo.classList.remove("show");
+
+    if(rafId){cancelAnimationFrame(rafId);rafId=0}
+    pendingClientX=null;
+
+    // Restore today's headline + selected-range return.
+    netWorthValue.textContent=fmt(currentNetWorth);
+    netWorthMeta.textContent=currentMeta;
+    setNetWorthReturn(lastValue-firstValue,currentNetWorthRange);
+
+    unlockPageScroll();
+  }
+
+  netWorthChart.onpointerdown=e=>{
+    if(e.pointerType==="mouse" && e.button!==0)return;
+    if(activePointerId!==null)return;
+    activePointerId=e.pointerId;
+    scrubbing=true;
+    lockPageScroll();
+    e.preventDefault();
+    try{netWorthChart.setPointerCapture(e.pointerId)}catch(_){}
+    applyScrub(e.clientX);
+  };
+  netWorthChart.onpointermove=e=>{
+    if(!scrubbing || e.pointerId!==activePointerId)return;
+    e.preventDefault();
+    selectAtClientX(e.clientX);
+  };
+  const finishPointer=e=>{
+    if(activePointerId!==null && e && e.pointerId!==undefined && e.pointerId!==activePointerId)return;
+    endScrub();
+    activePointerId=null;
+  };
+  netWorthChart.onpointerup=finishPointer;
+  netWorthChart.onpointercancel=finishPointer;
+  netWorthChart.onlostpointercapture=finishPointer;
 }
 function relativeUpdatedText(dateStr){
   if(!dateStr)return "—";
