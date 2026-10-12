@@ -1787,13 +1787,25 @@ function accountTrackingStart(id){
   }
   if(!starts.length)return null;
   // For combined investment history, start when every included holdings account has known data.
-  return starts.sort().at(-1);
+  starts.sort();
+  return starts[starts.length-1];
 }
 function chartPeriodLabelForAccount(accountId,requestedRange){
   const tracking=accountTrackingStart(accountId);
   if(!tracking)return portfolioReturnPeriodLabel(requestedRange);
   const d=new Date(tracking+"T00:00:00");
   return "since "+d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
+}
+function resetPortfolioChartUI(accountId,requestedRange){
+  const summary=portfolioSummary(accountId);
+  lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(accountId)} history…</div>`;
+  if(requestedRange==="ALL"){
+    portfolioGain.textContent=signedMoney(summary.total)+" all time";
+    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+  }else{
+    portfolioGain.textContent="— loading";
+    portfolioGain.style.color="var(--muted)";
+  }
 }
 function renderTrackingPlaceholder(accountId,requestedRange,message){
   const summary=portfolioSummary(accountId);
@@ -1808,7 +1820,7 @@ function renderTrackingPlaceholder(accountId,requestedRange,message){
     portfolioGain.textContent=signedMoney(summary.total)+" all time";
     portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
   }else{
-    portfolioGain.textContent=trackingText ? `— since ${trackingText}` : "— history unavailable";
+    portfolioGain.textContent="— history unavailable";
     portfolioGain.style.color="var(--muted)";
   }
 }
@@ -1816,18 +1828,32 @@ function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
   if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(id))id="all";
   selectedPortfolioAccount=id;
   saveTextSafe("selectedPortfolioAccountV58",id);
-  document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(b=>b.classList.toggle("active",b.dataset.account===id));
-  document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(b=>b.classList.toggle("active",b.dataset.divAccount===id));
 
-  // Invalidate any in-flight request from the previously selected account.
+  document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(
+    b=>b.classList.toggle("active",b.dataset.account===id)
+  );
+  document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(
+    b=>b.classList.toggle("active",b.dataset.divAccount===id)
+  );
+
+  // Invalidate the previous account request before anything else can repaint.
   portfolioChartRequestSeq++;
   renderHome();
-  renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
 
   if(refreshChart){
-    lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(id)} history…</div>`;
     chartCache.clear();
+    resetPortfolioChartUI(id,currentPortfolioRange);
     loadPortfolioHistory(currentPortfolioRange);
+  }
+
+  // Dividend rendering must never be able to block Home chart refresh.
+  // Only rerender it when that view is actually visible.
+  if(divView?.classList.contains("active")){
+    try{
+      renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
+    }catch(e){
+      console.warn("dividend render",e);
+    }
   }
 }
 function normalizeApiBase(v){return String(v||"").trim().replace(/\/+$/,"")}
@@ -2165,8 +2191,8 @@ function lotCostAtDateCAD(lot, fxHist){
   return amount*rate;
 }
 
-function allRangeConfig(){
-  const scopeLots=lotsForAccount(selectedPortfolioAccount);
+function allRangeConfig(accountId=selectedPortfolioAccount){
+  const scopeLots=lotsForAccount(accountId);
   if(!scopeLots.length)return portfolioRangeConfig.ALL;
   const earliest=scopeLots.reduce((m,l)=>!m||l.date<m?l.date:m,null);
   if(!earliest)return portfolioRangeConfig.ALL;
@@ -2187,32 +2213,34 @@ function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.
 async function loadPortfolioHistory(label){
   currentPortfolioRange=label||"ALL";
 
-  // Capture the context at the moment this request starts.
-  // This prevents an older Wealthsimple request from repainting the chart
-  // after the user has already switched to Questrade / All Accounts.
+  // Freeze the exact account + range for this request.
   const requestSeq=++portfolioChartRequestSeq;
   const accountId=selectedPortfolioAccount;
   const requestedRange=currentPortfolioRange;
-  const scopeLots=lotsForAccount(accountId);
-  const scopeDivs=dividendPaymentsForAccount(accountId);
-  const trackingStart=accountTrackingStart(accountId);
 
-  // Never leave the previous account's chart/return visible while loading.
-  lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(accountId)} history…</div>`;
-  if(requestedRange==="ALL"){
-    const s=portfolioSummary(accountId);
-    portfolioGain.textContent=signedMoney(s.total)+" all time";
-    portfolioGain.style.color=s.total>=0?"var(--green)":"var(--red)";
-  }else{
-    portfolioGain.textContent=trackingStart
-      ? `— ${chartPeriodLabelForAccount(accountId,requestedRange)}`
-      : "— loading";
-    portfolioGain.style.color="var(--muted)";
+  // Clear the old account immediately, before any account-specific calculation.
+  resetPortfolioChartUI(accountId,requestedRange);
+
+  let scopeLots=[];
+  let scopeDivs=[];
+  let trackingStart=null;
+  try{
+    scopeLots=lotsForAccount(accountId);
+    scopeDivs=dividendPaymentsForAccount(accountId);
+    trackingStart=accountTrackingStart(accountId);
+  }catch(e){
+    console.warn("portfolio chart context",e);
+    if(requestSeq===portfolioChartRequestSeq && accountId===selectedPortfolioAccount && requestedRange===currentPortfolioRange){
+      lineChart.innerHTML=`<div class="emptyChart">Unable to prepare ${accountName(accountId)} history.</div>`;
+      portfolioGain.textContent="— history unavailable";
+      portfolioGain.style.color="var(--muted)";
+    }
+    return;
   }
 
-  // Cash-only account: we only know the current snapshot, not prior history.
+  // Cash-only account: no fabricated market-history chart.
   if(!scopeLots.length){
-    if(requestSeq!==portfolioChartRequestSeq)return;
+    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
     renderTrackingPlaceholder(accountId,requestedRange);
     return;
   }
@@ -2253,7 +2281,7 @@ async function loadPortfolioHistory(label){
     return;
   }
 
-  const cfg=requestedRange==="ALL"?allRangeConfig():(portfolioRangeConfig[requestedRange]||portfolioRangeConfig.ALL);
+  const cfg=requestedRange==="ALL"?allRangeConfig(accountId):(portfolioRangeConfig[requestedRange]||portfolioRangeConfig.ALL);
 
   try{
     const tickers=[...new Set(scopeLots.map(l=>l.ticker))];
@@ -2805,8 +2833,12 @@ function showView(name){
   window.scrollTo(0,0);
 }
 document.querySelectorAll("#portfolioRanges button").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
-  currentPortfolioRange=b.textContent; loadPortfolioHistory(currentPortfolioRange);
+  document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  currentPortfolioRange=String(b.textContent||"ALL").trim();
+  portfolioChartRequestSeq++;
+  resetPortfolioChartUI(selectedPortfolioAccount,currentPortfolioRange);
+  loadPortfolioHistory(currentPortfolioRange);
 });
 document.querySelectorAll("#divRanges button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#divRanges button").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderDividends(b.textContent);
