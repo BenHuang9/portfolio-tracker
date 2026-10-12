@@ -1135,6 +1135,150 @@ body.manualDetailOpen{padding-bottom:0!important}
   .manualAccountRanges button{font-size:11px!important}
 }
 
+
+/* v5.9.1 compact manual-account detail UI */
+.manualAccountDetailView{
+  background:var(--bg);
+}
+.manualDetailTopbar{
+  padding:10px 18px 6px!important;
+  grid-template-columns:46px 1fr 46px!important;
+}
+.manualDetailTopbar h1{
+  font-size:18px!important;
+  letter-spacing:-.01em;
+}
+.manualDetailIconBtn{
+  width:42px!important;
+  height:42px!important;
+  box-shadow:0 6px 18px rgba(0,0,0,.05)!important;
+}
+.manualDetailIconBtn svg{
+  width:20px!important;
+  height:20px!important;
+}
+.manualDetailDelete{
+  color:var(--muted)!important;
+}
+.manualDetailDelete:active{
+  color:var(--red)!important;
+}
+
+.manualDetailHero{
+  padding:18px 24px 0!important;
+}
+.manualDetailBalanceRow{
+  gap:6px!important;
+}
+.manualDetailBalance{
+  font-size:clamp(44px,11.5vw,60px)!important;
+  line-height:1!important;
+}
+.manualDetailCurrency{
+  font-size:18px!important;
+  color:var(--text)!important;
+}
+.manualDetailEquivalent{
+  margin-top:8px!important;
+}
+#manualDetailEquivalent:empty{
+  display:none;
+}
+
+/* Keep return close to the balance and chart, instead of floating in a large blank area. */
+.manualAccountChart{
+  height:228px!important;
+  margin:12px 18px 0!important;
+}
+.manualAccountChart svg{
+  overflow:visible;
+}
+.manualAccountChartEmpty{
+  padding:22px!important;
+  font-size:14px;
+}
+.manualDetailDelta{
+  font-size:13px!important;
+  font-weight:850!important;
+}
+
+/* Tighter segmented range selector */
+.manualAccountRanges{
+  margin:4px 18px 14px!important;
+  min-height:48px!important;
+  border-radius:24px!important;
+}
+.manualAccountRanges button{
+  padding:8px 1px!important;
+  font-size:12px!important;
+  border-radius:19px!important;
+}
+
+/* Smaller Wealthsimple-like action cards */
+.manualDetailActions{
+  gap:10px!important;
+  padding:8px 18px 0!important;
+}
+.manualDetailAction{
+  min-height:82px!important;
+  border-radius:20px!important;
+  gap:6px!important;
+  font-size:13px!important;
+  color:var(--text)!important;
+  box-shadow:none!important;
+}
+.manualDetailAction svg{
+  width:21px!important;
+  height:21px!important;
+}
+.manualDetailAction:active{
+  background:#efefec!important;
+}
+
+/* Compact details section */
+.manualDetailSection{
+  padding:24px 24px 28px!important;
+}
+.manualDetailSection h2{
+  margin:0 0 10px!important;
+  font-size:13px!important;
+}
+.manualDetailInfoRow{
+  padding:14px 0!important;
+  font-size:14px!important;
+}
+.manualDetailInfoRow .value{
+  font-weight:800!important;
+}
+
+/* Update/Edit sheets closer to the reference screenshots */
+#manualUpdateModal .sheet,
+#manualAccountModal .sheet{
+  border-radius:28px 28px 0 0!important;
+}
+#manualUpdateModal .sheetHead,
+#manualAccountModal .sheetHead{
+  margin-bottom:10px;
+}
+#manualUpdateModal .field,
+#manualAccountModal .field{
+  margin:10px 0!important;
+}
+#manualUpdateModal .primary,
+#manualAccountModal .primary{
+  min-height:54px;
+  border-radius:18px!important;
+}
+
+/* On small iPhones, reclaim a little more vertical room. */
+@media(max-width:430px){
+  .manualDetailHero{padding-left:20px!important;padding-right:20px!important}
+  .manualAccountChart{height:214px!important;margin-left:12px!important;margin-right:12px!important}
+  .manualAccountRanges{margin-left:12px!important;margin-right:12px!important}
+  .manualDetailActions{padding-left:12px!important;padding-right:12px!important}
+  .manualDetailSection{padding-left:20px!important;padding-right:20px!important}
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3242,7 +3386,16 @@ function renderManualAccountChart(){
   if(!a||!manualAccountChart)return;
   const rows=manualHistoryRangeRows(a,currentManualAccountRange);
   if(rows.length<2){
-    manualAccountChart.innerHTML='<div class="manualAccountChartEmpty">Add another dated value to build this account’s history.</div>';
+    const only=rows[0];
+    if(only){
+      manualAccountChart.innerHTML=`<div class="manualAccountChartEmpty">
+        <div><strong>${a.currency} ${Number(only.value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><br>
+        <span style="font-size:12px">First saved value · ${parseLocalDate(only.date).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</span><br>
+        <span style="font-size:12px">Add another dated update to start the chart.</span></div>
+      </div>`;
+    }else{
+      manualAccountChart.innerHTML='<div class="manualAccountChartEmpty">Add a dated value to start this account’s history.</div>';
+    }
     return;
   }
   const w=560,h=300,padX=8,padTop=28,padBottom=26;
