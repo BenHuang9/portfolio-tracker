@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v4.1 Interactive chart scrub: drag across chart to inspect historical portfolio values -->
+<!-- v4.3 Chart scrub only: top Portfolio summary stays fixed while dragging -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -1084,6 +1084,18 @@ const portfolioRangeConfig={
   "1Y":{range:"1y",interval:"1d"},
   "ALL":{range:"max",interval:"1wk"}
 };
+
+function allRangeConfig(){
+  if(!lots.length)return portfolioRangeConfig.ALL;
+  const earliest=lots.reduce((m,l)=>!m||l.date<m?l.date:m,null);
+  if(!earliest)return portfolioRangeConfig.ALL;
+  const years=(Date.now()-new Date(earliest+"T00:00:00").getTime())/(365.25*24*3600*1000);
+  if(years<=1)return {range:"1y",interval:"1d"};
+  if(years<=2)return {range:"2y",interval:"1d"};
+  if(years<=5)return {range:"5y",interval:"1d"};
+  if(years<=10)return {range:"10y",interval:"1d"};
+  return {range:"max",interval:"1wk"};
+}
 function valueAtOrBefore(hist,t){
   if(!hist||!hist.length)return null;
   let lo=0,hi=hist.length-1,best=null;
@@ -1096,7 +1108,7 @@ async function loadPortfolioHistory(label){
   if(!marketApiBase||!liveMode)return;
   const key=currentPortfolioRange+"|"+lots.map(l=>`${l.ticker}:${l.date}:${l.shares}`).join(";");
   if(chartCache.has(key)){renderLineChart(chartCache.get(key));return;}
-  const cfg=portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL;
+  const cfg=currentPortfolioRange==="ALL" ? allRangeConfig() : (portfolioRangeConfig[currentPortfolioRange]||portfolioRangeConfig.ALL);
   try{
     const tickers=[...new Set(lots.map(l=>l.ticker))];
     const needsFx=tickers.some(t=>market(t).currency==="USD");
@@ -1262,12 +1274,6 @@ function renderLineChart(data,total){
   const dot=svg.querySelector("#chartPoint");
 
   let scrubbing=false;
-  let lastIndex=-1;
-
-  // Save the normal header so it can be restored when the user lifts their finger.
-  const normalPortfolioValue=portfolioValue.textContent;
-  const normalPortfolioGain=portfolioGain.textContent;
-  const normalPortfolioGainColor=portfolioGain.style.color;
 
   function formatScrubDate(sec){
     const d=new Date(sec*1000);
@@ -1277,30 +1283,49 @@ function renderLineChart(data,total){
     return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
   }
 
-  function selectAtClientX(clientX){
+  let rafId=0;
+  let pendingClientX=null;
+
+  function applyScrub(clientX){
     const rect=lineChart.getBoundingClientRect();
     if(!rect.width)return;
+
+    // Map the finger continuously into chart coordinates.
     let ratio=(clientX-rect.left)/rect.width;
     ratio=Math.max(0,Math.min(1,ratio));
-    const idx=Math.max(0,Math.min(pointXY.length-1,Math.round(ratio*(pointXY.length-1))));
-    const p=pointXY[idx];
 
-    vLine.setAttribute("x1",p.x); vLine.setAttribute("x2",p.x);
-    hLine.setAttribute("y1",p.y); hLine.setAttribute("y2",p.y);
-    dot.setAttribute("cx",p.x); dot.setAttribute("cy",p.y);
+    const floatIndex=ratio*(pointXY.length-1);
+    const i0=Math.floor(floatIndex);
+    const i1=Math.min(pointXY.length-1,i0+1);
+    const f=floatIndex-i0;
+
+    const a=pointXY[i0];
+    const b=pointXY[i1];
+
+    const x=a.x+(b.x-a.x)*f;
+    const y=a.y+(b.y-a.y)*f;
+    const value=a.value+(b.value-a.value)*f;
+    const time=a.time+(b.time-a.time)*f;
+
+    vLine.setAttribute("x1",x); vLine.setAttribute("x2",x);
+    hLine.setAttribute("y1",y); hLine.setAttribute("y2",y);
+    dot.setAttribute("cx",x); dot.setAttribute("cy",y);
     cross.style.display="";
 
-    const dateText=formatScrubDate(p.time);
+    const dateText=formatScrubDate(time);
     chartScrubDate.textContent=dateText;
-    chartScrubValue.textContent=fmt(p.value);
+    chartScrubValue.textContent=fmt(value);
     chartScrubInfo.classList.add("show");
 
-    // Same feel as Wealthsimple: the main portfolio value follows the selected point.
-    portfolioValue.textContent=fmt(p.value);
-    portfolioGain.textContent=dateText;
-    portfolioGain.style.color="var(--muted)";
+  }
 
-    lastIndex=idx;
+  function selectAtClientX(clientX){
+    pendingClientX=clientX;
+    if(rafId)return;
+    rafId=requestAnimationFrame(()=>{
+      rafId=0;
+      if(pendingClientX!=null)applyScrub(pendingClientX);
+    });
   }
 
   function endScrub(){
@@ -1308,10 +1333,8 @@ function renderLineChart(data,total){
     scrubbing=false;
     cross.style.display="none";
     chartScrubInfo.classList.remove("show");
-    portfolioValue.textContent=normalPortfolioValue;
-    portfolioGain.textContent=normalPortfolioGain;
-    portfolioGain.style.color=normalPortfolioGainColor;
-    lastIndex=-1;
+    if(rafId){cancelAnimationFrame(rafId);rafId=0}
+    pendingClientX=null;
   }
 
   lineChart.onpointerdown=e=>{
