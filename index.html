@@ -3066,7 +3066,7 @@ html,body{
     <div class="wealthHero">
       <div class="wealthEyebrow" id="netWorthMeta">Total net worth</div>
       <div class="wealthNetRow"><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
-      <div class="netWorthReturn" id="netWorthReturn">— Total Return</div>
+      <div class="netWorthReturn" id="netWorthReturn">— Investment Growth</div>
       <div class="netWorthPrincipalLine"><span>Net asset base</span><strong id="netWorthPrincipal">$0.00</strong></div>
     </div>
 
@@ -5499,13 +5499,22 @@ function loadNetWorthHistory(){
     const v=JSON.parse(localStorage.getItem(NET_WORTH_HISTORY_KEY)||"[]");
     const rows=Array.isArray(v)?v:[];
     const today=localDateISO();
-    rows.forEach(r=>{if(r?.date>today)r.date=today});
     const byDate=new Map();
     rows.forEach(r=>{
-      const n=Number(r?.value);
-      if(r?.date&&Number.isFinite(n))byDate.set(r.date,n);
+      const date=String(r?.date||"");
+      const value=Number(r?.value);
+      if(!date||!Number.isFinite(value))return;
+      const safeDate=date>today?today:date;
+      const row={date:safeDate,value};
+      const base=Number(r?.base);
+      const growth=Number(r?.growth);
+      const liabilities=Number(r?.liabilities);
+      if(Number.isFinite(base))row.base=base;
+      if(Number.isFinite(growth))row.growth=growth;
+      if(Number.isFinite(liabilities))row.liabilities=liabilities;
+      byDate.set(safeDate,row);
     });
-    return [...byDate.entries()].map(([date,value])=>({date,value})).sort((a,b)=>a.date.localeCompare(b.date));
+    return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }catch(e){return []}
 }
 function saveNetWorthHistory(){try{localStorage.setItem(NET_WORTH_HISTORY_KEY,JSON.stringify(netWorthHistory.slice(-730)))}catch(e){}}
@@ -6397,31 +6406,32 @@ function netWorthTotals(){
   const assets=investments+manualAssets;
   return {investments,manualAssets,liabilities,assets,total:assets-liabilities};
 }
-function netWorthPrincipal(){
-  // Home principal uses current non-investment account balances plus investment principal.
-  // Credit cards / other liabilities reduce both Net Worth and Principal, so daily spending
-  // does not get mistaken for investment return.
+function netAssetBaseSummary(){
+  // Net asset base = non-investment assets + investment deposits/book value.
+  // Credit cards and other debts are intentionally excluded from this base.
   const manualAssets=manualAccounts.filter(a=>a.type==="asset").reduce((s,a)=>s+manualBalanceCAD(a),0);
-  const liabilities=manualAccounts.filter(a=>a.type==="liability").reduce((s,a)=>s+manualBalanceCAD(a),0);
-  const investmentPrincipal=depositsForAccount("all");
-  const manualNetPrincipal=manualAssets-liabilities;
+  const investmentBasis=depositsForAccount("all");
   return {
-    manualNetPrincipal,
-    investmentPrincipal,
-    total:manualNetPrincipal+investmentPrincipal
+    manualAssets,
+    investmentBasis,
+    total:manualAssets+investmentBasis
   };
 }
-function currentNetWorthTotalReturn(){
+function currentInvestmentGrowth(){
   const totals=netWorthTotals();
-  const principal=netWorthPrincipal();
-  return totals.total-principal.total;
+  const base=netAssetBaseSummary();
+  return totals.investments-base.investmentBasis;
 }
 function recordNetWorthSnapshot(total){
   if(!Number.isFinite(total))return;
   const date=localDateISO();
+  const base=netAssetBaseSummary();
+  const growth=currentInvestmentGrowth();
+  const liabilities=netWorthTotals().liabilities;
+  const row={date,value:total,base:base.total,growth,liabilities};
   const ix=netWorthHistory.findIndex(x=>x.date===date);
-  if(ix>=0)netWorthHistory[ix].value=total;
-  else netWorthHistory.push({date,value:total});
+  if(ix>=0)netWorthHistory[ix]=row;
+  else netWorthHistory.push(row);
   netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).sort((a,b)=>a.date.localeCompare(b.date)).slice(-730);
   saveNetWorthHistory();
 }
@@ -6466,7 +6476,13 @@ function netWorthRangeLabel(range){
 function netWorthRowsForRange(range){
   const rows=netWorthHistory
     .slice()
-    .map(x=>({date:x.date,value:Number(x.value)}))
+    .map(x=>({
+      date:x.date,
+      value:Number(x.value),
+      base:Number(x.base),
+      growth:Number(x.growth),
+      liabilities:Number(x.liabilities)
+    }))
     .filter(x=>x.date&&Number.isFinite(x.value))
     .sort((a,b)=>a.date.localeCompare(b.date));
 
@@ -6485,21 +6501,31 @@ function netWorthRowsForRange(range){
   const cutoffISO=localDateISO(cutoff);
   return rows.filter(x=>x.date>=cutoffISO);
 }
-function setNetWorthReturn(){
+function setHomeGrowthSummary(snapshot=null){
   if(!netWorthReturn)return;
-  const principal=netWorthPrincipal();
-  if(netWorthPrincipalEl)netWorthPrincipalEl.textContent=fmt(principal.total);
-  const totalReturn=currentNetWorthTotalReturn();
-  if(!Number.isFinite(totalReturn)){
-    netWorthReturn.textContent="— Total Return";
+  let base;
+  let growth;
+  if(snapshot && Number.isFinite(Number(snapshot.base)) && Number.isFinite(Number(snapshot.growth))){
+    base=Number(snapshot.base);
+    growth=Number(snapshot.growth);
+  }else if(snapshot){
+    // Older snapshots predate base/growth tracking. Avoid showing today's base against an old Net Worth.
+    if(netWorthPrincipalEl)netWorthPrincipalEl.textContent="—";
+    netWorthReturn.textContent="— Investment Growth";
     netWorthReturn.classList.remove("pos","neg");
     return;
+  }else{
+    const summary=netAssetBaseSummary();
+    base=summary.total;
+    growth=currentInvestmentGrowth();
   }
-  netWorthReturn.textContent=`${signedMoney(totalReturn)} Total Return`;
-  netWorthReturn.classList.toggle("pos",totalReturn>=0);
-  netWorthReturn.classList.toggle("neg",totalReturn<0);
-  netWorthReturn.title=`Net asset base ${fmt(principal.total)} · Investment basis ${fmt(principal.investmentPrincipal)}`;
+  if(netWorthPrincipalEl)netWorthPrincipalEl.textContent=fmt(base);
+  netWorthReturn.textContent=`${signedMoney(growth)} Investment Growth`;
+  netWorthReturn.classList.toggle("pos",growth>=0);
+  netWorthReturn.classList.toggle("neg",growth<0);
+  netWorthReturn.title=`Net asset base ${fmt(base)} · Credit card/debts excluded`;
 }
+function setNetWorthReturn(){setHomeGrowthSummary();}
 function renderNetWorthChart(){
   if(!netWorthChart)return;
 
@@ -6627,7 +6653,7 @@ function renderNetWorthChart(){
 
     netWorthValue.textContent=fmt(p.value);
     netWorthMeta.textContent=formatNetWorthScrubDate(p.time);
-    setNetWorthReturn();
+    setHomeGrowthSummary(p);
   }
   function endScrub(){
     if(!scrubbing)return;
