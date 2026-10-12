@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.3 Home Total Return = Net Worth - Principal -->
+<!-- v5.17.4 Home Principal Amount -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2878,6 +2878,24 @@ html,body{
   text-overflow:ellipsis!important;
 }
 
+
+/* v5.17.4 principal amount under Total Return */
+.netWorthPrincipalLine{
+  margin-top:7px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:750;
+}
+.netWorthPrincipalLine strong{
+  color:#676a6f;
+  font-size:12px;
+  font-weight:850;
+  font-variant-numeric:tabular-nums;
+}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3017,6 +3035,7 @@ html,body{
       <div class="wealthEyebrow" id="netWorthMeta">Total net worth</div>
       <div class="wealthNetRow"><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
       <div class="netWorthReturn" id="netWorthReturn">— Total Return</div>
+      <div class="netWorthPrincipalLine"><span>Principal</span><strong id="netWorthPrincipal">$0.00</strong></div>
     </div>
 
     <div class="chartScrubInfo netWorthScrubInfo" id="netWorthScrubInfo">
@@ -3766,6 +3785,7 @@ var deleteTransaction=document.getElementById("deleteTransaction");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
 var netWorthReturn=document.getElementById("netWorthReturn");
+var netWorthPrincipal=document.getElementById("netWorthPrincipal");
 var netWorthScrubInfo=document.getElementById("netWorthScrubInfo");
 var netWorthScrubDate=document.getElementById("netWorthScrubDate");
 var netWorthScrubValue=document.getElementById("netWorthScrubValue");
@@ -6401,6 +6421,8 @@ function netWorthRowsForRange(range){
 }
 function setNetWorthReturn(){
   if(!netWorthReturn)return;
+  const principal=netWorthPrincipal();
+  if(netWorthPrincipal)netWorthPrincipal.textContent=fmt(principal.total);
   const totalReturn=currentNetWorthTotalReturn();
   if(!Number.isFinite(totalReturn)){
     netWorthReturn.textContent="— Total Return";
@@ -6410,7 +6432,6 @@ function setNetWorthReturn(){
   netWorthReturn.textContent=`${signedMoney(totalReturn)} Total Return`;
   netWorthReturn.classList.toggle("pos",totalReturn>=0);
   netWorthReturn.classList.toggle("neg",totalReturn<0);
-  const principal=netWorthPrincipal();
   netWorthReturn.title=`Principal ${fmt(principal.total)} · Investment principal ${fmt(principal.investmentPrincipal)}`;
 }
 function renderNetWorthChart(){
