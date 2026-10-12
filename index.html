@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.16.3 Transaction sheet layout + date + scroll reset fix -->
+<!-- v5.16.4 Soft-color Transactions + Stats UI -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -2499,6 +2499,184 @@ html,body{
 /* Avoid inherited label margins making the inner date control taller. */
 .quickField > label.quickDateControl{
   margin-bottom:0!important;
+}
+
+
+/* v5.16.4 Softer accounting UI — no black action/selection surfaces */
+.transactionsView,
+.statsView{
+  --acct-accent:#1fa77a;
+  --acct-accent-soft:#e9f7f1;
+  --acct-accent-border:#bfe7d7;
+  --acct-blue:#5e8fd8;
+  --acct-blue-soft:#edf3fc;
+  --acct-red-soft:#fff0f0;
+  --acct-green-soft:#edf8f2;
+}
+
+/* Transactions page */
+.ledgerAddBtn{
+  background:#1fa77a!important;
+  color:#fff!important;
+  box-shadow:0 6px 16px rgba(31,167,122,.16)!important;
+}
+.ledgerAddBtn:active{
+  background:#188c67!important;
+}
+.ledgerDay.today .dayNum{
+  background:#1fa77a!important;
+  color:#fff!important;
+}
+.ledgerDay.selected{
+  background:#e9f7f1!important;
+}
+.ledgerDay.selected.today .dayNum{
+  background:#1fa77a!important;
+}
+
+/* Expense / Income / Transfer segmented control */
+#transactionModal .txTypeTabs{
+  background:#f0f1ef!important;
+  border:1px solid #e4e5e1;
+}
+#transactionModal .txTypeTabs button{
+  color:#85888c!important;
+}
+#transactionModal .txTypeTabs button.active{
+  box-shadow:none!important;
+  border:1px solid transparent!important;
+}
+#transactionModal .txTypeTabs button[data-tx-type="expense"].active{
+  background:#fff0f0!important;
+  color:var(--red)!important;
+  border-color:#f3cccc!important;
+}
+#transactionModal .txTypeTabs button[data-tx-type="income"].active{
+  background:#edf8f2!important;
+  color:var(--green)!important;
+  border-color:#cce8d7!important;
+}
+#transactionModal .txTypeTabs button[data-tx-type="transfer"].active{
+  background:#edf3fc!important;
+  color:#4d7fc6!important;
+  border-color:#d3e0f3!important;
+}
+
+/* Selected category is soft teal instead of black. */
+#transactionModal .quickCategoryBtn.active{
+  background:#e9f7f1!important;
+  color:#137a5b!important;
+  border-color:#9fd9c2!important;
+  box-shadow:inset 0 0 0 1px #c7eadc;
+}
+#transactionModal .quickCategoryBtn.active .quickCategoryIcon{
+  background:#cfeee1!important;
+  color:#137a5b!important;
+}
+#transactionModal .quickCategoryBtn:active{
+  background:#f0f7f4!important;
+}
+
+/* Saved note selection */
+#transactionModal .quickNoteChip.active{
+  background:#e9f7f1!important;
+  color:#137a5b!important;
+  border-color:#a9dcc7!important;
+}
+
+/* Main save action */
+#transactionModal .quickSaveBtn{
+  background:#1fa77a!important;
+  color:#fff!important;
+  box-shadow:0 7px 18px rgba(31,167,122,.17)!important;
+}
+#transactionModal .quickSaveBtn:active{
+  background:#188c67!important;
+}
+
+/* Amount gets a subtle accent instead of feeling heavy. */
+#transactionModal .quickAmountCurrency{
+  color:#1fa77a!important;
+}
+#transactionModal #txAmount{
+  color:#202724!important;
+}
+#transactionModal #txAmount::placeholder{
+  color:#c9cdcb!important;
+}
+
+/* Softer keypad */
+#transactionModal .quickKeypad button{
+  background:#f3f4f2!important;
+  color:#252927!important;
+  border:1px solid #ecece8!important;
+}
+#transactionModal .quickKeypad button:active{
+  background:#e4f2ec!important;
+  color:#137a5b!important;
+}
+
+/* Stats: softer cards and semantic emphasis */
+.statsView .ledgerSummaryCard.income{
+  background:#f1faf5!important;
+  border-color:#d9eee2!important;
+}
+.statsView .ledgerSummaryCard.expense{
+  background:#fff4f4!important;
+  border-color:#f3dada!important;
+}
+.statsView .ledgerSummaryCard.net{
+  background:#f1f7f6!important;
+  border-color:#d8e8e4!important;
+}
+.statsMode{
+  background:#eceeeb!important;
+  border:1px solid #e1e3df!important;
+}
+.statsMode button.active{
+  background:#e9f7f1!important;
+  color:#137a5b!important;
+  box-shadow:none!important;
+  border:1px solid #bfe7d7!important;
+}
+
+/* Spending trend is expense-colored rather than black/neutral. */
+.statsYearMonths .statsMonthBar{
+  background:#e57272!important;
+}
+
+/* Category cards keep the semantic red/green bars but use softer tracks. */
+.statsView .categoryTrack{
+  background:#f0f1ef!important;
+}
+.statsView .categoryRowButton:active{
+  background:#f8f9f7!important;
+  border-radius:12px;
+}
+
+/* Category detail bars follow Expense / Income colors. */
+#categoryDetailModal .categoryDetailBar{
+  background:#88b9ae!important;
+}
+#categoryDetailModal.expenseDetail .categoryDetailBar{
+  background:#e57272!important;
+}
+#categoryDetailModal.incomeDetail .categoryDetailBar{
+  background:#46b982!important;
+}
+#categoryDetailModal.expenseDetail .categoryDetailTotal{
+  color:var(--red)!important;
+}
+#categoryDetailModal.incomeDetail .categoryDetailTotal{
+  color:var(--green)!important;
+}
+
+/* Keep all text readable while removing heavy black backgrounds. */
+#transactionModal .primary,
+.transactionsView .primary,
+.statsView .primary{
+  background:#1fa77a!important;
+  color:#fff!important;
 }
 
 </style>
@@ -5734,6 +5912,8 @@ function renderCategoryDetailTransactions(rows,type){
 }
 function openCategoryDetail(type,category){
   const rows=categoryDetailRows(type,category);
+  categoryDetailModal.classList.toggle("expenseDetail",type==="expense");
+  categoryDetailModal.classList.toggle("incomeDetail",type==="income");
   const total=rows.reduce((s,t)=>s+transactionAmountCAD(t),0);
   categoryDetailTitle.textContent=category;
   categoryDetailPeriod.textContent=statsCurrentMode==="month"?monthLabel(statsMonth):String(statsYear);
