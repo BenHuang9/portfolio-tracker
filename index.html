@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v3.6 Holding detail adds Stock Return excluding dividends; Home unchanged -->
+<!-- v3.8 Home Holdings sorted A-Z and centered by column -->
 <style>
 :root{
   --bg:#f6f6f4;
@@ -468,6 +468,30 @@ input,button{touch-action:manipulation;}
   height:1px;
   background:var(--line);
   margin:13px 0;
+}
+
+
+/* v3.8 Center Home Holdings columns */
+.holdings .thead > div{
+  text-align:center !important;
+}
+.holdings .row > div{
+  text-align:center !important;
+}
+.holdings .stock{
+  justify-content:center !important;
+  text-align:left !important;
+}
+.holdings .stock > div:last-child{
+  text-align:left !important;
+}
+.holdings .num{
+  justify-self:center !important;
+  text-align:center !important;
+}
+.holdings .today{
+  justify-self:center !important;
+  text-align:center !important;
 }
 
 </style>
@@ -1025,7 +1049,7 @@ function positions(){
 }
 
 function renderHome(){
-  const ps=positions();
+  const ps=positions().sort((a,b)=>a.ticker.localeCompare(b.ticker, undefined, {numeric:true, sensitivity:"base"}));
   const mv=ps.reduce((s,p)=>s+p.mv,0);
   const bv=ps.reduce((s,p)=>s+p.bv,0);
   const capital=mv-bv;
