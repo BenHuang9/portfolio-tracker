@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.11 CIBC Mutual Funds -->
+<!-- v5.12 CIBC Mutual Funds auto NAV -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -1525,6 +1525,12 @@ body.manualDetailOpen{padding-bottom:0!important}
   .cibcHoldingMetric .value{font-size:12px}
 }
 
+
+/* v5.12 CIBC daily NAV auto-update */
+.cibcFundNavStatus{margin-top:7px;font-size:12px;font-weight:700;color:var(--muted)}
+.cibcFundNavStatus.live{color:var(--teal)}
+.cibcHoldingPriceDate{margin-top:4px;font-size:10px;font-weight:700;color:var(--muted)}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -1760,6 +1766,7 @@ body.manualDetailOpen{padding-bottom:0!important}
       </div>
       <div class="cibcFundGain" id="cibcFundGain">+$0.00 (+0.00%)</div>
       <div class="cibcFundNote">3 CIBC Class A mutual funds · purchased in 2024</div>
+      <div class="cibcFundNavStatus" id="cibcFundNavStatus">Daily NAV · checking latest price…</div>
     </div>
 
     <div class="cibcFundSummary">
@@ -2183,6 +2190,7 @@ var cibcFundBalance=document.getElementById("cibcFundBalance");
 var cibcFundGain=document.getElementById("cibcFundGain");
 var cibcFundBook=document.getElementById("cibcFundBook");
 var cibcFundGainCard=document.getElementById("cibcFundGainCard");
+var cibcFundNavStatus=document.getElementById("cibcFundNavStatus");
 var cibcFundHoldings=document.getElementById("cibcFundHoldings");
 var manualAccountDetailView=document.getElementById("manualAccountDetailView");
 var manualDetailBackBtn=document.getElementById("manualDetailBackBtn");
@@ -2241,11 +2249,39 @@ const INVESTMENT_ACCOUNTS=[
   {id:"questrade_tfsa",name:"Questrade TFSA",short:"Questrade TFSA",icon:"Q"},
   {id:"questrade_cash",name:"Questrade Cash",short:"Questrade Cash",icon:"Q"}
 ];
+const CIBC_MUTUAL_FUND_CACHE_KEY="cibcMutualFundNavV512";
 const CIBC_MUTUAL_FUNDS=[
-  {ticker:"ATL486",name:"CIBC Dividend Growth Fund, Class A",units:197.745,bookValue:9737.31,marketValue:11299.90,displayPrice:57.14},
-  {ticker:"ATL496",name:"CIBC Technology Innovation Fund, Class A",units:84.413,bookValue:5194.48,marketValue:9487.66,displayPrice:112.40},
-  {ticker:"ATL525",name:"CIBC U.S. Equity Fund, Class A",units:201.869,bookValue:5194.48,marketValue:8362.74,displayPrice:41.43}
+  {ticker:"ATL486",name:"CIBC Dividend Growth Fund, Class A",units:197.745,bookValue:9737.31,marketValue:11299.90,displayPrice:57.14,priceDate:"2026-10-09",priceSource:"CIBC statement"},
+  {ticker:"ATL496",name:"CIBC Technology Innovation Fund, Class A",units:84.413,bookValue:5194.48,marketValue:9487.66,displayPrice:112.40,priceDate:"2026-10-09",priceSource:"CIBC statement"},
+  {ticker:"ATL525",name:"CIBC U.S. Equity Fund, Class A",units:201.869,bookValue:5194.48,marketValue:8362.74,displayPrice:41.43,priceDate:"2026-10-09",priceSource:"CIBC statement"}
 ];
+let cibcFundNavFetchedAt=0;
+function saveCibcFundNavCache(){
+  try{
+    localStorage.setItem(CIBC_MUTUAL_FUND_CACHE_KEY,JSON.stringify({
+      fetchedAt:cibcFundNavFetchedAt||Date.now(),
+      funds:CIBC_MUTUAL_FUNDS.map(f=>({ticker:f.ticker,displayPrice:f.displayPrice,marketValue:f.marketValue,priceDate:f.priceDate,priceSource:f.priceSource}))
+    }));
+  }catch(e){}
+}
+function loadCibcFundNavCache(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(CIBC_MUTUAL_FUND_CACHE_KEY)||"null");
+    if(!raw||!Array.isArray(raw.funds))return false;
+    for(const row of raw.funds){
+      const f=CIBC_MUTUAL_FUNDS.find(x=>x.ticker===row.ticker);
+      const px=Number(row.displayPrice);
+      if(!f||!(px>0))continue;
+      f.displayPrice=px;
+      f.marketValue=Number((px*Number(f.units)).toFixed(2));
+      f.priceDate=row.priceDate||f.priceDate;
+      f.priceSource=row.priceSource||"cached";
+    }
+    cibcFundNavFetchedAt=Number(raw.fetchedAt)||0;
+    return true;
+  }catch(e){return false;}
+}
+loadCibcFundNavCache();
 function cibcMutualFundSummary(){
   const bookValue=CIBC_MUTUAL_FUNDS.reduce((s,f)=>s+Number(f.bookValue||0),0);
   const marketValue=CIBC_MUTUAL_FUNDS.reduce((s,f)=>s+Number(f.marketValue||0),0);
@@ -2563,6 +2599,48 @@ async function apiDividends(symbol){
   if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`${symbol} dividends: ${r.status} ${msg}`)}
   return await r.json();
 }
+async function apiCibcFunds(){
+  const r=await fetch(apiUrl("/cibc-funds"),{cache:"no-store"});
+  if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`CIBC mutual funds: ${r.status} ${msg}`)}
+  return await r.json();
+}
+function cibcDateLabel(v){
+  if(!v)return "latest available NAV";
+  try{return parseLocalDate(v).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}catch(e){return v}
+}
+async function refreshCibcFundPrices(render=true){
+  if(!marketApiBase)return false;
+  try{
+    const data=await apiCibcFunds();
+    let changed=false;
+    for(const row of (data.funds||[])){
+      const f=CIBC_MUTUAL_FUNDS.find(x=>x.ticker===String(row.ticker||"").toUpperCase());
+      const px=Number(row.price);
+      if(!f||!(px>0))continue;
+      f.displayPrice=px;
+      f.marketValue=Number((px*Number(f.units)).toFixed(2));
+      f.priceDate=row.date||f.priceDate;
+      f.priceSource=row.source||"Auto NAV";
+      changed=true;
+    }
+    if(changed){
+      cibcFundNavFetchedAt=Date.now();
+      saveCibcFundNavCache();
+      if(render){
+        renderNetWorth();
+        if(cibcFundView?.classList.contains("active"))renderCibcFundDetail();
+      }
+    }
+    return changed;
+  }catch(err){
+    console.warn("CIBC mutual-fund NAV refresh failed",err);
+    if(cibcFundNavStatus && cibcFundView?.classList.contains("active")){
+      cibcFundNavStatus.textContent="Daily NAV · using last saved price";
+      cibcFundNavStatus.classList.remove("live");
+    }
+    return false;
+  }
+}
 function normalizeYahooDividendEvents(events){
   return (events||[]).map(e=>({
     exDate:e.exDate||e.date,
@@ -2722,6 +2800,7 @@ async function syncDividendHistory(tickers){
 }
 async function refreshLiveData(silent=false){
   marketApiBase=DEFAULT_MARKET_API;
+  const cibcSyncPromise=refreshCibcFundPrices(false);
   if(!marketApiBase){
     liveMode=false; setMarketStatus("","Connecting market data…");
     if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}`;
@@ -2786,6 +2865,7 @@ async function refreshLiveData(silent=false){
     if(!successCount && fxResult.status!=="fulfilled") throw new Error("All market data requests failed");
 
     rebuildDividendPayments();
+    await cibcSyncPromise;
     liveMode=true;
     liveUpdatedAt=Date.now();
     chartCache.clear();
@@ -2803,6 +2883,9 @@ async function refreshLiveData(silent=false){
     syncDividendHistory(tickers);
   }catch(err){
     console.error(err);
+    try{await cibcSyncPromise;}catch(e){}
+    renderNetWorth();
+    if(cibcFundView?.classList.contains("active"))renderCibcFundDetail();
     setMarketStatus("error", (liveMode ? "Refresh failed · cached data · " : "Market data unavailable · demo data · ") + String(err?.message||err));
   }
 }
@@ -3967,7 +4050,7 @@ function renderNetWorth(){
     </div>`;
   }).join('')+`<div class="netWorthRow cibcFundAccountRow" data-cibc-fund-account="1">
       <div class="netWorthIcon">C</div>
-      <div><div class="netWorthAccountName">CIBC Mutual Fund <span class="cibcInvestBadge">3 FUNDS</span></div><div class="netWorthAccountMeta">ATL486 · ATL496 · ATL525 · Purchased 2024</div></div>
+      <div><div class="netWorthAccountName">CIBC Mutual Fund <span class="cibcInvestBadge">3 FUNDS</span></div><div class="netWorthAccountMeta">ATL486 · ATL496 · ATL525 · Daily NAV auto-update</div></div>
       <div class="netWorthAmount">${fmt(cibcSummary.marketValue)}<span class="sub">Book ${fmt0(cibcSummary.bookValue)}</span></div>
     </div>`;
 
@@ -4002,6 +4085,12 @@ function renderCibcFundDetail(){
   cibcFundBook.textContent=fmt(s.bookValue);
   cibcFundGainCard.textContent=signedMoney(s.gain);
   cibcFundGainCard.style.color=s.gain>=0?"var(--teal)":"var(--red)";
+  const latestDates=CIBC_MUTUAL_FUNDS.map(f=>f.priceDate).filter(Boolean).sort();
+  const latestDate=latestDates.length?latestDates[latestDates.length-1]:null;
+  if(cibcFundNavStatus){
+    cibcFundNavStatus.textContent=`Daily NAV · ${cibcDateLabel(latestDate)} · Auto update`;
+    cibcFundNavStatus.classList.toggle("live",Boolean(cibcFundNavFetchedAt));
+  }
   cibcFundHoldings.innerHTML=CIBC_MUTUAL_FUNDS.map(f=>{
     const gain=f.marketValue-f.bookValue;
     const gainPct=f.bookValue?gain/f.bookValue*100:0;
@@ -4013,7 +4102,7 @@ function renderCibcFundDetail(){
       <div class="cibcHoldingGrid">
         <div class="cibcHoldingMetric"><div class="label">Units</div><div class="value">${Number(f.units).toLocaleString(undefined,{minimumFractionDigits:3,maximumFractionDigits:3})}</div></div>
         <div class="cibcHoldingMetric"><div class="label">Book Value</div><div class="value">${fmt(f.bookValue)}</div></div>
-        <div class="cibcHoldingMetric"><div class="label">Price / Unit</div><div class="value">${fmt(f.displayPrice)}</div></div>
+        <div class="cibcHoldingMetric"><div class="label">Price / Unit</div><div class="value">${fmt(f.displayPrice)}</div><div class="cibcHoldingPriceDate">NAV ${cibcDateLabel(f.priceDate)}</div></div>
       </div>
     </div>`;
   }).join('');
