@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
-<!-- v5.17.2 Single-line account dropdown -->
+<!-- v5.17.3 Home Total Return = Net Worth - Principal -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
 <style>
 :root{
@@ -3016,7 +3016,7 @@ html,body{
     <div class="wealthHero">
       <div class="wealthEyebrow" id="netWorthMeta">Total net worth</div>
       <div class="wealthNetRow"><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
-      <div class="netWorthReturn" id="netWorthReturn">— history building</div>
+      <div class="netWorthReturn" id="netWorthReturn">— Total Return</div>
     </div>
 
     <div class="chartScrubInfo netWorthScrubInfo" id="netWorthScrubInfo">
@@ -6311,6 +6311,25 @@ function netWorthTotals(){
   const assets=investments+manualAssets;
   return {investments,manualAssets,liabilities,assets,total:assets-liabilities};
 }
+function netWorthPrincipal(){
+  // Home principal uses current non-investment account balances plus investment principal.
+  // Credit cards / other liabilities reduce both Net Worth and Principal, so daily spending
+  // does not get mistaken for investment return.
+  const manualAssets=manualAccounts.filter(a=>a.type==="asset").reduce((s,a)=>s+manualBalanceCAD(a),0);
+  const liabilities=manualAccounts.filter(a=>a.type==="liability").reduce((s,a)=>s+manualBalanceCAD(a),0);
+  const investmentPrincipal=depositsForAccount("all");
+  const manualNetPrincipal=manualAssets-liabilities;
+  return {
+    manualNetPrincipal,
+    investmentPrincipal,
+    total:manualNetPrincipal+investmentPrincipal
+  };
+}
+function currentNetWorthTotalReturn(){
+  const totals=netWorthTotals();
+  const principal=netWorthPrincipal();
+  return totals.total-principal.total;
+}
 function recordNetWorthSnapshot(total){
   if(!Number.isFinite(total))return;
   const date=localDateISO();
@@ -6380,16 +6399,19 @@ function netWorthRowsForRange(range){
   const cutoffISO=localDateISO(cutoff);
   return rows.filter(x=>x.date>=cutoffISO);
 }
-function setNetWorthReturn(delta,range=currentNetWorthRange){
+function setNetWorthReturn(){
   if(!netWorthReturn)return;
-  if(!Number.isFinite(delta)){
-    netWorthReturn.textContent="— history building";
+  const totalReturn=currentNetWorthTotalReturn();
+  if(!Number.isFinite(totalReturn)){
+    netWorthReturn.textContent="— Total Return";
     netWorthReturn.classList.remove("pos","neg");
     return;
   }
-  netWorthReturn.textContent=`${signedMoney(delta)} ${netWorthRangeLabel(range)}`;
-  netWorthReturn.classList.toggle("pos",delta>=0);
-  netWorthReturn.classList.toggle("neg",delta<0);
+  netWorthReturn.textContent=`${signedMoney(totalReturn)} Total Return`;
+  netWorthReturn.classList.toggle("pos",totalReturn>=0);
+  netWorthReturn.classList.toggle("neg",totalReturn<0);
+  const principal=netWorthPrincipal();
+  netWorthReturn.title=`Principal ${fmt(principal.total)} · Investment principal ${fmt(principal.investmentPrincipal)}`;
 }
 function renderNetWorthChart(){
   if(!netWorthChart)return;
@@ -6398,7 +6420,7 @@ function renderNetWorthChart(){
 
   if(rows.length<2){
     netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history begins with your first daily snapshot.<br>Today’s value is saved automatically — or add a dated snapshot below.</div>';
-    setNetWorthReturn(NaN);
+    setNetWorthReturn();
     if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
     netWorthChart.onpointerdown=null;
     netWorthChart.onpointermove=null;
@@ -6410,7 +6432,7 @@ function renderNetWorthChart(){
 
   const firstValue=rows[0].value;
   const lastValue=rows[rows.length-1].value;
-  setNetWorthReturn(lastValue-firstValue);
+  setNetWorthReturn();
 
   const w=520,h=220,pad=8;
   const vals=rows.map(x=>x.value);
@@ -6518,7 +6540,7 @@ function renderNetWorthChart(){
 
     netWorthValue.textContent=fmt(p.value);
     netWorthMeta.textContent=formatNetWorthScrubDate(p.time);
-    setNetWorthReturn(p.value-firstValue,currentNetWorthRange);
+    setNetWorthReturn();
   }
   function endScrub(){
     if(!scrubbing)return;
@@ -6528,7 +6550,7 @@ function renderNetWorthChart(){
 
     netWorthValue.textContent=fmt(currentNetWorth);
     netWorthMeta.textContent=currentMeta;
-    setNetWorthReturn(lastValue-firstValue,currentNetWorthRange);
+    setNetWorthReturn();
 
     unlockPageScroll();
   }
@@ -6578,6 +6600,7 @@ function renderNetWorth(){
 
   netWorthValue.textContent=fmt(totals.total);
   netWorthMeta.textContent="Total net worth";
+  setNetWorthReturn();
 
   investmentGroupTotal.textContent=fmt(totals.investments);
   cashGroupTotal.textContent=fmt(cashTotal);
