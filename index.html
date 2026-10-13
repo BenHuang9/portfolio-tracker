@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.19 Cloud Foundation: safe D1 backup + dual-write -->
+<!-- v5.20 Cloud First: D1 primary sync + automatic daily net worth snapshots -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v5.17.7 Hotfix restore Home rendering -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
@@ -2983,7 +2983,7 @@ html,body{
 }
 
 
-/* v5.19 Cloud Foundation */
+/* v5.20 Cloud First */
 .cloudSyncBlock{padding-bottom:12px}
 .cloudSyncStatusRow{display:flex;align-items:center;gap:8px;margin:10px 0 2px;color:var(--muted);font-size:11px;font-weight:750}
 .cloudSyncDot{width:8px;height:8px;border-radius:50%;background:#b5b7b8;flex:0 0 auto}
@@ -3567,21 +3567,21 @@ html,body{
     </div>
     <div class="settingsNote">Investment Value includes each account's cash. Account-level Total Return uses Investment Value − Net Deposits when Net Deposits is entered.</div>
 
-    <div class="settingsSectionTitle">Cloud Backup</div>
+    <div class="settingsSectionTitle">Cloud Sync</div>
     <div class="accountSettingsBlock cloudSyncBlock">
       <div class="accountSettingsTitle">Private Cloud Sync</div>
-      <div class="accountSettingsSub">Keeps your local data on this device and safely copies it to your Cloudflare D1 database.</div>
+      <div class="accountSettingsSub">Uses Cloudflare D1 as the primary synced copy while keeping this device available offline.</div>
       <div class="field">
         <label>Sync Token</label>
         <input id="cloudSyncTokenInput" type="password" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Enter your private sync token"/>
       </div>
-      <label class="cloudSyncToggle"><input id="cloudSyncEnabledInput" type="checkbox"/>Automatic cloud backup</label>
+      <label class="cloudSyncToggle"><input id="cloudSyncEnabledInput" type="checkbox"/>Automatic cloud sync</label>
       <div class="cloudSyncStatusRow"><span class="cloudSyncDot" id="cloudSyncDot"></span><span id="cloudSyncStatus">Not configured</span></div>
       <div class="cloudSyncActions">
-        <button class="secondaryBtn" id="cloudBackupBtn" type="button">Back Up This Device</button>
+        <button class="secondaryBtn" id="cloudBackupBtn" type="button">Sync This Device</button>
         <button class="secondaryBtn" id="cloudRestoreBtn" type="button">Restore from Cloud</button>
       </div>
-      <div class="cloudSyncMeta" id="cloudSyncMeta">Local data remains the source of truth until you explicitly enable cloud backup.</div>
+      <div class="cloudSyncMeta" id="cloudSyncMeta">Cloud is the primary synced copy when enabled; this device keeps an offline cache.</div>
     </div>
 
     <div class="settingsSectionTitle">Market Data</div>
@@ -4005,6 +4005,7 @@ const CLOUD_SYNC_TOKEN_KEY="portfolioCloudSyncTokenV519";
 const CLOUD_SYNC_REVISION_KEY="portfolioCloudRevisionV519";
 const CLOUD_SYNC_DEVICE_KEY="portfolioCloudDeviceIdV519";
 const CLOUD_SYNC_LAST_AT_KEY="portfolioCloudLastSyncAtV519";
+const CLOUD_SYNC_DIRTY_KEY="portfolioCloudDirtyV520";
 const CLOUD_SYNC_KEYS=[
   "incomeTrackerLots",
   "portfolioAccountCashCAD","portfolioNetDepositsCAD",
@@ -4013,15 +4014,21 @@ const CLOUD_SYNC_KEYS=[
   "netWorthManualAccountsV58","netWorthHistoryV58","personalLedgerTransactionsV513",
   "miao2026HistoryImportedV514","multiAccountMigrationV58","questradeHistoryStartV584",
   "questradeCurrentHoldingsSeedV581","cibcMutualFundMigrationV511","cibcManualAccountBackupV511",
-  "portfolioDataResetVersion"
+  "cibcMutualFundNavV512","portfolioDataResetVersion"
 ];
 let cloudSyncTimer=null;
 let cloudSyncInFlight=false;
+let cloudPullInFlight=false;
 let cloudRestoreInProgress=false;
+let cloudBootstrapFinished=false;
+let cloudPendingBeforeBootstrap=false;
 let cloudLastError="";
+let cloudLastRemoteCheckAt=0;
 function cloudSyncEnabled(){try{return localStorage.getItem(CLOUD_SYNC_ENABLED_KEY)==="1"}catch(e){return false}}
 function cloudSyncToken(){try{return String(localStorage.getItem(CLOUD_SYNC_TOKEN_KEY)||"").trim()}catch(e){return ""}}
 function cloudRevision(){try{return Math.max(0,Number(localStorage.getItem(CLOUD_SYNC_REVISION_KEY)||0)||0)}catch(e){return 0}}
+function cloudDirty(){try{return localStorage.getItem(CLOUD_SYNC_DIRTY_KEY)==="1"}catch(e){return false}}
+function setCloudDirty(v){try{if(v)localStorage.setItem(CLOUD_SYNC_DIRTY_KEY,"1");else localStorage.removeItem(CLOUD_SYNC_DIRTY_KEY)}catch(e){}}
 function cloudDeviceId(){
   try{
     let id=localStorage.getItem(CLOUD_SYNC_DEVICE_KEY);
@@ -4038,12 +4045,42 @@ function cloudApiUrl(path){
   const base=String(DEFAULT_MARKET_API||"").replace(/\/+$/g,"");
   return base+path;
 }
+function cloudBuildModel(){
+  try{recomputeAllLedgerAccounts()}catch(e){}
+  let tz="America/Vancouver";
+  try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||tz}catch(e){}
+  const manual=(Array.isArray(manualAccounts)?manualAccounts:[]).map(a=>({
+    id:String(a.id||""),name:String(a.name||""),type:String(a.type||"asset"),category:String(a.category||""),
+    currency:String(a.currency||"CAD"),balance:Math.abs(Number(a.balance)||0)
+  })).filter(a=>a.id);
+  const inv=(Array.isArray(INVESTMENT_ACCOUNTS)?INVESTMENT_ACCOUNTS:[]).map(a=>({
+    id:a.id,name:a.name,cashCAD:Number(cashForAccount(a.id)||0),netDepositsCAD:Number(depositsForAccount(a.id)||0)
+  }));
+  const lotRows=(Array.isArray(lots)?lots:[]).map(l=>({
+    ticker:String(l.ticker||"").toUpperCase(),date:String(l.date||""),shares:Number(l.shares)||0,cost:Number(l.cost)||0,
+    accountId:String(l.accountId||DEFAULT_INVESTMENT_ACCOUNT),openingPosition:Boolean(l.openingPosition),source:String(l.source||"")
+  })).filter(l=>l.ticker&&l.date&&l.shares!==0);
+  const cibc=(Array.isArray(CIBC_MUTUAL_FUNDS)?CIBC_MUTUAL_FUNDS:[]).map(f=>({
+    ticker:String(f.ticker||"").toUpperCase(),name:String(f.name||""),units:Number(f.units)||0,
+    bookValue:Number(f.bookValue)||0,lastPrice:Number(f.displayPrice)||0
+  }));
+  let currentSnapshot=null;
+  try{
+    const totals=netWorthTotals();
+    const base=netAssetBaseSummary();
+    currentSnapshot={
+      date:localDateISO(),netWorth:Number(totals.total)||0,netAssetBase:Number(base.total)||0,
+      investmentGrowth:Number(currentInvestmentGrowth())||0,debts:Number(totals.liabilities)||0
+    };
+  }catch(e){}
+  return {timezone:tz,manualAccounts:manual,investmentAccounts:inv,lots:lotRows,cibcFunds:cibc,currentSnapshot};
+}
 function cloudBuildPayload(){
   const storage={};
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:1,appVersion:"5.19",exportedAt:new Date().toISOString(),storage};
+  return {schemaVersion:2,appVersion:"5.20",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -4059,16 +4096,19 @@ async function cloudRequest(path,options={}){
   }
   return data;
 }
-async function cloudStatusCheck(){
-  if(!cloudSyncToken()){setCloudStatus("Not configured","","Enter the same private token you configure on the Worker.");return null}
+async function cloudStatusCheck({quiet=false}={}){
+  if(!cloudSyncToken()){if(!quiet)setCloudStatus("Not configured","","Enter the same private token you configure on the Worker.");return null}
   try{
     const data=await cloudRequest("/api/cloud/status");
-    const last=data?.updatedAt?new Date(data.updatedAt).toLocaleString():"Never";
-    setCloudStatus(data.hasCloudState?"Cloud backup ready":"Cloud connected — no backup yet","ok",data.hasCloudState?`Cloud revision ${data.revision} · Last backup ${last}`:"This device can create the first cloud backup.");
+    cloudLastRemoteCheckAt=Date.now();
+    if(!quiet){
+      const last=data?.updatedAt?new Date(data.updatedAt).toLocaleString():"Never";
+      setCloudStatus(data.hasCloudState?"Cloud sync ready":"Cloud connected — no data yet","ok",data.hasCloudState?`Cloud revision ${data.revision} · Last sync ${last}`:"This device can create the first cloud copy.");
+    }
     return data;
   }catch(e){
     cloudLastError=String(e?.message||e);
-    setCloudStatus("Cloud unavailable","err",cloudLastError);
+    if(!quiet)setCloudStatus("Cloud unavailable","err",cloudLastError);
     return null;
   }
 }
@@ -4076,52 +4116,93 @@ async function cloudPushState(force=false,reason="manual"){
   if(cloudSyncInFlight)return null;
   if(!cloudSyncToken())throw new Error("Sync token is missing");
   cloudSyncInFlight=true;
-  setCloudStatus("Backing up…","warn",reason==="auto"?"Saving the latest local changes to D1.":"Creating a cloud copy of this device.");
+  setCloudStatus("Syncing…","warn",reason==="auto"?"Saving the latest local changes to D1.":"Saving this device to the primary cloud copy.");
   try{
     const body={payload:cloudBuildPayload(),deviceId:cloudDeviceId(),baseRevision:cloudRevision(),force:Boolean(force)};
     const data=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});
     localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
     localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||new Date().toISOString()));
+    setCloudDirty(false);
     cloudLastError="";
-    setCloudStatus("Backed up","ok",`Cloud revision ${data.revision} · ${new Date(data.updatedAt).toLocaleString()}`);
+    const extra=data?.structuredSyncWarning?` · Structured copy warning: ${data.structuredSyncWarning}`:"";
+    setCloudStatus("Synced","ok",`Cloud revision ${data.revision} · ${new Date(data.updatedAt).toLocaleString()}${extra}`);
     return data;
   }catch(e){
     cloudLastError=String(e?.message||e);
-    if(e?.status===409)setCloudStatus("Cloud has newer data","warn","Nothing was overwritten. Restore the cloud copy first, or use Back Up This Device to intentionally replace it.");
-    else setCloudStatus("Backup failed","err",cloudLastError);
+    if(e?.status===409)setCloudStatus("Sync conflict","warn","Cloud changed on another device. Your local changes were not overwritten. Open the app on the latest device first, or choose Restore from Cloud / Sync This Device manually.");
+    else setCloudStatus("Sync failed","err",cloudLastError);
     throw e;
   }finally{cloudSyncInFlight=false}
 }
 function cloudScheduleSync(){
   if(cloudRestoreInProgress || !cloudSyncEnabled() || !cloudSyncToken())return;
+  if(!cloudBootstrapFinished){cloudPendingBeforeBootstrap=true;return}
+  setCloudDirty(true);
   clearTimeout(cloudSyncTimer);
-  cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},900);
+  cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},700);
 }
 function cloudApplyPayload(payload){
-  if(!payload || typeof payload!=="object" || !payload.storage || typeof payload.storage!=="object")throw new Error("Cloud backup format is invalid");
+  if(!payload || typeof payload!=="object" || !payload.storage || typeof payload.storage!=="object")throw new Error("Cloud data format is invalid");
   cloudRestoreInProgress=true;
   try{
+    const exactReplace=Number(payload.schemaVersion||0)>=2;
     for(const key of CLOUD_SYNC_KEYS){
       if(Object.prototype.hasOwnProperty.call(payload.storage,key))localStorage.setItem(key,String(payload.storage[key]));
+      else if(exactReplace)localStorage.removeItem(key);
     }
   }finally{cloudRestoreInProgress=false}
 }
-async function cloudRestoreFromServer(){
-  const data=await cloudRequest("/api/cloud/state");
-  if(!data?.payload)throw new Error("No cloud backup exists yet");
-  if(!confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return;
-  try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV519",JSON.stringify(cloudBuildPayload()))}catch(e){}
-  cloudApplyPayload(data.payload);
-  localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
-  localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||""));
-  location.reload();
+async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
+  if(cloudPullInFlight)return null;
+  cloudPullInFlight=true;
+  try{
+    const data=await cloudRequest("/api/cloud/state");
+    if(!data?.payload)throw new Error("No cloud data exists yet");
+    if(confirmFirst && !confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return null;
+    try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}catch(e){}
+    cloudApplyPayload(data.payload);
+    localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
+    localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||""));
+    setCloudDirty(false);
+    cloudPendingBeforeBootstrap=false;
+    clearTimeout(cloudSyncTimer);
+    if(reason==="auto")setCloudStatus("Cloud update received","ok",`Cloud revision ${data.revision} · Reloading latest data…`);
+    location.reload();
+    return data;
+  }finally{cloudPullInFlight=false}
+}
+async function cloudRestoreFromServer(){return cloudPullLatest({confirmFirst:true,reason:"manual"})}
+async function cloudReconcile(reason="resume"){
+  if(!cloudSyncEnabled() || !cloudSyncToken())return null;
+  const status=await cloudStatusCheck({quiet:true});
+  if(!status)return null;
+  const remoteRev=Math.max(0,Number(status.revision||0)||0);
+  const localRev=cloudRevision();
+  if(!status.hasCloudState){
+    return await cloudPushState(false,"first backup");
+  }
+  if(remoteRev>localRev){
+    if(localRev===0 || !cloudDirty()){
+      return await cloudPullLatest({confirmFirst:false,reason:"auto"});
+    }
+    setCloudStatus("Sync conflict","warn",`Cloud revision ${remoteRev} is newer than this device (${localRev}), and this device also has unsynced changes. Nothing was overwritten.`);
+    return status;
+  }
+  if(remoteRev===localRev){
+    if(Number(status?.schemaVersion||0)<2)return await cloudPushState(false,"upgrade");
+    if(cloudDirty())return await cloudPushState(false,"auto");
+    const last=status?.updatedAt?new Date(status.updatedAt).toLocaleString():"Never";
+    setCloudStatus("Synced","ok",`Cloud revision ${remoteRev} · ${last}`);
+    return status;
+  }
+  setCloudStatus("Revision check needed","warn",`This device is at revision ${localRev}, but cloud reports ${remoteRev}. Nothing was overwritten.`);
+  return status;
 }
 async function cloudBootstrap(){
-  if(!cloudSyncEnabled() || !cloudSyncToken())return;
-  const status=await cloudStatusCheck();
-  if(status && !status.hasCloudState){
-    try{await cloudPushState(false,"first backup")}catch(e){}
-  }
+  if(!cloudSyncEnabled() || !cloudSyncToken()){cloudBootstrapFinished=true;return}
+  try{await cloudReconcile("startup")}catch(e){}
+  cloudBootstrapFinished=true;
+  cloudPendingBeforeBootstrap=false;
 }
 
 function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
@@ -5591,7 +5672,7 @@ function openSettings(){
   if(cloudSyncTokenInput)cloudSyncTokenInput.value=cloudSyncToken();
   if(cloudSyncEnabledInput)cloudSyncEnabledInput.checked=cloudSyncEnabled();
   if(cloudSyncEnabled()&&cloudSyncToken())cloudStatusCheck();
-  else setCloudStatus("Not configured","","Create the D1 database and Worker secret first, then enable cloud backup here.");
+  else setCloudStatus("Not configured","","Create the D1 database and Worker secret first, then enable cloud sync here.");
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
   settingsModal.classList.add("show");
 }
@@ -5644,8 +5725,16 @@ if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
     const token=String(cloudSyncTokenInput?.value||"").trim();
     if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);
     localStorage.setItem(CLOUD_SYNC_ENABLED_KEY,cloudSyncEnabledInput?.checked?"1":"0");
-    await cloudPushState(true,"manual backup");
-  }catch(e){alert(`Cloud backup failed: ${String(e?.message||e)}`)}
+    const status=await cloudStatusCheck({quiet:true});
+    const remoteRev=Math.max(0,Number(status?.revision||0)||0);
+    const localRev=cloudRevision();
+    let force=false;
+    if(status?.hasCloudState && remoteRev>localRev){
+      force=confirm(`Cloud revision ${remoteRev} is newer than this device (${localRev}).\n\nSync This Device will replace the newer cloud copy with this device. Continue?`);
+      if(!force)return;
+    }
+    await cloudPushState(force,"manual");
+  }catch(e){alert(`Cloud sync failed: ${String(e?.message||e)}`)}
 };
 if(cloudRestoreBtn)cloudRestoreBtn.onclick=async()=>{
   try{
@@ -7633,9 +7722,20 @@ renderTransactions();
 renderStats();
 if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
 setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&marketApiBase)refreshLiveData(true)});
-setTimeout(()=>cloudBootstrap(),1400);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")cloudScheduleSync()});
+setInterval(()=>{
+  if(document.visibilityState==="visible"&&cloudSyncEnabled()&&cloudSyncToken()&&!cloudSyncInFlight&&!cloudPullInFlight)cloudReconcile("poll").catch(()=>{});
+},60000);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    if(marketApiBase)refreshLiveData(true);
+    if(cloudSyncEnabled()&&cloudSyncToken()&&Date.now()-cloudLastRemoteCheckAt>10000)cloudReconcile("resume").catch(()=>{});
+  }else if(cloudSyncEnabled()&&cloudSyncToken()&&cloudDirty()&&!cloudSyncInFlight){
+    clearTimeout(cloudSyncTimer);
+    cloudPushState(false,"auto").catch(()=>{});
+  }
+});
+window.addEventListener("online",()=>{if(cloudSyncEnabled()&&cloudSyncToken())cloudReconcile("online").catch(()=>{})});
+setTimeout(()=>cloudBootstrap(),800);
 
 /* v1.8 iOS zoom lock */
 (function () {

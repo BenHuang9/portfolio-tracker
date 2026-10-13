@@ -11,3 +11,7 @@ database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
 
 # Never put PORTFOLIO_SYNC_TOKEN here as plaintext.
 # Use: wrangler secret put PORTFOLIO_SYNC_TOKEN
+
+# Daily net worth snapshot after North American market close (00:15 UTC).
+[triggers]
+crons = ["15 0 * * *"]

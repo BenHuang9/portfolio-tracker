@@ -1,90 +1,65 @@
-# V5.19 Cloud Foundation — setup
+# V5.20 Cloud First — deployment
 
-V5.19 is intentionally conservative: **localStorage remains intact and remains usable even if cloud sync is offline**. Cloud sync only starts after you explicitly configure it.
+V5.20 keeps the existing Cloudflare D1 database and turns the cloud copy into the primary synced state. localStorage remains as an offline cache, so the app still opens if the Worker is temporarily unavailable.
 
-## 1. Create the D1 database
+## Already completed from V5.19
 
-In Cloudflare Dashboard:
+- D1 database: `portfolio-tracker`
+- D1 binding name: `DB`
+- Worker secret: `PORTFOLIO_SYNC_TOKEN`
+- Existing schema tables
 
-1. Open **Workers & Pages → D1 SQL Database**.
-2. Create a database, for example `portfolio-tracker`.
-3. Open its SQL Console and run the entire `schema.sql` file included in this ZIP.
+You do **not** need to recreate the database or rerun `schema.sql` if V5.19 is already working.
 
-## 2. Bind D1 to your existing Worker
+## Deploy V5.20
 
-Open the existing Worker used by the app (`portfolio-market-data...workers.dev`).
+1. Replace the Worker code with `market-worker.js` and deploy.
+2. Replace GitHub Pages `index.html` and `sw.js`.
+3. Keep the existing D1 binding and secret unchanged.
+4. In Cloudflare Worker **Settings → Trigger events → Cron Triggers**, add:
 
-Under **Settings → Bindings**, add a D1 database binding:
+```text
+15 0 * * *
+```
 
-- Variable name: `DB`
-- Database: the D1 database you just created
+This runs at 00:15 UTC, which is after the North American market close in Vancouver year-round.
 
-The variable name must be exactly `DB`.
+## Verify the Worker
 
-## 3. Add a private sync token
+Open:
 
-Under the Worker's **Settings → Variables and Secrets**, add a **Secret**:
+```text
+https://portfolio-market-data.benhuang011.workers.dev/health?v=520
+```
 
-- Name: `PORTFOLIO_SYNC_TOKEN`
-- Value: a long random private token (at least 32 random characters)
+Expected fields include:
 
-Do not put this token directly into `market-worker.js` or GitHub.
+```json
+{
+  "cloudDatabaseConfigured": true,
+  "cloudSyncSecretConfigured": true,
+  "cloudMode": "v5.20 cloud-first",
+  "dailyNetWorthSnapshotSupport": true
+}
+```
 
-## 4. Deploy the V5.19 Worker
+## What changes in V5.20
 
-Replace the current Worker code with the included `market-worker.js`, then Deploy.
+- On startup/resume, the app checks the cloud revision.
+- If cloud is newer and this device has no unsynced local edits, the latest cloud state is pulled automatically.
+- Local edits are debounced and pushed automatically.
+- Revision conflicts stop overwrites instead of silently choosing a side.
+- Every cloud push also refreshes the normalized D1 tables for accounts, transactions, investment accounts, lots, and net-worth history.
+- The scheduled Worker calculates a daily Net Worth snapshot from current Yahoo prices, USD/CAD, CIBC NAV, investment cash, manual accounts, and debts, then writes it into both `net_worth_daily` and the canonical cloud state.
+- The next time a device opens the app, that server-generated history is pulled into the chart automatically.
 
-Check:
+## Optional manual daily-snapshot test
 
-- `/health` should show `cloudDatabaseConfigured: true`
-- `/health` should show `cloudSyncSecretConfigured: true`
+After V5.20 has synced once, you can POST to `/api/cloud/daily/refresh` with the same Bearer token. The app does not require this for normal use; the Cron Trigger does it automatically.
 
-## 5. Replace the front-end files
+## Safety
 
-On GitHub Pages replace:
-
-- `index.html`
-- `sw.js`
-
-No other front-end files are required.
-
-## 6. Make the first backup
-
-In the app:
-
-1. Open **Settings**.
-2. Under **Cloud Backup**, enter the same private sync token.
-3. Turn on **Automatic cloud backup**.
-4. Tap **Back Up This Device**.
-
-This first operation copies the current device state to D1. It does **not** delete local data.
-
-## Safety behavior
-
-- Existing localStorage is never deleted by cloud backup.
-- Automatic backup uses revision checking. A stale device cannot silently overwrite newer cloud data.
-- If the cloud has a newer revision, auto-sync stops with a conflict message instead of overwriting it.
-- **Back Up This Device** intentionally forces the current device to become the cloud copy.
-- **Restore from Cloud** requires confirmation and first stores an emergency local JSON copy in `portfolioLocalBeforeCloudRestoreV519`.
-- D1 also keeps one pre-overwrite backup per day in `portfolio_backups`.
-
-## What V5.19 syncs
-
-The lossless cloud state includes the important persistent data:
-
-- investment lots
-- Wealthsimple/Questrade cash and net-deposit settings
-- manual Cash/Chequing/Savings/Credit Card accounts
-- transactions
-- Net Worth history
-- one-time migration/import flags needed to prevent duplicate historical imports
-
-Market quote caches and CIBC NAV caches are intentionally not synced; they can be rebuilt from the Worker.
-
-## What comes next
-
-The schema already includes normalized tables (`accounts`, `transactions`, `investment_accounts`, `investment_lots`, `net_worth_daily`). V5.19 does not switch the app to those tables yet. The safe sequence is:
-
-1. Back up the exact current state to `portfolio_state`.
-2. Verify D1 and restore on a second device.
-3. Then migrate each feature to normalized cloud tables without risking the original data.
+- Existing D1 state is not deleted.
+- Existing localStorage is not deleted.
+- Before a manual restore, the device keeps an emergency local copy.
+- A newer remote revision cannot be overwritten automatically by an older device.

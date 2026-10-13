@@ -1,4 +1,5 @@
 // Cloudflare Worker for the personal Portfolio Tracker.
+// v5.20 Cloud First: D1 primary sync + scheduled daily net worth snapshots.
 // Yahoo Finance: prices/history/search.
 // Dividend provider priority:
 //   1) Official fund issuer pages for supported Harvest / Purpose ETFs
@@ -625,6 +626,8 @@ async function fetchCibcMutualFundPrice(ticker){
 
 
 const CLOUD_MAX_BODY_BYTES=1800000;
+const CLOUD_USER_ID="primary";
+const CLOUD_NET_WORTH_HISTORY_KEY="netWorthHistoryV58";
 function privateJson(body,status=200,origin=""){
   return new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json;charset=UTF-8","Cache-Control":"no-store",...cors(origin)}});
 }
@@ -635,7 +638,176 @@ function cloudAuthorized(request,env){
   return header===`Bearer ${configured}`;
 }
 async function cloudStateRow(env){
-  return await env.DB.prepare("SELECT revision, payload_json, device_id, local_updated_at, updated_at FROM portfolio_state WHERE user_id = ?").bind("primary").first();
+  return await env.DB.prepare("SELECT revision, payload_json, device_id, local_updated_at, updated_at FROM portfolio_state WHERE user_id = ?").bind(CLOUD_USER_ID).first();
+}
+function safeJsonParse(raw,fallback=null){try{return JSON.parse(String(raw??""))}catch(e){return fallback}}
+function cloudLocalDate(date=new Date(),timeZone="America/Vancouver"){
+  try{
+    const parts=new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
+    const m=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+    if(m.year&&m.month&&m.day)return `${m.year}-${m.month}-${m.day}`;
+  }catch(e){}
+  return date.toISOString().slice(0,10);
+}
+function cloudModelFromPayload(payload){
+  return payload?.cloudModel && typeof payload.cloudModel==="object" ? payload.cloudModel : null;
+}
+async function yahooLatestQuote(symbol){
+  const u=new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
+  u.searchParams.set("range","5d");u.searchParams.set("interval","1d");u.searchParams.set("includeAdjustedClose","false");
+  const r=await fetch(u.toString(),{headers:{"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/2.0)","Accept":"application/json"},cf:{cacheTtl:120,cacheEverything:true}});
+  if(!r.ok)throw new Error(`Yahoo quote ${symbol} ${r.status}`);
+  const raw=await r.json();
+  const result=raw?.chart?.result?.[0];
+  if(!result)throw new Error(raw?.chart?.error?.description||`Yahoo quote unavailable for ${symbol}`);
+  const meta=result.meta||{};
+  const closes=result.indicators?.quote?.[0]?.close||[];
+  const last=[...closes].reverse().find(v=>Number.isFinite(Number(v)));
+  const price=Number(meta.regularMarketPrice ?? last ?? 0);
+  if(!(price>0))throw new Error(`No price for ${symbol}`);
+  return {symbol:String(meta.symbol||symbol),price,currency:String(meta.currency||((/\.(TO|NE|V)$/i.test(symbol))?"CAD":"USD"))};
+}
+async function runStatements(env,statements,chunkSize=70){
+  for(let i=0;i<statements.length;i+=chunkSize){await env.DB.batch(statements.slice(i,i+chunkSize));}
+}
+function transactionCreatedAtIso(v){
+  const n=Number(v||0);if(n>0){try{return new Date(n).toISOString()}catch(e){}}
+  return null;
+}
+async function syncStructuredTablesFromPayload(env,payload,now){
+  const model=cloudModelFromPayload(payload);
+  const storage=payload?.storage||{};
+  if(!model)return;
+
+  const statements=[];
+  statements.push(env.DB.prepare("DELETE FROM accounts WHERE user_id = ?").bind(CLOUD_USER_ID));
+  for(const a of (Array.isArray(model.manualAccounts)?model.manualAccounts:[])){
+    if(!a?.id)continue;
+    statements.push(env.DB.prepare(`INSERT INTO accounts (id,user_id,name,account_type,currency,balance,updated_at) VALUES (?,?,?,?,?,?,?)`)
+      .bind(String(a.id),CLOUD_USER_ID,String(a.name||"Account"),String(a.category||a.type||"asset"),String(a.currency||"CAD"),Math.abs(Number(a.balance)||0),now));
+  }
+
+  statements.push(env.DB.prepare("DELETE FROM investment_accounts WHERE user_id = ?").bind(CLOUD_USER_ID));
+  for(const a of (Array.isArray(model.investmentAccounts)?model.investmentAccounts:[])){
+    if(!a?.id)continue;
+    statements.push(env.DB.prepare(`INSERT INTO investment_accounts (id,user_id,name,cash_cad,net_deposits_cad,updated_at) VALUES (?,?,?,?,?,?)`)
+      .bind(String(a.id),CLOUD_USER_ID,String(a.name||a.id),Number(a.cashCAD)||0,Number(a.netDepositsCAD)||0,now));
+  }
+
+  statements.push(env.DB.prepare("DELETE FROM investment_lots WHERE user_id = ?").bind(CLOUD_USER_ID));
+  for(const l of (Array.isArray(model.lots)?model.lots:[])){
+    if(!l?.ticker||!l?.date||!(Number(l.shares)!==0))continue;
+    statements.push(env.DB.prepare(`INSERT INTO investment_lots (user_id,account_id,ticker,trade_date,shares,cost_per_share,opening_position,source,created_at) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .bind(CLOUD_USER_ID,String(l.accountId||"wealthsimple_tfsa"),String(l.ticker).toUpperCase(),String(l.date),Number(l.shares)||0,Number(l.cost)||0,l.openingPosition?1:0,String(l.source||""),now));
+  }
+
+  const txRows=safeJsonParse(storage.personalLedgerTransactionsV513,[]);
+  statements.push(env.DB.prepare("DELETE FROM transactions WHERE user_id = ?").bind(CLOUD_USER_ID));
+  for(const t of (Array.isArray(txRows)?txRows:[])){
+    if(!t?.id||!t?.date||!(Math.abs(Number(t.amount)||0)>0))continue;
+    statements.push(env.DB.prepare(`INSERT INTO transactions (id,user_id,transaction_date,transaction_type,category,note,amount,currency,account_id,from_account_id,to_account_id,affects_balance,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(String(t.id),CLOUD_USER_ID,String(t.date),String(t.type||"expense"),String(t.category||""),String(t.note||""),Math.abs(Number(t.amount)||0),String(t.currency||"CAD"),String(t.accountId||""),String(t.fromAccountId||""),String(t.toAccountId||""),t.affectsBalance===false?0:1,String(t.source||"manual"),transactionCreatedAtIso(t.createdAt),now));
+  }
+
+  const history=safeJsonParse(storage[CLOUD_NET_WORTH_HISTORY_KEY],[]);
+  for(const h of (Array.isArray(history)?history:[])){
+    const date=String(h?.date||"");const value=Number(h?.value);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value))continue;
+    statements.push(env.DB.prepare(`INSERT INTO net_worth_daily (user_id,snapshot_date,net_worth,net_asset_base,investment_growth,debts,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id,snapshot_date) DO UPDATE SET net_worth=excluded.net_worth,net_asset_base=excluded.net_asset_base,investment_growth=excluded.investment_growth,debts=excluded.debts,updated_at=excluded.updated_at`)
+      .bind(CLOUD_USER_ID,date,value,Number.isFinite(Number(h.base))?Number(h.base):null,Number.isFinite(Number(h.growth))?Number(h.growth):null,Number.isFinite(Number(h.liabilities))?Number(h.liabilities):null,now,now));
+  }
+  await runStatements(env,statements);
+}
+async function computeDailySnapshotFromPayload(payload){
+  const model=cloudModelFromPayload(payload);
+  if(!model)throw new Error("Cloud state is from V5.19 and does not contain the V5.20 cloud model yet");
+  const timezone=String(model.timezone||"America/Vancouver");
+  const fxQuote=await yahooLatestQuote("CAD=X");
+  const fx=Number(fxQuote.price)||1;
+
+  const lotMap=new Map();
+  for(const l of (Array.isArray(model.lots)?model.lots:[])){
+    const ticker=String(l?.ticker||"").toUpperCase();if(!ticker)continue;
+    lotMap.set(ticker,(lotMap.get(ticker)||0)+(Number(l.shares)||0));
+  }
+  const tickers=[...lotMap.entries()].filter(([,shares])=>Math.abs(shares)>1e-9).map(([ticker])=>ticker);
+  const settled=await Promise.allSettled(tickers.map(t=>yahooLatestQuote(t)));
+  const quotes=new Map();
+  settled.forEach((r,i)=>{if(r.status==="fulfilled")quotes.set(tickers[i],r.value)});
+  const missing=tickers.filter(t=>!quotes.has(t));
+  if(missing.length)throw new Error(`Missing market prices: ${missing.join(", ")}`);
+
+  let listedMarketValue=0;
+  for(const [ticker,shares] of lotMap.entries()){
+    if(Math.abs(shares)<=1e-9)continue;
+    const q=quotes.get(ticker);if(!q)continue;
+    listedMarketValue+=shares*q.price*(String(q.currency).toUpperCase()==="USD"?fx:1);
+  }
+
+  let cibcMarketValue=0;
+  const cibcFunds=Array.isArray(model.cibcFunds)?model.cibcFunds:[];
+  if(cibcFunds.length){
+    const navResults=await Promise.allSettled(cibcFunds.map(f=>fetchCibcMutualFundPrice(String(f.ticker||"").toUpperCase())));
+    navResults.forEach((r,i)=>{
+      const units=Number(cibcFunds[i]?.units)||0;
+      if(r.status==="fulfilled" && Number(r.value?.price)>0)cibcMarketValue+=units*Number(r.value.price);
+      else cibcMarketValue+=units*(Number(cibcFunds[i]?.lastPrice)||0);
+    });
+  }
+
+  const invAccounts=Array.isArray(model.investmentAccounts)?model.investmentAccounts:[];
+  const investmentCash=invAccounts.reduce((sum,a)=>sum+(Number(a?.cashCAD)||0),0);
+  const investmentBasis=invAccounts.reduce((sum,a)=>sum+(Number(a?.netDepositsCAD)||0),0);
+  const investmentValue=listedMarketValue+cibcMarketValue+investmentCash;
+
+  let manualAssets=0,debts=0;
+  for(const a of (Array.isArray(model.manualAccounts)?model.manualAccounts:[])){
+    const cad=Math.abs(Number(a?.balance)||0)*(String(a?.currency||"CAD").toUpperCase()==="USD"?fx:1);
+    if(String(a?.type||"asset")==="liability")debts+=cad;else manualAssets+=cad;
+  }
+  const netAssetBase=manualAssets+investmentBasis;
+  const investmentGrowth=investmentValue-investmentBasis;
+  const netWorth=investmentValue+manualAssets-debts;
+  return {date:cloudLocalDate(new Date(),timezone),netWorth,netAssetBase,investmentGrowth,debts,investmentValue,manualAssets,investmentBasis,fx};
+}
+function mergeSnapshotIntoPayload(payload,snapshot,now){
+  const storage=payload.storage && typeof payload.storage==="object" ? payload.storage : (payload.storage={});
+  let history=safeJsonParse(storage[CLOUD_NET_WORTH_HISTORY_KEY],[]);
+  if(!Array.isArray(history))history=[];
+  const row={date:snapshot.date,value:snapshot.netWorth,base:snapshot.netAssetBase,growth:snapshot.investmentGrowth,liabilities:snapshot.debts};
+  const ix=history.findIndex(x=>String(x?.date||"")===snapshot.date);
+  if(ix>=0)history[ix]=row;else history.push(row);
+  history=history.filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x?.date||""))&&Number.isFinite(Number(x?.value))).sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(-730);
+  storage[CLOUD_NET_WORTH_HISTORY_KEY]=JSON.stringify(history);
+  if(payload.cloudModel && typeof payload.cloudModel==="object")payload.cloudModel.currentSnapshot={date:snapshot.date,netWorth:snapshot.netWorth,netAssetBase:snapshot.netAssetBase,investmentGrowth:snapshot.investmentGrowth,debts:snapshot.debts};
+  payload.serverSnapshotAt=now;
+  return payload;
+}
+async function updateDailyNetWorthFromCloud(env){
+  if(!env.DB)return {ok:false,reason:"no-db"};
+  const current=await cloudStateRow(env);
+  if(!current?.payload_json)return {ok:false,reason:"no-cloud-state"};
+  const payload=safeJsonParse(current.payload_json,null);
+  if(!payload)return {ok:false,reason:"invalid-cloud-state"};
+  const snapshot=await computeDailySnapshotFromPayload(payload);
+  const now=new Date().toISOString();
+  const nextPayload=mergeSnapshotIntoPayload(payload,snapshot,now);
+  const nextJson=JSON.stringify(nextPayload);
+  const currentRevision=Number(current.revision||0);
+  const nextRevision=currentRevision+1;
+  const result=await env.DB.prepare(`UPDATE portfolio_state SET revision=?,payload_json=?,device_id=?,updated_at=? WHERE user_id=? AND revision=?`)
+    .bind(nextRevision,nextJson,"server-daily",now,CLOUD_USER_ID,currentRevision).run();
+  if(Number(result?.meta?.changes||0)!==1)return {ok:false,reason:"revision-race"};
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO portfolio_backups (user_id,backup_date,revision,payload_json,created_at) VALUES (?,?,?,?,?)
+      ON CONFLICT(user_id,backup_date) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,created_at=excluded.created_at`)
+      .bind(CLOUD_USER_ID,snapshot.date,currentRevision,current.payload_json,now),
+    env.DB.prepare(`INSERT INTO net_worth_daily (user_id,snapshot_date,net_worth,net_asset_base,investment_growth,debts,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id,snapshot_date) DO UPDATE SET net_worth=excluded.net_worth,net_asset_base=excluded.net_asset_base,investment_growth=excluded.investment_growth,debts=excluded.debts,updated_at=excluded.updated_at`)
+      .bind(CLOUD_USER_ID,snapshot.date,snapshot.netWorth,snapshot.netAssetBase,snapshot.investmentGrowth,snapshot.debts,now,now)
+  ]);
+  return {ok:true,revision:nextRevision,snapshot};
 }
 async function handleCloudRequest(request,env,origin,url){
   if(!env.DB)return privateJson({error:"D1 binding DB is not configured"},503,origin);
@@ -644,14 +816,16 @@ async function handleCloudRequest(request,env,origin,url){
 
   if(url.pathname==="/api/cloud/status" && request.method==="GET"){
     const row=await cloudStateRow(env);
-    return privateJson({ok:true,configured:true,hasCloudState:Boolean(row),revision:Number(row?.revision||0),updatedAt:row?.updated_at||null,deviceId:row?.device_id||null},200,origin);
+    const stateMeta=row?.payload_json?safeJsonParse(row.payload_json,{}):{};
+    const daily=await env.DB.prepare("SELECT snapshot_date,net_worth,updated_at FROM net_worth_daily WHERE user_id=? ORDER BY snapshot_date DESC LIMIT 1").bind(CLOUD_USER_ID).first();
+    return privateJson({ok:true,configured:true,mode:"cloud-first",hasCloudState:Boolean(row),revision:Number(row?.revision||0),updatedAt:row?.updated_at||null,deviceId:row?.device_id||null,schemaVersion:Number(stateMeta?.schemaVersion||0),appVersion:String(stateMeta?.appVersion||""),lastDailySnapshot:daily||null},200,origin);
   }
 
   if(url.pathname==="/api/cloud/state" && request.method==="GET"){
     const row=await cloudStateRow(env);
-    if(!row)return privateJson({error:"No cloud backup exists yet"},404,origin);
-    let payload=null;
-    try{payload=JSON.parse(row.payload_json)}catch(e){return privateJson({error:"Stored cloud backup is unreadable"},500,origin)}
+    if(!row)return privateJson({error:"No cloud data exists yet"},404,origin);
+    const payload=safeJsonParse(row.payload_json,null);
+    if(!payload)return privateJson({error:"Stored cloud data is unreadable"},500,origin);
     return privateJson({revision:Number(row.revision||0),updatedAt:row.updated_at,deviceId:row.device_id||null,localUpdatedAt:row.local_updated_at||null,payload},200,origin);
   }
 
@@ -660,8 +834,8 @@ async function handleCloudRequest(request,env,origin,url){
     if(announced>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
     const raw=await request.text();
     if(raw.length>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
-    let body;
-    try{body=JSON.parse(raw)}catch(e){return privateJson({error:"Invalid JSON"},400,origin)}
+    const body=safeJsonParse(raw,null);
+    if(!body)return privateJson({error:"Invalid JSON"},400,origin);
     if(!body?.payload || typeof body.payload!=="object")return privateJson({error:"payload object is required"},400,origin);
     const payloadJson=JSON.stringify(body.payload);
     if(payloadJson.length>CLOUD_MAX_BODY_BYTES)return privateJson({error:"Cloud payload is too large"},413,origin);
@@ -675,28 +849,50 @@ async function handleCloudRequest(request,env,origin,url){
     }
 
     const now=new Date().toISOString();
-    const day=now.slice(0,10);
+    const model=cloudModelFromPayload(body.payload);
+    const day=cloudLocalDate(new Date(),String(model?.timezone||"America/Vancouver"));
     const nextRevision=currentRevision+1;
     const deviceId=String(body.deviceId||"").slice(0,160);
     const localUpdatedAt=String(body?.payload?.exportedAt||body.localUpdatedAt||"").slice(0,64);
-    const statements=[];
-    if(current?.payload_json){
-      statements.push(env.DB.prepare(`INSERT INTO portfolio_backups (user_id, backup_date, revision, payload_json, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, backup_date) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,created_at=excluded.created_at`)
-        .bind("primary",day,currentRevision,current.payload_json,now));
+
+    if(current){
+      let writeResult;
+      if(force){
+        writeResult=await env.DB.prepare(`UPDATE portfolio_state SET revision=?,payload_json=?,device_id=?,local_updated_at=?,updated_at=? WHERE user_id=?`)
+          .bind(nextRevision,payloadJson,deviceId,localUpdatedAt,now,CLOUD_USER_ID).run();
+      }else{
+        writeResult=await env.DB.prepare(`UPDATE portfolio_state SET revision=?,payload_json=?,device_id=?,local_updated_at=?,updated_at=? WHERE user_id=? AND revision=?`)
+          .bind(nextRevision,payloadJson,deviceId,localUpdatedAt,now,CLOUD_USER_ID,currentRevision).run();
+      }
+      if(Number(writeResult?.meta?.changes||0)!==1){
+        const latest=await cloudStateRow(env);
+        return privateJson({error:"Cloud state changed on another device",conflict:true,cloudRevision:Number(latest?.revision||0),updatedAt:latest?.updated_at||null},409,origin);
+      }
+      await env.DB.prepare(`INSERT INTO portfolio_backups (user_id,backup_date,revision,payload_json,created_at) VALUES (?,?,?,?,?)
+        ON CONFLICT(user_id,backup_date) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,created_at=excluded.created_at`)
+        .bind(CLOUD_USER_ID,day,currentRevision,current.payload_json,now).run();
+    }else{
+      await env.DB.prepare(`INSERT INTO portfolio_state (user_id,revision,payload_json,device_id,local_updated_at,updated_at) VALUES (?,?,?,?,?,?)`)
+        .bind(CLOUD_USER_ID,nextRevision,payloadJson,deviceId,localUpdatedAt,now).run();
     }
-    statements.push(env.DB.prepare(`INSERT INTO portfolio_state (user_id, revision, payload_json, device_id, local_updated_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET revision=excluded.revision,payload_json=excluded.payload_json,device_id=excluded.device_id,local_updated_at=excluded.local_updated_at,updated_at=excluded.updated_at`)
-      .bind("primary",nextRevision,payloadJson,deviceId,localUpdatedAt,now));
-    await env.DB.batch(statements);
-    return privateJson({ok:true,revision:nextRevision,updatedAt:now},200,origin);
+
+    let structuredSyncWarning="";
+    try{await syncStructuredTablesFromPayload(env,body.payload,now)}catch(e){structuredSyncWarning=String(e?.message||e).slice(0,240);console.warn("Structured D1 sync failed",structuredSyncWarning)}
+    return privateJson({ok:true,revision:nextRevision,updatedAt:now,structuredSyncWarning:structuredSyncWarning||undefined},200,origin);
   }
 
   if(url.pathname==="/api/cloud/backups" && request.method==="GET"){
-    const result=await env.DB.prepare("SELECT backup_date, revision, created_at FROM portfolio_backups WHERE user_id = ? ORDER BY backup_date DESC LIMIT 30").bind("primary").all();
+    const result=await env.DB.prepare("SELECT backup_date, revision, created_at FROM portfolio_backups WHERE user_id = ? ORDER BY backup_date DESC LIMIT 30").bind(CLOUD_USER_ID).all();
     return privateJson({backups:result?.results||[]},200,origin);
+  }
+
+  if(url.pathname==="/api/cloud/daily" && request.method==="GET"){
+    const result=await env.DB.prepare("SELECT snapshot_date,net_worth,net_asset_base,investment_growth,debts,updated_at FROM net_worth_daily WHERE user_id=? ORDER BY snapshot_date DESC LIMIT 90").bind(CLOUD_USER_ID).all();
+    return privateJson({snapshots:result?.results||[]},200,origin);
+  }
+
+  if(url.pathname==="/api/cloud/daily/refresh" && request.method==="POST"){
+    try{return privateJson(await updateDailyNetWorthFromCloud(env),200,origin)}catch(e){return privateJson({error:String(e?.message||e)},500,origin)}
   }
 
   return privateJson({error:"Unsupported cloud sync operation"},404,origin);
@@ -720,6 +916,9 @@ export default {
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
         cloudDatabaseConfigured:Boolean(env.DB),
         cloudSyncSecretConfigured:Boolean(env.PORTFOLIO_SYNC_TOKEN),
+        cloudMode:"v5.20 cloud-first",
+        dailyNetWorthSnapshotSupport:true,
+        recommendedCron:"15 0 * * *",
         dividendCache:"v5.2 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }
@@ -903,5 +1102,15 @@ export default {
     }catch(e){
       return json({error:String(e?.message||e)},502,origin);
     }
+  },
+  async scheduled(event,env,ctx){
+    ctx.waitUntil((async()=>{
+      try{
+        const result=await updateDailyNetWorthFromCloud(env);
+        console.log("Daily net worth snapshot",JSON.stringify(result));
+      }catch(e){
+        console.error("Daily net worth snapshot failed",String(e?.message||e));
+      }
+    })());
   }
 };

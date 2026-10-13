@@ -1,4 +1,4 @@
--- V5.19 Cloud Foundation for Portfolio Tracker
+-- V5.20 Cloud First for Portfolio Tracker
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 INSERT OR IGNORE INTO users (id, label) VALUES ('primary', 'Primary');
 
--- Lossless copy of the app's local state. V5.19 uses this table for safe dual-write/migration.
+-- Lossless canonical cloud copy of the app state. V5.20 treats this as the primary synced state.
 CREATE TABLE IF NOT EXISTS portfolio_state (
   user_id TEXT PRIMARY KEY,
   revision INTEGER NOT NULL DEFAULT 0,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS portfolio_backups (
 );
 CREATE INDEX IF NOT EXISTS idx_portfolio_backups_user_date ON portfolio_backups(user_id, backup_date DESC);
 
--- Normalized tables reserved for the next cloud-native phase. V5.19 does not delete localStorage or depend on these tables yet.
+-- Normalized query tables maintained from the canonical cloud state. localStorage remains an offline cache.
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
