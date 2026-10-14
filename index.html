@@ -5025,44 +5025,61 @@ async function loadPortfolioHistory(label){
     return;
   }
 
-  // CIBC Class A mutual funds publish at most one NAV per business day.
-  // Plot only observed dated NAV points; never fabricate intraday/historical values.
+  // CIBC mutual funds have daily NAV observations, not intraday quotes.
+  // NEVER stretch two observed NAVs into a misleading continuous 1M/ALL chart.
   if(accountId==="cibc_mutual_fund"){
     if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    const fundDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
-    const latestDate=fundDates.at(-1);
-    const cutoffDays={"1W":7,"1M":31,"3M":93,"6M":186,"YTD":366,"1Y":366};
-    let rangeDates=fundDates;
-    if(requestedRange==="1D"){
-      rangeDates=fundDates.slice(-2); // Only the last two published NAV dates, not intraday prices.
-    }else if(requestedRange==="YTD"){
-      rangeDates=fundDates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
-    }else if(cutoffDays[requestedRange] && latestDate){
-      const minDate=new Date(latestDate+"T12:00:00Z");
-      minDate.setUTCDate(minDate.getUTCDate()-cutoffDays[requestedRange]);
-      const cut=minDate.toISOString().slice(0,10);
-      rangeDates=fundDates.filter(d=>d>=cut);
+    const allDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
+    const cutoffDays={"1W":7,"1M":31,"3M":93,"6M":186,"1Y":366};
+    const last=allDates.at(-1);
+    let dates=allDates;
+    if(requestedRange==="1D") dates=allDates.slice(-2);
+    else if(requestedRange==="YTD") dates=allDates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
+    else if(cutoffDays[requestedRange]&&last){
+      const dt=new Date(last+"T12:00:00Z");dt.setUTCDate(dt.getUTCDate()-cutoffDays[requestedRange]);
+      dates=allDates.filter(d=>d>=dt.toISOString().slice(0,10));
     }
-    const data=rangeDates.map(d=>{
+    // A dated portfolio point requires a genuine NAV for all three funds on the SAME date.
+    const observed=dates.map(d=>{
       let value=0;
       for(const f of CIBC_MUTUAL_FUNDS){
         const row=(cibcNavHistory[f.ticker]||[]).find(x=>x.date===d);
-        // Do not carry forward unknown NAVs into a purported complete daily valuation.
-        if(!row)return null;
+        if(!row || !(Number(row.price)>0))return null;
         value+=Number(row.price)*Number(f.units);
       }
-      return {time:Date.parse(d+"T12:00:00Z")/1000,value};
+      return {date:d,time:Date.parse(d+"T12:00:00Z")/1000,value};
     }).filter(Boolean);
-    if(data.length<2){
-      renderTrackingPlaceholder(accountId,requestedRange,
-        "CIBC NAV chart is collecting published daily prices. Not enough dates in this period yet; older NAV history is not available from the current free source.");
+    const human=d=>new Date(d+"T12:00:00Z").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"});
+    const start=observed[0],end=observed.at(-1);
+    const latest=last?human(last):"unknown";
+    if(requestedRange==="ALL"){
+      const summary=portfolioSummary(accountId);
+      portfolioGain.textContent=signedMoney(summary.total)+" all time";
+      portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+    }else if(observed.length>=2){
+      const change=end.value-start.value;
+      const labelText=requestedRange==="1D"?"last published NAV change":`since ${human(start.date)} (observed NAV)`;
+      portfolioGain.textContent=signedMoney(change)+" "+labelText;
+      portfolioGain.style.color=change>=0?"var(--green)":"var(--red)";
+    }else{
+      portfolioGain.textContent="— NAV history collecting";
+      portfolioGain.style.color="var(--muted)";
+    }
+    // 1D is a comparison of two closing NAVs, never an intraday chart.
+    // Require at least 5 fully observed dates before drawing a line; no fabricated trend.
+    if(requestedRange==="1D" || observed.length<5){
+      clearPortfolioChartInteraction();
+      const detail=observed.length>=2
+        ? `${human(start.date)}: ${fmt(start.value)} → ${human(end.date)}: ${fmt(end.value)}`
+        : observed.length===1?`Latest observed: ${human(end.date)} ${fmt(end.value)}`:`Last published NAV: ${latest}`;
+      lineChart.innerHTML=`<div class="emptyChart" style="line-height:1.65;padding:14px 22px">
+        <div style="font-weight:750;color:var(--text);margin-bottom:8px">${requestedRange==="1D"?"Daily NAV comparison":"Building actual NAV history"}</div>
+        <div>${detail}</div>
+        <div style="margin-top:10px;font-size:.88em">${observed.length} verified portfolio NAV date${observed.length===1?"":"s"} available${requestedRange==="1D"?". Mutual funds do not trade intraday.":" for this range. Chart will appear after 5 published NAV dates; earlier values are not invented."}</div>
+      </div>`;
       return;
     }
-    renderLineChart(data);
-    const valueChange=data.at(-1).value-data[0].value;
-    const label=requestedRange==="1D"?"last published NAV change":requestedRange==="ALL"?"since NAV tracking began":portfolioReturnPeriodLabel(requestedRange);
-    portfolioGain.textContent=signedMoney(valueChange)+" "+label;
-    portfolioGain.style.color=valueChange>=0?"var(--green)":"var(--red)";
+    renderLineChart(observed);
     return;
   }
 
