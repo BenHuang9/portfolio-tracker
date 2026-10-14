@@ -1087,14 +1087,24 @@ export default {
         date:dateKey(d.date), amount:Number(d.amount)||0
       })).filter(d=>d.amount>0).sort((a,b)=>a.date.localeCompare(b.date));
       const price=Number(meta.regularMarketPrice ?? history.at(-1)?.close ?? 0);
-      let previousClose=price;
-      if(history.length){
-        const marketDate=meta.regularMarketTime?dateKey(meta.regularMarketTime):null;
-        const last=history.at(-1);
-        const prior=history.at(-2);
-        if(marketDate && last?.date===marketDate && prior?.close>0) previousClose=Number(prior.close);
-        else if(last?.close>0) previousClose=Number(last.close);
-        else if(prior?.close>0) previousClose=Number(prior.close);
+
+      // IMPORTANT: previous close must not depend on the chart range/interval.
+      // The old fallback inferred it from the last two history candles. That is
+      // wrong for requests such as 5y/1wk (the app's background quote refresh),
+      // where the last history candle can equal the current weekly close and make
+      // today's return appear as $0. Yahoo's chart metadata exposes the previous
+      // regular-session close directly, so prefer that value.
+      let previousClose=Number(meta.chartPreviousClose ?? meta.previousClose ?? 0);
+      if(!(previousClose>0)){
+        previousClose=price;
+        if(history.length){
+          const marketDate=meta.regularMarketTime?dateKey(meta.regularMarketTime):null;
+          const last=history.at(-1);
+          const prior=history.at(-2);
+          if(marketDate && last?.date===marketDate && prior?.close>0) previousClose=Number(prior.close);
+          else if(last?.close>0) previousClose=Number(last.close);
+          else if(prior?.close>0) previousClose=Number(prior.close);
+        }
       }
       return json({
         symbol:meta.symbol||symbol,
