@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.20 Cloud First: D1 primary sync + automatic daily net worth snapshots -->
+<!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v5.17.7 Hotfix restore Home rendering -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
@@ -4080,7 +4080,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.20",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.20.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -4139,7 +4139,7 @@ function cloudScheduleSync(){
   if(!cloudBootstrapFinished){cloudPendingBeforeBootstrap=true;return}
   setCloudDirty(true);
   clearTimeout(cloudSyncTimer);
-  cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},700);
+  cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},2000);
 }
 function cloudApplyPayload(payload){
   if(!payload || typeof payload!=="object" || !payload.storage || typeof payload.storage!=="object")throw new Error("Cloud data format is invalid");
@@ -5853,7 +5853,7 @@ function loadNetWorthHistory(){
     return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }catch(e){return []}
 }
-function saveNetWorthHistory(){try{localStorage.setItem(NET_WORTH_HISTORY_KEY,JSON.stringify(netWorthHistory.slice(-730)));cloudScheduleSync()}catch(e){}}
+function saveNetWorthHistory(syncCloud=true){try{localStorage.setItem(NET_WORTH_HISTORY_KEY,JSON.stringify(netWorthHistory.slice(-730)));if(syncCloud)cloudScheduleSync()}catch(e){}}
 let manualAccounts=loadManualAccounts();
 // v5.11: replace an old exact-name manual placeholder with the real 3-fund CIBC account.
 // Keep a backup in localStorage before removing it, so the migration is reversible.
@@ -6787,7 +6787,9 @@ function recordNetWorthSnapshot(total){
   if(ix>=0)netWorthHistory[ix]=row;
   else netWorthHistory.push(row);
   netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).sort((a,b)=>a.date.localeCompare(b.date)).slice(-730);
-  saveNetWorthHistory();
+  // Market-price refreshes can update today's local chart point many times per day.
+  // Keep that local without creating a D1 write storm; user/account/transaction changes still sync normally.
+  saveNetWorthHistory(false);
 }
 
 function openNetWorthSnapshotModal(){

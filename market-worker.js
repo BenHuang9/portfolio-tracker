@@ -1,5 +1,5 @@
 // Cloudflare Worker for the personal Portfolio Tracker.
-// v5.20 Cloud First: D1 primary sync + scheduled daily net worth snapshots.
+// v5.20.1 D1 Write Hotfix: cloud-first sync + low-write daily structured refresh.
 // Yahoo Finance: prices/history/search.
 // Dividend provider priority:
 //   1) Official fund issuer pages for supported Harvest / Purpose ETFs
@@ -649,6 +649,13 @@ function cloudLocalDate(date=new Date(),timeZone="America/Vancouver"){
   }catch(e){}
   return date.toISOString().slice(0,10);
 }
+function previousDateKey(dateKey){
+  const m=String(dateKey||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m)return String(dateKey||"");
+  const d=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0));
+  d.setUTCDate(d.getUTCDate()-1);
+  return d.toISOString().slice(0,10);
+}
 function cloudModelFromPayload(payload){
   return payload?.cloudModel && typeof payload.cloudModel==="object" ? payload.cloudModel : null;
 }
@@ -719,7 +726,7 @@ async function syncStructuredTablesFromPayload(env,payload,now){
   }
   await runStatements(env,statements);
 }
-async function computeDailySnapshotFromPayload(payload){
+async function computeDailySnapshotFromPayload(payload,snapshotDate=null){
   const model=cloudModelFromPayload(payload);
   if(!model)throw new Error("Cloud state is from V5.19 and does not contain the V5.20 cloud model yet");
   const timezone=String(model.timezone||"America/Vancouver");
@@ -769,7 +776,7 @@ async function computeDailySnapshotFromPayload(payload){
   const netAssetBase=manualAssets+investmentBasis;
   const investmentGrowth=investmentValue-investmentBasis;
   const netWorth=investmentValue+manualAssets-debts;
-  return {date:cloudLocalDate(new Date(),timezone),netWorth,netAssetBase,investmentGrowth,debts,investmentValue,manualAssets,investmentBasis,fx};
+  return {date:snapshotDate||cloudLocalDate(new Date(),timezone),netWorth,netAssetBase,investmentGrowth,debts,investmentValue,manualAssets,investmentBasis,fx};
 }
 function mergeSnapshotIntoPayload(payload,snapshot,now){
   const storage=payload.storage && typeof payload.storage==="object" ? payload.storage : (payload.storage={});
@@ -790,7 +797,11 @@ async function updateDailyNetWorthFromCloud(env){
   if(!current?.payload_json)return {ok:false,reason:"no-cloud-state"};
   const payload=safeJsonParse(current.payload_json,null);
   if(!payload)return {ok:false,reason:"invalid-cloud-state"};
-  const snapshot=await computeDailySnapshotFromPayload(payload);
+  const model=cloudModelFromPayload(payload);
+  const timezone=String(model?.timezone||"America/Vancouver");
+  // The cron runs shortly after local midnight. Store the point as the day that just ended.
+  const snapshotDate=previousDateKey(cloudLocalDate(new Date(),timezone));
+  const snapshot=await computeDailySnapshotFromPayload(payload,snapshotDate);
   const now=new Date().toISOString();
   const nextPayload=mergeSnapshotIntoPayload(payload,snapshot,now);
   const nextJson=JSON.stringify(nextPayload);
@@ -876,9 +887,9 @@ async function handleCloudRequest(request,env,origin,url){
         .bind(CLOUD_USER_ID,nextRevision,payloadJson,deviceId,localUpdatedAt,now).run();
     }
 
-    let structuredSyncWarning="";
-    try{await syncStructuredTablesFromPayload(env,body.payload,now)}catch(e){structuredSyncWarning=String(e?.message||e).slice(0,240);console.warn("Structured D1 sync failed",structuredSyncWarning)}
-    return privateJson({ok:true,revision:nextRevision,updatedAt:now,structuredSyncWarning:structuredSyncWarning||undefined},200,origin);
+    // IMPORTANT: Do not rebuild hundreds of structured rows on every device sync.
+    // portfolio_state is the authoritative cloud copy; structured tables refresh once per day in scheduled().
+    return privateJson({ok:true,revision:nextRevision,updatedAt:now,structuredSync:"deferred-daily"},200,origin);
   }
 
   if(url.pathname==="/api/cloud/backups" && request.method==="GET"){
@@ -916,9 +927,9 @@ export default {
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
         cloudDatabaseConfigured:Boolean(env.DB),
         cloudSyncSecretConfigured:Boolean(env.PORTFOLIO_SYNC_TOKEN),
-        cloudMode:"v5.20 cloud-first",
+        cloudMode:"v5.20.1 cloud-first low-write",
         dailyNetWorthSnapshotSupport:true,
-        recommendedCron:"15 0 * * *",
+        recommendedCron:"15 8 * * *",
         dividendCache:"v5.2 official/exact responses cached; Yahoo fallback is not cached"
       },200,origin,30);
     }
@@ -1108,6 +1119,14 @@ export default {
       try{
         const result=await updateDailyNetWorthFromCloud(env);
         console.log("Daily net worth snapshot",JSON.stringify(result));
+        // Keep the normalized tables useful for inspection/reporting, but only once per day.
+        // This avoids the V5.20 write amplification that could exceed the D1 free-tier row-write limit.
+        const current=await cloudStateRow(env);
+        const payload=current?.payload_json?safeJsonParse(current.payload_json,null):null;
+        if(payload){
+          try{await syncStructuredTablesFromPayload(env,payload,new Date().toISOString())}
+          catch(e){console.warn("Daily structured D1 refresh failed",String(e?.message||e).slice(0,240))}
+        }
       }catch(e){
         console.error("Daily net worth snapshot failed",String(e?.message||e));
       }
