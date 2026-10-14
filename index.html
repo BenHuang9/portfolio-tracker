@@ -5073,6 +5073,7 @@ async function loadPortfolioHistory(label){
   const requestedRange=currentPortfolioRange;
 
   // Clear the old account immediately, before any account-specific calculation.
+  lineChart.style.height="";
   resetPortfolioChartUI(accountId,requestedRange);
 
   let scopeLots=[];
@@ -5093,61 +5094,57 @@ async function loadPortfolioHistory(label){
     return;
   }
 
-  // CIBC mutual funds have daily NAV observations, not intraday quotes.
-  // NEVER stretch two observed NAVs into a misleading continuous 1M/ALL chart.
+  // CIBC publishes one NAV per trading day. 1D shows the current account value
+  // without inventing an intraday gain or chart. All longer ranges chart only
+  // independently observed NAVs for all three holdings on matching dates.
   if(accountId==="cibc_mutual_fund"){
     if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    const allDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
-    const cutoffDays={"1W":7,"1M":31,"3M":93,"6M":186,"1Y":366};
-    const last=allDates.at(-1);
-    let dates=allDates;
-    if(requestedRange==="1D") dates=allDates.slice(-2);
-    else if(requestedRange==="YTD") dates=allDates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
-    else if(cutoffDays[requestedRange]&&last){
-      const dt=new Date(last+"T12:00:00Z");dt.setUTCDate(dt.getUTCDate()-cutoffDays[requestedRange]);
-      dates=allDates.filter(d=>d>=dt.toISOString().slice(0,10));
+    lineChart.style.height="";
+    const book=portfolioSummary(accountId);
+    if(requestedRange==="1D"){
+      clearPortfolioChartInteraction();
+      lineChart.innerHTML="";
+      lineChart.style.height="0px";
+      portfolioGain.textContent="Daily NAV";
+      portfolioGain.style.color="var(--muted)";
+      return;
     }
-    // A dated portfolio point requires a genuine NAV for all three funds on the SAME date.
+    const allDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
+    const windowDays={"1W":7,"1M":31,"3M":93,"6M":186,"1Y":366};
+    let dates=allDates;
+    if(requestedRange==="YTD") dates=dates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
+    else if(windowDays[requestedRange]){
+      const dt=new Date();dt.setUTCDate(dt.getUTCDate()-windowDays[requestedRange]);
+      const cutoff=dt.toISOString().slice(0,10);
+      dates=dates.filter(d=>d>=cutoff);
+    }
     const observed=dates.map(d=>{
       let value=0;
       for(const f of CIBC_MUTUAL_FUNDS){
         const row=(cibcNavHistory[f.ticker]||[]).find(x=>x.date===d);
-        if(!row || !(Number(row.price)>0))return null;
+        if(!row||!(Number(row.price)>0))return null;
         value+=Number(row.price)*Number(f.units);
       }
       return {date:d,time:Date.parse(d+"T12:00:00Z")/1000,value};
     }).filter(Boolean);
-    const human=d=>new Date(d+"T12:00:00Z").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"});
-    const start=observed[0],end=observed.at(-1);
-    const latest=last?human(last):"unknown";
     if(requestedRange==="ALL"){
-      const summary=portfolioSummary(accountId);
-      portfolioGain.textContent=signedMoney(summary.total)+" all time";
-      portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+      portfolioGain.textContent=signedMoney(book.total)+" all time";
+      portfolioGain.style.color=book.total<0?"var(--red)":"var(--green)";
     }else if(observed.length>=2){
-      const change=end.value-start.value;
-      const labelText=requestedRange==="1D"?"last published NAV change":`since ${human(start.date)} (observed NAV)`;
-      portfolioGain.textContent=signedMoney(change)+" "+labelText;
-      portfolioGain.style.color=change>=0?"var(--green)":"var(--red)";
+      const change=observed.at(-1).value-observed[0].value;
+      portfolioGain.textContent=signedMoney(change)+" "+portfolioReturnPeriodLabel(requestedRange);
+      portfolioGain.style.color=change<0?"var(--red)":"var(--green)";
     }else{
-      portfolioGain.textContent="— NAV history collecting";
+      portfolioGain.textContent="Daily NAV";
       portfolioGain.style.color="var(--muted)";
     }
-    // 1D is a comparison of two closing NAVs, never an intraday chart.
-    // Require at least 5 fully observed dates before drawing a line; no fabricated trend.
-    if(requestedRange==="1D" || observed.length<5){
+    if(observed.length>=2){
+      renderLineChart(observed,null,{discrete:true,showObservedDots:true,noArea:true});
+    }else{
       clearPortfolioChartInteraction();
-      const detail=observed.length>=2
-        ? `${human(start.date)}: ${fmt(start.value)} → ${human(end.date)}: ${fmt(end.value)}`
-        : observed.length===1?`Latest observed: ${human(end.date)} ${fmt(end.value)}`:`Last published NAV: ${latest}`;
-      lineChart.innerHTML=`<div class="emptyChart" style="line-height:1.65;padding:14px 22px">
-        <div style="font-weight:750;color:var(--text);margin-bottom:8px">${requestedRange==="1D"?"Daily NAV comparison":"Building actual NAV history"}</div>
-        <div>${detail}</div>
-        <div style="margin-top:10px;font-size:.88em">${observed.length} verified portfolio NAV date${observed.length===1?"":"s"} available${requestedRange==="1D"?". Mutual funds do not trade intraday.":" for this range. Chart will appear after 5 published NAV dates; earlier values are not invented."}</div>
-      </div>`;
-      return;
+      // A single NAV cannot form a historical line. Keep an uncluttered state.
+      lineChart.innerHTML=`<div class="emptyChart">${observed.length===1?"1 NAV record":"NAV history is still building"}</div>`;
     }
-    renderLineChart(observed);
     return;
   }
 
@@ -5482,7 +5479,7 @@ function renderHome(){
   bindHoldingRows();
   if(netWorthView?.classList.contains("active"))renderNetWorth();
 }
-function renderLineChart(data,total){
+function renderLineChart(data,total,options={}){
   const w=520,h=220,pad=8;
   if(!Array.isArray(data) || data.length<2){
     clearPortfolioChartInteraction();
@@ -5511,6 +5508,8 @@ function renderLineChart(data,total){
   }));
 
   const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const navColor=options.discrete&&cleanData.at(-1).value<cleanData[0].value?"#e15360":"#159447";
+  const observedDots=options.showObservedDots?pointXY.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#fff" stroke="${navColor}" stroke-width="3"/>`).join(""):"";
 
   clearPortfolioChartInteraction();
   lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
@@ -5520,8 +5519,9 @@ function renderLineChart(data,total){
         <stop offset="100%" stop-color="#159447" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    <path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>
-    <path d="${d}" fill="none" stroke="#159447" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${options.noArea?"":`<path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>`}
+    <path d="${d}" fill="none" stroke="${navColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${observedDots}
 
     <g id="chartCrosshair" style="display:none;pointer-events:none">
       <line id="chartVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
@@ -5573,6 +5573,17 @@ function renderLineChart(data,total){
     ratio=Math.max(0,Math.min(1,ratio));
 
     const floatIndex=ratio*(pointXY.length-1);
+    if(options.discrete){
+      const p=pointXY[Math.round(floatIndex)];
+      vLine.setAttribute("x1",p.x);vLine.setAttribute("x2",p.x);
+      hLine.setAttribute("y1",p.y);hLine.setAttribute("y2",p.y);
+      dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);
+      cross.style.display="";
+      chartScrubDate.textContent=new Date(p.time*1000).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"});
+      chartScrubValue.textContent=fmt(p.value);
+      chartScrubInfo.classList.add("show");
+      return;
+    }
     const i0=Math.floor(floatIndex);
     const i1=Math.min(pointXY.length-1,i0+1);
     const f=floatIndex-i0;
