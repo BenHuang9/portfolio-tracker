@@ -4226,6 +4226,43 @@ const CIBC_MUTUAL_FUNDS=[
   {ticker:"ATL525",name:"CIBC U.S. Equity Fund, Class A",units:201.869,bookValue:5194.48,marketValue:8362.74,displayPrice:41.43,priceDate:"2026-10-09",priceSource:"CIBC statement"}
 ];
 let cibcFundNavFetchedAt=0;
+// Persist only observed, dated NAVs. No interpolation or fictitious historical prices.
+const CIBC_NAV_HISTORY_KEY="cibcMutualFundNavHistoryV1";
+const CIBC_NAV_SEED={
+  // Historical values previously shown by the app as of Oct 9, 2026.
+  ATL486:{date:"2026-10-09",price:57.14},
+  ATL496:{date:"2026-10-09",price:112.40},
+  ATL525:{date:"2026-10-09",price:41.43}
+};
+let cibcNavHistory={};
+function loadCibcNavHistory(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(CIBC_NAV_HISTORY_KEY)||"{}");
+    if(saved&&typeof saved==="object")cibcNavHistory=saved;
+  }catch(e){}
+  for(const [ticker,seed] of Object.entries(CIBC_NAV_SEED)){
+    if(!Array.isArray(cibcNavHistory[ticker]))cibcNavHistory[ticker]=[];
+    if(!cibcNavHistory[ticker].some(p=>p.date===seed.date))
+      cibcNavHistory[ticker].push({...seed,source:"Previously displayed NAV"});
+    cibcNavHistory[ticker].sort((x,y)=>x.date.localeCompare(y.date));
+  }
+}
+function saveCibcNavHistory(){
+  try{localStorage.setItem(CIBC_NAV_HISTORY_KEY,JSON.stringify(cibcNavHistory))}catch(e){}
+}
+function recordCibcNav(ticker,date,price,source){
+  if(!CIBC_NAV_SEED[ticker] || !/^\d{4}-\d{2}-\d{2}$/.test(String(date||"")) || !(Number(price)>0))return false;
+  const rows=cibcNavHistory[ticker]||(cibcNavHistory[ticker]=[]);
+  const old=rows.find(x=>x.date===date);
+  if(old && Math.abs(old.price-price)<0.000001)return false;
+  const point={date,price:Number(price),source:String(source||"NAV")};
+  if(old)Object.assign(old,point);else rows.push(point);
+  rows.sort((x,y)=>x.date.localeCompare(y.date));
+  if(rows.length>2000)rows.splice(0,rows.length-2000);
+  saveCibcNavHistory();
+  return true;
+}
+loadCibcNavHistory();
 function saveCibcFundNavCache(){
   try{
     localStorage.setItem(CIBC_MUTUAL_FUND_CACHE_KEY,JSON.stringify({
@@ -4248,6 +4285,7 @@ function loadCibcFundNavCache(){
       f.priceSource=row.priceSource||"cached";
     }
     cibcFundNavFetchedAt=Number(raw.fetchedAt)||0;
+    for(const f of CIBC_MUTUAL_FUNDS)recordCibcNav(f.ticker,f.priceDate,f.displayPrice,f.priceSource);
     return true;
   }catch(e){return false;}
 }
@@ -4627,6 +4665,7 @@ async function refreshCibcFundPrices(render=true){
       f.marketValue=Number((px*Number(f.units)).toFixed(2));
       f.priceDate=row.date||f.priceDate;
       f.priceSource=row.source||"Auto NAV";
+      recordCibcNav(f.ticker,f.priceDate,px,f.priceSource);
       changed=true;
     }
     if(changed){
@@ -4635,6 +4674,7 @@ async function refreshCibcFundPrices(render=true){
       if(render){
         renderNetWorth();
         if(cibcFundView?.classList.contains("active"))renderCibcFundDetail();
+        if(selectedPortfolioAccount==="cibc_mutual_fund" && homeView?.classList.contains("active"))loadPortfolioHistory(currentPortfolioRange);
       }
     }
     return changed;
@@ -4985,10 +5025,44 @@ async function loadPortfolioHistory(label){
     return;
   }
 
-  // CIBC current NAV is live, but historical NAV has not been backfilled into the chart yet.
+  // CIBC Class A mutual funds publish at most one NAV per business day.
+  // Plot only observed dated NAV points; never fabricate intraday/historical values.
   if(accountId==="cibc_mutual_fund"){
     if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    renderTrackingPlaceholder(accountId,requestedRange,"CIBC Mutual Fund current NAV updates automatically. Historical NAV chart data has not been backfilled yet.");
+    const fundDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
+    const latestDate=fundDates.at(-1);
+    const cutoffDays={"1W":7,"1M":31,"3M":93,"6M":186,"YTD":366,"1Y":366};
+    let rangeDates=fundDates;
+    if(requestedRange==="1D"){
+      rangeDates=fundDates.slice(-2); // Only the last two published NAV dates, not intraday prices.
+    }else if(requestedRange==="YTD"){
+      rangeDates=fundDates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
+    }else if(cutoffDays[requestedRange] && latestDate){
+      const minDate=new Date(latestDate+"T12:00:00Z");
+      minDate.setUTCDate(minDate.getUTCDate()-cutoffDays[requestedRange]);
+      const cut=minDate.toISOString().slice(0,10);
+      rangeDates=fundDates.filter(d=>d>=cut);
+    }
+    const data=rangeDates.map(d=>{
+      let value=0;
+      for(const f of CIBC_MUTUAL_FUNDS){
+        const row=(cibcNavHistory[f.ticker]||[]).find(x=>x.date===d);
+        // Do not carry forward unknown NAVs into a purported complete daily valuation.
+        if(!row)return null;
+        value+=Number(row.price)*Number(f.units);
+      }
+      return {time:Date.parse(d+"T12:00:00Z")/1000,value};
+    }).filter(Boolean);
+    if(data.length<2){
+      renderTrackingPlaceholder(accountId,requestedRange,
+        "CIBC NAV chart is collecting published daily prices. Not enough dates in this period yet; older NAV history is not available from the current free source.");
+      return;
+    }
+    renderLineChart(data);
+    const valueChange=data.at(-1).value-data[0].value;
+    const label=requestedRange==="1D"?"last published NAV change":requestedRange==="ALL"?"since NAV tracking began":portfolioReturnPeriodLabel(requestedRange);
+    portfolioGain.textContent=signedMoney(valueChange)+" "+label;
+    portfolioGain.style.color=valueChange>=0?"var(--green)":"var(--red)";
     return;
   }
 
