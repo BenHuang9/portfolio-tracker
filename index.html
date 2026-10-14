@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
+<!-- UI unified V5.20.1; CSS-only changes -->
 <!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v5.17.7 Hotfix restore Home rendering -->
@@ -2995,6 +2996,73 @@ html,body{
 .cloudSyncActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .cloudSyncActions button{min-height:44px;border-radius:14px;font-size:12px;font-weight:850}
 .cloudSyncMeta{margin-top:7px;color:var(--muted);font-size:10px;font-weight:700;line-height:1.35}
+
+
+/* V5.20 UI UNIFICATION — shared visual language; no financial logic changes */
+:root{
+  --bg:#f6f6f4;
+  --card:#fff;
+  --text:#111315;
+  --muted:#7b7e82;
+  --line:#e3e4e1;
+  --green:#23bf97;
+  --red:#df5260;
+  --teal:#23bf97;
+  --chip:#efefed;
+  --shadow:0 8px 24px rgba(26,33,36,.045);
+  --ui-radius:22px;
+  --ui-radius-sm:14px;
+  --ui-space:16px;
+}
+/* A shared type scale across Home, Investment, CIBC, Transactions and Stats. */
+:where(.wealthHomeTop h1,.ledgerTopbar h1,.topbar h1,.divTop h1){font-size:27px;letter-spacing:-.035em;font-weight:850;line-height:1.15}
+:where(.sectionHead h2,.wealthAccountsHeader h2,.wealthCardTitle,.cibcFundSectionHead h2,.statsSectionHead h2,.ledgerListHead h2,.payments h2){font-size:22px;letter-spacing:-.025em;font-weight:850;line-height:1.2}
+:where(.small,.sectionSub,.wealthCardSub,.cibcFundNote,.wealthGroupSub,.cibcFundSectionHead .small){color:var(--muted);line-height:1.4}
+:where(.big,.wealthNetRow .big,.cibcFundBalance){font-weight:850;font-variant-numeric:tabular-nums;letter-spacing:-.046em}
+:where(.num,.metric .value,.cibcHoldingMV,.cibcHoldingGain,.cibcHoldingMetric .value,.cibcFundSummaryCard .value,.ledgerSummaryCard .value,.wealthGroupHead strong,.wealthGroupRight strong,.wealthAccountList .netWorthAmount,.netWorthPrincipalLine strong){font-variant-numeric:tabular-nums}
+/* One consistent card system; colors and content hierarchies remain meaningful. */
+:where(.metric,.incomeCard,.wealthCard,.wealthGroupCard,.cibcFundSummaryCard,.cibcHoldingCard,.ledgerSummaryCard,.ledgerCalendarCard,.statsTrendCard,.statsSectionCard,.holdings,.ledgerDayCard,.ledgerGroupCard){background:var(--card);border:1px solid var(--line);border-radius:var(--ui-radius);box-shadow:var(--shadow)}
+:where(.metric,.cibcFundSummaryCard,.ledgerSummaryCard){border-radius:18px}
+:where(.wealthCard,.wealthGroupCard){border-color:var(--line)}
+:where(.section,.cibcFundSection,.payments){max-width:100%}
+:where(.wealthCard,.wealthGroupCard){margin-top:14px;margin-bottom:14px}
+.cibcHoldingCard{margin-bottom:12px}
+.cibcFundSummary{gap:10px}
+.cibcFundSectionHead{margin-bottom:12px}
+.cibcFundHero{padding-top:24px}
+.cibcFundBalance{font-size:clamp(38px,10vw,56px)}
+.cibcFundGain{color:var(--green)}
+.cibcHoldingGain{color:var(--green)}
+.cibcFundNavStatus.live{color:var(--green)}
+/* Consistent headings for independently scrolling views. */
+.wealthHomeTop,.ledgerTopbar{min-height:78px}
+.ledgerTopbar{padding-top:18px}
+:where(.accountSwitcher button,.seg button,.statsMode button){-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+:where(.seg button,.statsMode button){font-weight:750}
+:where(.accountSwitcher button.active,.seg button.active,.statsMode button.active){color:var(--text)}
+/* Inputs and bottom sheets use the same outlines, corners and tap targets. */
+:where(.field input,.field select,.field textarea,#txAccount,#txFromAccount,#txToAccount){border:1px solid #d2d5d5;border-radius:var(--ui-radius-sm);background:#fff;color:var(--text)}
+:where(.iconbtn,.close,.ledgerPeriodBtn){min-width:42px;min-height:42px;touch-action:manipulation}
+.sheet{border-radius:28px 28px 0 0;background:#fff;overscroll-behavior:contain}
+.sheetHead h2{font-size:24px;font-weight:850;letter-spacing:-.025em}
+:where(.primary,.ledgerAddBtn,.quickSaveBtn){font-weight:850}
+/* Keep fixed navigation coherent on every view, including detail pages. */
+.bottom{background:rgba(250,250,249,.94);border:1px solid var(--line);box-shadow:0 10px 34px rgba(0,0,0,.085);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+:where(.navbtn,.wealthTextBtn,.ledgerPeriodBtn){-webkit-tap-highlight-color:transparent}
+/* Narrow screens: typography adapts instead of clipping dollar amounts. */
+@media(max-width:430px){
+ .wealthHomeTop,.ledgerTopbar{min-height:72px}
+ .wealthHomeTop h1,.ledgerTopbar h1,.topbar h1{font-size:25px}
+ .cibcFundBalance{font-size:clamp(34px,10vw,44px)}
+ .cibcFundSummaryCard{padding:14px 12px}
+ .cibcHoldingCard{padding:15px 14px}
+ .cibcHoldingGrid{gap:6px}
+ .cibcHoldingMetric .value{font-size:12px}
+ .cibcHoldingName{max-width:190px}
+}
+@media(prefers-reduced-motion:reduce){
+ .breakdownSeg,.quickKeypad button{transition:none!important}
+}
 
 </style>
 
