@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Income Portfolio Tracker</title>
-<!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
+<!-- v5.20.2 1D Return Fix: 1D gain uses current price vs previous close -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
 <!-- v5.17.7 Hotfix restore Home rendering -->
 <!-- v4.8 Dividend engine: official issuer payment dates + Alpha/Yahoo fallback -->
@@ -5014,6 +5014,13 @@ async function loadPortfolioHistory(label){
       const summary=portfolioSummary(accountId);
       portfolioGain.textContent=signedMoney(summary.total)+" all time";
       portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+    }else if(requestedRange==="1D"){
+      // 1D return is today's gain versus the previous regular-session close.
+      // Keep the chart itself intraday; only the headline return uses previous close
+      // so it matches the TODAY column for the selected account.
+      const dayReturn=positions(accountId).reduce((sum,p)=>sum+(Number(p.today)||0),0);
+      portfolioGain.textContent=signedMoney(dayReturn)+" "+portfolioReturnPeriodLabel(requestedRange);
+      portfolioGain.style.color=dayReturn>=0?"var(--green)":"var(--red)";
     }else if(payload?.hasHistory){
       const periodReturn=Number(payload.periodReturn)||0;
       const labelText=payload.truncatedByTracking
