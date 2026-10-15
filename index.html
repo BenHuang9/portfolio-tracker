@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
 <title>Income Portfolio Tracker</title>
+<!-- 5.21.0: unified observed-point charts and low-write foreground quotes -->
 <!-- UI unified V5.20.1; CSS-only changes -->
 <!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
@@ -3085,6 +3086,27 @@ html,body{
 #settingsModal .settingsSaveStatus[data-state="saved"]{color:#12775c}
 #settingsModal .field input[aria-invalid="true"]{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
 
+
+/* 5.21 unified value charts: identical geometry, touch rules and point selection. */
+#lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{
+ position:relative;display:block;box-sizing:border-box;height:250px!important;min-height:250px!important;
+ overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none;max-width:100%;
+}
+.unifiedValueChart svg{display:block;width:100%;height:100%;}
+#lineChart.unifiedValueChart path.unifiedStroke,.unifiedValueChart .unifiedStroke{stroke:var(--value-chart-color)!important;}
+#lineChart.unifiedValueChart .unifiedGhost,.unifiedValueChart .unifiedGhost{stroke:#d4d9d6!important;}
+#lineChart.unifiedValueChart circle.unifiedDot,.unifiedValueChart circle.unifiedDot{stroke:var(--value-chart-color)!important;stroke-width:2px;fill:var(--card,#fff);}
+.unifiedValueChart svg .unifiedAxis{fill:var(--muted);font-size:10px;font-family:inherit;font-weight:600;}
+.unifiedChartMeta{position:absolute;left:12px;top:0;height:38px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;opacity:0;pointer-events:none;}
+.unifiedChartMeta.show{opacity:1;}
+.unifiedChartMeta span{color:var(--muted);font-size:11px;font-weight:650;}
+.unifiedChartMeta strong{font-size:15px;font-weight:750;font-variant-numeric:tabular-nums;}
+.unifiedChartNote{margin:2px 20px 10px;min-height:16px;color:var(--muted);font-size:10px;line-height:1.4;overflow-wrap:anywhere;}
+.unifiedEmpty{height:100%;display:flex;align-items:center;justify-content:center;padding:16px;color:var(--muted);font-size:12px;text-align:center;}
+#chartScrubInfo,#netWorthScrubInfo{display:none!important;}
+#portfolioGain{min-height:24px;line-height:1.35;}
+@media(min-width:700px){#lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{height:300px!important;min-height:300px!important;}}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -4098,6 +4120,516 @@ const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
 })();
 
 
+/* v5.21: shared observed-point chart engine. No interpolated tooltip values. */
+const CHART_ZONE="America/New_York";
+const INVESTMENT_OBSERVATIONS_KEY="portfolioAccountObservationsV521";
+const INVESTMENT_CASH_HISTORY_KEY="portfolioCashHistoryV521";
+const chartControllers=new WeakMap();
+let chartPendingPaint=false;
+let quoteRefreshPromise=null;
+let lastQuoteAttemptAt=0;
+let lastQuoteSuccessAt=0;
+let lastDividendBootstrap=0;
+let activeChartPayload=null;
+const quoteHttpCache=new Map();
+function chartDateKey(sec,zone=CHART_ZONE){
+  const p=new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(Number(sec)*1000));
+  const m=Object.fromEntries(p.map(x=>[x.type,x.value]));return `${m.year}-${m.month}-${m.day}`;
+}
+function chartDayTime(date){return Date.parse(String(date)+"T12:00:00Z")/1000}
+function chartDayEnd(date){
+  const noon=Date.parse(String(date)+"T18:00:00Z")/1000;
+  const p=new Intl.DateTimeFormat("en-CA",{timeZone:CHART_ZONE,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date(noon*1000));
+  const m=Object.fromEntries(p.map(x=>[x.type,x.value]));
+  const localAsUTC=Date.UTC(Number(m.year),Number(m.month)-1,Number(m.day),Number(m.hour),Number(m.minute),Number(m.second))/1000;
+  return Date.parse(String(date)+"T23:59:59Z")/1000-(localAsUTC-noon);
+}
+function chartFinite(v){return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))}
+function chartPrepare(data,grain="daily"){
+  const byKey=new Map();
+  for(const row of (Array.isArray(data)?data:[])){
+    if(!chartFinite(row.value))continue;
+    const t=chartFinite(row.time)?Number(row.time):chartDayTime(row.date);
+    if(!Number.isFinite(t))continue;
+    const date=/^\d{4}-\d{2}-\d{2}$/.test(String(row.date||""))?row.date:chartDateKey(t);
+    const key=grain==="daily"?date:String(t);
+    const old=byKey.get(key);
+    if(!old||t>=old.sampleTime)byKey.set(key,{...row,date,time:grain==="daily"?chartDayTime(date):t,sampleTime:t,value:Number(row.value)});
+  }
+  return [...byKey.values()].sort((a,b)=>a.time-b.time);
+}
+function chartRangeRows(rows,range){
+  if(range==="ALL")return rows;
+  const now=new Date();const d=new Date(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate(),12));
+  if(range==="YTD")d.setUTCMonth(0,1);
+  else if(range==="1Y")d.setUTCFullYear(d.getUTCFullYear()-1);
+  else if(range==="1W")d.setUTCDate(d.getUTCDate()-7);
+  else if(range==="1D")d.setUTCDate(d.getUTCDate()-1);
+  else d.setUTCMonth(d.getUTCMonth()-({"1M":1,"3M":3,"6M":6}[range]||1));
+  const key=d.toISOString().slice(0,10);return rows.filter(x=>x.date>=key);
+}
+function chartLabel(p,grain){
+  if(grain==="intraday")return new Date(p.time*1000).toLocaleString("en-CA",{timeZone:CHART_ZONE,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+" ET";
+  return new Date(chartDayTime(p.date)*1000).toLocaleDateString("en-CA",{timeZone:"UTC",month:"short",day:"numeric",year:"numeric"});
+}
+function chartIsScrubbing(){return Boolean(document.querySelector('[data-chart-scrubbing="true"]'))}
+function disposeValueChart(el){
+  chartControllers.get(el)?.destroy();chartControllers.delete(el);
+  if(el){for(const name of ["onpointerdown","onpointermove","onpointerup","onpointercancel","onlostpointercapture","onpointerleave","onkeydown"])el[name]=null;el.dataset.chartScrubbing="false";}
+}
+function drawValueChart(el,input,options={}){
+  if(!el)return;
+  disposeValueChart(el);
+  const grain=options.grain||"daily";
+  const rows=chartPrepare(input,grain);
+  const money=options.money||fmt;
+  el.classList.add("unifiedValueChart");el.style.height="";
+  el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);
+  el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
+  if(!rows.length){el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
+  const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
+  const left=12,right=w-12,top=45,bottom=h-28;
+  const minT=rows[0].time,maxT=rows.at(-1).time;
+  let minV=Math.min(...rows.map(r=>r.value)),maxV=Math.max(...rows.map(r=>r.value));
+  const valueSpan=Math.max(maxV-minV,Math.abs(maxV)*0.002,1);
+  const middle=(maxV+minV)/2;minV=middle-valueSpan*.62;maxV=middle+valueSpan*.62;
+  const points=rows.map(r=>({...r,x:maxT===minT?(left+right)/2:left+(r.time-minT)/(maxT-minT)*(right-left),y:bottom-(r.value-minV)/(maxV-minV)*(bottom-top)}));
+  const path=points.map((p,i)=>`${i?(options.step?`H ${p.x.toFixed(2)} V`:"L"):"M"} ${options.step&&i?"":p.x.toFixed(2)+" "}${p.y.toFixed(2)}`).join(" ");
+  const color=options.color||(rows.at(-1).value<rows[0].value?"var(--red)":"var(--teal)");
+  el.style.setProperty("--value-chart-color",color);
+  const id="value-"+(el.id||"chart");
+  const area=points.length>1?`${path} L ${points.at(-1).x} ${bottom} L ${points[0].x} ${bottom} Z`:"";
+  const last=points.at(-1);
+  const xLabel=p=>grain==="intraday"?new Date(p.time*1000).toLocaleTimeString("en-CA",{timeZone:CHART_ZONE,hour:"numeric",minute:"2-digit"}):new Date(chartDayTime(p.date)*1000).toLocaleDateString("en-CA",{timeZone:"UTC",month:"short",day:"numeric"});
+  el.innerHTML=`<div class="unifiedChartMeta" aria-live="off"><span data-point-date></span><strong data-point-value></strong></div>
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="${id}-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".16"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient>
+      <clipPath id="${id}-left"><rect data-clip x="0" y="0" width="${w}" height="${h}"/></clipPath></defs>
+      <path class="unifiedGhost" d="${path}" fill="none" stroke-width="2"/>
+      <g clip-path="url(#${id}-left)">${area?`<path d="${area}" fill="url(#${id}-area)"/>`:""}<path class="unifiedStroke" d="${path}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+      ${points.length===1?`<circle class="unifiedDot" cx="${last.x}" cy="${last.y}" r="4"/>`:""}
+      <g data-cross style="display:none"><line x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#a7aaa8" stroke-width="1"/><circle class="unifiedDot" r="4"/></g>
+      <text x="${left}" y="${h-6}" class="unifiedAxis">${xLabel(points[0])}</text>${points.length>1?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${xLabel(last)}</text>`:""}
+    </svg>`;
+  const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
+  let pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
+  function select(index){
+    index=Math.max(0,Math.min(points.length-1,index));const p=points[index];selected=index;showing=true;
+    cross.style.display="";vline.setAttribute("x1",p.x);vline.setAttribute("x2",p.x);dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);clip.setAttribute("width",String(p.x+0.6));
+    meta.querySelector('[data-point-date]').textContent=chartLabel(p,grain);meta.querySelector('[data-point-value]').textContent=money(p.value);meta.classList.add('show');
+    el.dataset.selectedDate=p.date;el.dataset.selectedTime=String(p.time);el.dataset.selectedValue=String(p.value);
+    options.onSelect?.(p,index);
+  }
+  function nearest(clientX){
+    const rect=el.getBoundingClientRect();const x=(clientX-rect.left)/(rect.width||1)*w;
+    let lo=0,hi=points.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(points[mid].x<x)lo=mid+1;else hi=mid;}
+    if(lo>0&&Math.abs(points[lo-1].x-x)<=Math.abs(points[lo].x-x))lo--;return lo;
+  }
+  function reset(){
+    if(raf)cancelAnimationFrame(raf);raf=0;pendingX=null;pointer=null;el.dataset.chartScrubbing="false";
+    cross.style.display="none";clip.setAttribute("width",String(w));meta.classList.remove('show');
+    if(showing){showing=false;options.onReset?.();}
+    if(chartPendingPaint){chartPendingPaint=false;setTimeout(()=>paintAfterQuotes(),0);}
+  }
+  el.onpointerdown=e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if(pointer!==null)return;pointer=e.pointerId;if(e.pointerType==="mouse")e.preventDefault();el.dataset.chartScrubbing="true";try{el.setPointerCapture(pointer)}catch(_){}select(nearest(e.clientX));};
+  el.onpointermove=e=>{if(pointer===null||e.pointerId!==pointer)return;pendingX=e.clientX;if(!raf)raf=requestAnimationFrame(()=>{raf=0;if(pendingX!==null)select(nearest(pendingX));});};
+  const end=e=>{if(pointer!==null&&e?.pointerId!==undefined&&e.pointerId!==pointer)return;reset();};
+  el.onpointerup=end;el.onpointercancel=end;el.onlostpointercapture=end;
+  el.setAttribute("tabindex","0");el.onkeydown=e=>{if(!["ArrowLeft","ArrowRight","Escape"].includes(e.key))return;e.preventDefault();if(e.key==="Escape")reset();else select((selected<0?points.length-1:selected)+(e.key==="ArrowRight"?1:-1));};
+  chartControllers.set(el,{rows,points,select,destroy(){if(raf)cancelAnimationFrame(raf);if(showing)options.onReset?.();el.dataset.chartScrubbing="false";}});
+}
+function readLocalJSON(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")||fallback}catch(_){return fallback}}
+function writeLocalJSON(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch(_){return false}}
+function recordCashAnchor(){
+  const histories=readLocalJSON(INVESTMENT_CASH_HISTORY_KEY,{}),now=Date.now()/1000;
+  for(const a of INVESTMENT_ACCOUNTS){if(a.kind==="mutual_fund")continue;const value=cashForAccount(a.id);const rows=histories[a.id]||(histories[a.id]=[]);if(!rows.length||rows.at(-1).value!==value)rows.push({time:now,date:chartDateKey(now),value});}
+  writeLocalJSON(INVESTMENT_CASH_HISTORY_KEY,histories);
+}
+function accountCashAt(accountId,t){
+  const histories=readLocalJSON(INVESTMENT_CASH_HISTORY_KEY,{});
+  const ids=accountId==="all"?INVESTMENT_ACCOUNTS.filter(a=>a.kind!=="mutual_fund").map(a=>a.id):[accountId];
+  let value=0,estimated=false;
+  for(const id of ids){const rows=histories[id]||[];const at=rows.filter(p=>p.time<=t).at(-1);if(at)value+=Number(at.value);else{value+=cashForAccount(id);estimated=true;}}
+  return {value,estimated};
+}
+function recordAccountObservation(){
+  const observations=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{}),now=Date.now()/1000,date=chartDateKey(now);
+  for(const id of ["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)]){
+    const summary=portfolioSummary(id);if(summary.ps.some(p=>!(p.price>0)))continue;
+    const entry=observations[id]||(observations[id]={daily:[],intraday:[]});
+    const row={date,time:now,value:summary.accountValue,cash:cashForAccount(id),basis:depositsForAccount(id),source:"Observed account value"};
+    const ix=entry.daily.findIndex(p=>p.date===date);if(ix>=0)entry.daily[ix]=row;else entry.daily.push(row);
+    // Minutes are observations, never randomly generated ticks. Keep five days locally.
+    const minute=Math.floor(now/60)*60,old=entry.intraday.at(-1);
+    const tick={date,time:minute,value:row.value};
+    if(old?.time===minute)entry.intraday[entry.intraday.length-1]=tick;
+    else if(!old||old.value!==tick.value||minute-old.time>=900)entry.intraday.push(tick);
+    // Keep a compact, bounded intraday cache; long-term daily records remain intact.
+    entry.intraday=entry.intraday.filter(p=>p.time>=now-5*86400).slice(-1440);
+  }
+  writeLocalJSON(INVESTMENT_OBSERVATIONS_KEY,observations);
+}
+function currentCashChartRows(id,range){
+  const entry=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{})[id]||{daily:[],intraday:[]};
+  const grain=range==="1D"?"intraday":"daily";
+  let rows=chartPrepare(range==="1D"?entry.intraday:entry.daily,grain);
+  rows=range==="1D"?rows.filter(p=>p.date===chartDateKey(Date.now()/1000)):chartRangeRows(rows,range);
+  return rows;
+}
+function cifNavRows(range){
+  const dates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
+  const rows=dates.map(date=>{let value=0;for(const f of CIBC_MUTUAL_FUNDS){const row=(cibcNavHistory[f.ticker]||[]).find(r=>r.date===date);if(!row||!(row.price>0))return null;value+=row.price*f.units;}return {date,time:chartDayTime(date),value};}).filter(Boolean);
+  return range==="1D"?rows.slice(-1):chartRangeRows(rows,range);
+}
+function historyQuoteKey(t,range,interval){return `${t}|${range}|${interval}`}
+async function chartFetchQuote(t,range,interval,ttl=60000){
+  const key=historyQuoteKey(t,range,interval),cached=quoteHttpCache.get(key);
+  if(cached&&Date.now()-cached.at<ttl)return cached.promise;
+  const promise=apiQuote(t,range,interval).catch(e=>{quoteHttpCache.delete(key);throw e;});
+  quoteHttpCache.set(key,{at:Date.now(),promise});return promise;
+}
+async function chartMapLimit(items,fn,limit=5){const output=new Array(items.length);let index=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{for(;;){const i=index++;if(i>=items.length)return;try{output[i]={status:"fulfilled",value:await fn(items[i],i)}}catch(reason){output[i]={status:"rejected",reason}}}}));return output;}
+function dailyQuoteBaseline(q){
+  if(!chartFinite(q?.regularMarketTime))return null;
+  const session=chartDateKey(q.regularMarketTime,q.exchangeTimezoneName||CHART_ZONE);
+  const rows=(q.history||[]).filter(p=>chartFinite(p.close)&&p.close>0).map(p=>({...p,date:p.date||chartDateKey(p.time)})).sort((a,b)=>a.time-b.time);
+  const prior=rows.filter(p=>p.date<session).at(-1);
+  return prior?{price:Number(prior.close),date:prior.date,session}:null;
+}
+function setQuoteFromDaily(t,q){
+  if(!chartFinite(q.price)||Number(q.price)<=0)return false;
+  const prev=catalog[t]||{},base=dailyQuoteBaseline(q);
+  catalog[t]={...prev,title:q.title||prev.title||t,currency:q.currency||prev.currency||(/\.(TO|NE|V)$/.test(t)?"CAD":"USD"),price:Number(q.price),prev:base?.price||Number(q.price),dailyBaselineAvailable:Boolean(base),dailyBaselineDate:base?.date||null,regularMarketTime:q.regularMarketTime||null,exchange:q.exchange||prev.exchange||"",marketState:q.marketState||prev.marketState||"",annualDiv:Number(prev.annualDiv)||0,color:colorForTicker(t)};
+  return true;
+}
+function updateValueSource(){
+  if(selectedPortfolioAccount==="cibc_mutual_fund"){
+    const dates=CIBC_MUTUAL_FUNDS.map(f=>f.priceDate).filter(Boolean).sort();
+    setMarketStatus("",`Daily NAV${dates.length?" \u00b7 "+cibcDateLabel(dates[0]):""}`);return;
+  }
+  const ps=positions(selectedPortfolioAccount).filter(p=>!p.isCibcMutualFund);
+  if(!ps.length){setMarketStatus("", "Account balance \u00b7 saved on this device");return;}
+  const times=ps.map(p=>Number(p.regularMarketTime)).filter(n=>n>0);
+  const date=times.length?new Date(Math.min(...times)*1000):null;
+  const when=date?date.toLocaleString("en-CA",{timeZone:CHART_ZONE,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+" ET":"timestamp unavailable";
+  setMarketStatus("",`Quotes ${when}`);
+}
+function paintAfterQuotes(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
+  renderHome();renderNetWorth();
+  if(cibcFundView?.classList.contains("active"))renderCibcFundDetail();
+  if(currentManualDetailId&&manualAccountDetailView?.classList.contains("active"))renderManualAccountDetail();
+  if(homeView?.classList.contains("active"))loadPortfolioHistory(currentPortfolioRange,{quiet:true}).catch(()=>{});
+  updateValueSource();
+}
+async function primeLongDividendEvents(tickers){
+  if(lastDividendBootstrap&&Date.now()-lastDividendBootstrap<12*3600000)return;
+  lastDividendBootstrap=Date.now();
+  const missing=tickers.filter(t=>!yahooDividendEventsByTicker[t]?.length&&!dividendEventsByTicker[t]?.length);
+  try{
+    const fxQuote=await chartFetchQuote("CAD=X","5y","1d",12*3600000);
+    const history=(fxQuote.history||[]).filter(p=>chartFinite(p.close)&&Number(p.close)>0).sort((a,b)=>a.time-b.time);
+    if(history.length)fxHistory=history;
+  }catch(e){console.warn("FX history retained from cache",e);}
+  const data=await chartMapLimit(missing,t=>chartFetchQuote(t,"5y","1wk",12*3600000),3);
+  data.forEach((r,i)=>{if(r.status!=="fulfilled")return;const t=missing[i],events=normalizeYahooDividendEvents(r.value.dividends||[]);yahooDividendEventsByTicker[t]=events;if(!isExactDividendSource(dividendSourceByTicker[t]))dividendEventsByTicker[t]=events;catalog[t]={...market(t),annualDiv:trailingAnnualDividendPerShare(events)};});
+  rebuildDividendPayments();saveMarketCache();
+  if(!chartIsScrubbing()){renderHome();renderDividends(document.querySelector('#divRanges .active')?.textContent||"1M");}
+  syncDividendHistory(tickers);
+}
+async function refreshLiveData(silent=false){
+  if(quoteRefreshPromise)return quoteRefreshPromise;
+  lastQuoteAttemptAt=Date.now();
+  quoteRefreshPromise=(async()=>{
+    const tickers=[...new Set(lots.map(l=>l.ticker))];
+    if(!silent)setMarketStatus("loading","Checking latest quotes...");
+    const refreshNav=!cibcFundNavFetchedAt||Date.now()-cibcFundNavFetchedAt>15*60000||!silent;
+    const navPromise=refreshNav?refreshCibcFundPrices(false):Promise.resolve(false);
+    const results=await chartMapLimit(["CAD=X",...tickers],t=>chartFetchQuote(t,"5d","1d",silent?30000:0),5);
+    let success=0;const unavailable=[];
+    for(let i=0;i<results.length;i++){
+      const r=results[i];if(r.status!=="fulfilled"){if(i)unavailable.push(tickers[i-1]);continue;}
+      const q=r.value;
+      if(i===0){if(Number(q.price)>0)fx=Number(q.price);continue;}
+      if(setQuoteFromDaily(tickers[i-1],q))success++;
+    }
+    await navPromise;
+    if(success||!tickers.length){liveMode=true;liveUpdatedAt=Date.now();lastQuoteSuccessAt=Date.now();}
+    recordCashAnchor();recordAccountObservation();saveMarketCache();
+    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} \u00b7 quote data`;
+    if(!chartIsScrubbing())paintAfterQuotes();else chartPendingPaint=true;
+    if(unavailable.length)setMarketStatus("error",`Using saved quotes for ${unavailable.join(", ")}`);
+    if(!success&&tickers.length)setMarketStatus("error","Quote refresh failed \u00b7 showing saved data");
+    // Historical dividend requests are separate from quote refresh; never used as daily price baselines.
+    primeLongDividendEvents(tickers).catch(e=>console.warn("Dividend history",e));
+    return {success,unavailable};
+  })().catch(e=>{setMarketStatus("error","Quote refresh failed \u00b7 saved data");console.warn("Quotes",e);return null;}).finally(()=>{quoteRefreshPromise=null;});
+  return quoteRefreshPromise;
+}
+function clearPortfolioChartInteraction(){
+  disposeValueChart(lineChart);
+  if(chartScrubInfo)chartScrubInfo.classList.remove("show");
+  if(chartScrubDate)chartScrubDate.textContent="";
+  if(chartScrubValue)chartScrubValue.textContent="";
+  // Clean up old-version scroll locks, but this renderer never locks the page.
+  if(document.body.classList.contains("chartScrubbing")){
+    const top=parseInt(document.body.style.top||"0",10);
+    document.body.classList.remove("chartScrubbing");document.documentElement.classList.remove("chartScrubbing");document.body.style.top="";
+    if(top)window.scrollTo(0,Math.abs(top));
+  }
+}
+function setPortfolioChartNote(text){
+  let el=document.getElementById('portfolioChartNote');
+  if(!el){el=document.createElement('div');el.id='portfolioChartNote';el.className='unifiedChartNote';lineChart.insertAdjacentElement('afterend',el);}
+  el.textContent=text||"";
+}
+function renderLineChart(data,total,options={}){
+  const accountId=selectedPortfolioAccount,range=currentPortfolioRange;
+  const gain=portfolioGain.textContent,gainColor=portfolioGain.style.color;
+  drawValueChart(lineChart,data,{...options,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
+    portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
+  },onReset(){
+    portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
+  }});
+}
+function setPortfolioPeriodGain(value,range,label){
+  portfolioGain.textContent=chartFinite(value)?`${signedMoney(value)} ${label||portfolioReturnPeriodLabel(range)}`:"\u2014 previous close unavailable";
+  portfolioGain.style.setProperty("color",chartFinite(value)?(value<0?"var(--red)":"var(--green)"):"var(--muted)","important");
+}
+async function loadPortfolioHistory(label,{quiet=false}={}){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
+  currentPortfolioRange=label||"ALL";
+  const seq=++portfolioChartRequestSeq,id=selectedPortfolioAccount,range=currentPortfolioRange;
+  const isCurrent=()=>seq===portfolioChartRequestSeq&&id===selectedPortfolioAccount&&range===currentPortfolioRange;
+  const summary=portfolioSummary(id),scope=lotsForAccount(id);
+  clearPortfolioChartInteraction();lineChart.style.height="";
+  portfolioValue.textContent=fmt(summary.accountValue);
+  updateValueSource();setPortfolioChartNote("");
+  if(!quiet){lineChart.innerHTML='<div class="unifiedEmpty">Loading history...</div>';}
+  const allTime=()=>setPortfolioPeriodGain(portfolioSummary(id).total,"ALL");
+  if(id==="cibc_mutual_fund"){
+    const rows=cifNavRows(range);
+    if(range==="ALL")allTime();else if(range==="1D"||rows.length<2){portfolioGain.textContent="Daily NAV";portfolioGain.style.setProperty("color","var(--muted)","important");}
+    else setPortfolioPeriodGain(rows.at(-1).value-rows[0].value,range);
+    renderLineChart(rows,null,{grain:"daily"});setPortfolioChartNote("Published NAV dates only");return;
+  }
+  if(!scope.length){
+    recordAccountObservation();const rows=currentCashChartRows(id,range);
+    if(range==="ALL")allTime();else if(rows.length>1)setPortfolioPeriodGain(rows.at(-1).value-rows[0].value,range,"balance change");
+    else{portfolioGain.textContent="Current balance";portfolioGain.style.setProperty("color","var(--muted)","important");}
+    renderLineChart(rows,null,{grain:range==="1D"?"intraday":"daily",step:true});setPortfolioChartNote("Saved account balances \u00b7 cash has no market price");return;
+  }
+  if(!marketApiBase){renderLineChart(currentCashChartRows(id,range));setPortfolioChartNote("Saved values \u00b7 market connection unavailable");return;}
+  try{
+    const grain=range==="1D"?"intraday":"daily";
+    const cfg=range==="ALL"?{...allRangeConfig(id),interval:"1d"}:({"1D":{range:"1d",interval:"1m"},"1W":{range:"1mo",interval:"1d"}}[range]||portfolioRangeConfig[range]);
+    const tickers=[...new Set(scope.map(l=>l.ticker))];
+    const needsFx=tickers.some(t=>market(t).currency==="USD");
+    const results=await chartMapLimit([...tickers,...(needsFx?["CAD=X"]:[])],t=>chartFetchQuote(t,cfg.range,cfg.interval,range==="1D"?20000:180000),5);
+    if(!isCurrent())return;
+    const qMap={},histMap={};let fxHist=[];const bad=[];
+    results.forEach((r,i)=>{
+      const t=tickers[i]||"CAD=X";
+      if(r.status!=="fulfilled"){if(t!=="CAD=X")bad.push(t);return;}
+      const q=r.value;
+      const history=chartPrepare((q.history||[]).filter(p=>chartFinite(p.close)&&Number(p.close)>0).map(p=>({...p,value:p.close})),grain);
+      if(t==="CAD=X"){fxHist=history;return;}qMap[t]=q;histMap[t]=history;
+    });
+    if(bad.length)throw new Error("Missing prices: "+bad.join(", "));
+    // A chart response may be newer than the last headline quote request. Keep the
+    // latest endpoint and current headline from the same observed quote.
+    for(const t of tickers){
+      const q=qMap[t],old=market(t),stamp=Number(q.regularMarketTime)||0;
+      if(stamp>0&&stamp>=Number(old.regularMarketTime||0)&&Number(q.price)>0){
+        const sameSession=!old.regularMarketTime||chartDateKey(stamp)===chartDateKey(old.regularMarketTime);
+        catalog[t]={...old,price:Number(q.price),regularMarketTime:stamp,dailyBaselineAvailable:sameSession&&Boolean(old.dailyBaselineAvailable)};
+      }
+    }
+    renderHome();updateValueSource();
+    let times=[...new Set(tickers.flatMap(t=>(histMap[t]||[]).map(p=>p.time)))].sort((a,b)=>a-b);
+    if(grain==="daily")times=chartRangeRows(times.map(time=>({time,date:new Date(time*1000).toISOString().slice(0,10)})),range).map(p=>p.time);
+    if(grain==="intraday"&&times.length){
+      // Only one actual market date; old sessions are never relabeled as today.
+      const session=chartDateKey(times.at(-1));times=times.filter(t=>chartDateKey(t)===session);
+    }
+    function at(rows,time){let lo=0,hi=rows.length-1,out=null;while(lo<=hi){const mid=(lo+hi)>>1;if(rows[mid].time<=time){out=rows[mid];lo=mid+1}else hi=mid-1;}return out;}
+    const includesFunds=id==="all";let estimated=false;
+    const series=[];
+    for(const t of times){
+      const date=grain==="daily"?new Date(t*1000).toISOString().slice(0,10):chartDateKey(t);
+      const cash=accountCashAt(id,grain==="daily"?chartDayEnd(date):t);let value=cash.value,missing=false,hasPosition=false;
+      let fxAt=needsFx?at(fxHist,t):null;
+      for(const ticker of tickers){
+        const shares=sharesHeldOn(ticker,date,id);if(!(shares>0))continue;
+        hasPosition=true;const px=at(histMap[ticker]||[],t);
+        if(!px){missing=true;break;}
+        value+=shares*px.value*(market(ticker).currency==="USD"?(fxAt?.value||fx):1);
+      }
+      if(includesFunds){for(const f of CIBC_MUTUAL_FUNDS){const nav=(cibcNavHistory[f.ticker]||[]).filter(p=>p.date<=date).at(-1);if(!nav){missing=true;break;}value+=Number(nav.price)*Number(f.units);}}
+      if(missing||!hasPosition)continue;
+      estimated=estimated||cash.estimated||Boolean(needsFx&&!fxAt);
+      series.push({time:t,date,value,source:"Market value reconstruction"});
+    }
+    if(!isCurrent())return;
+    // The latest quote is an observed endpoint, with the quote timestamp, not Date.now().
+    if(series.length){
+      const observedTimes=tickers.map(t=>Number(qMap[t]?.regularMarketTime)).filter(t=>t>0);
+      const latest=observedTimes.length?Math.min(...observedTimes):null;
+      if(latest){
+        const date=chartDateKey(latest);let value=cashForAccount(id),valid=true;
+        for(const ticker of tickers){const shares=sharesHeldOn(ticker,date,id);const px=Number(qMap[ticker]?.price);if(shares>0&&!(px>0)){valid=false;break;}value+=shares*px*(market(ticker).currency==="USD"?fx:1);}
+        if(includesFunds)value+=cibcMutualFundSummary().marketValue;
+        if(valid&&(grain!=="intraday"||date===series.at(-1).date)){
+          const time=grain==="daily"?chartDayTime(date):latest;
+          if(time>=series.at(-1).time){const row={time,date,value,source:"Latest quote"};if(time===series.at(-1).time)series[series.length-1]=row;else series.push(row);}
+        }
+      }
+    }
+    const clean=chartPrepare(series,grain);
+    if(range==="ALL")allTime();
+    else if(range==="1D"){
+      const ps=positions(id).filter(p=>!p.isCibcMutualFund);
+      setPortfolioPeriodGain(ps.length&&ps.every(p=>p.dailyBaselineAvailable)?ps.reduce((s,p)=>s+p.today,0):null,range);
+    }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range);
+    else{portfolioGain.textContent="Current value";portfolioGain.style.setProperty("color","var(--muted)","important");}
+    activeChartPayload={id,range,rows:clean};renderLineChart(clean,null,{grain});
+    setPortfolioChartNote(range==="1D"?"1-minute points \u00b7 checks every 60s \u00b7 feed may be delayed":estimated?"Daily values \u00b7 historical cash estimated where unrecorded":"Daily values \u00b7 recorded dates only");
+  }catch(e){
+    if(!isCurrent())return;
+    const observed=currentCashChartRows(id,range);
+    if(range==="ALL")allTime();else{portfolioGain.textContent="Saved value";portfolioGain.style.setProperty("color","var(--muted)","important");}
+    renderLineChart(observed,null,{grain:range==="1D"?"intraday":"daily"});setPortfolioChartNote("Market history unavailable \u00b7 no artificial prices");console.warn("Chart history",e);
+  }
+}
+function renderNetWorthChart(){
+  if(!netWorthChart)return;
+  if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
+  const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
+  setNetWorthReturn();
+  drawValueChart(netWorthChart,rows,{grain:"daily",label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+}
+function renderManualAccountChart(){
+  const a=getManualAccount(currentManualDetailId);if(!a||!manualAccountChart)return;
+  const rows=manualHistoryRangeRows(a,currentManualAccountRange).filter(p=>!p.carried).map(p=>({...p,time:chartDayTime(p.date)}));
+  const money=n=>(a.type==="liability"?"-":"")+new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency}).format(n);
+  const prior=manualDetailEquivalent.textContent;
+  drawValueChart(manualAccountChart,rows,{grain:"daily",label:a.name+" balance history",step:true,money,onSelect(p){manualDetailBalance.textContent=money(p.value);manualDetailEquivalent.textContent=chartLabel(p,"daily");},onReset(){manualDetailBalance.textContent=money(manualCurrentValue(a));manualDetailEquivalent.textContent=prior;}});
+}
+
+/* Safe three-way conflict resolution. Cron-only revisions are not user edits. */
+const CLOUD_BASELINE_KEY="portfolioCloudBaselineV521";
+const CLOUD_EDIT_BASE_KEY="portfolioCloudEditBaseV521";
+const CLOUD_OPTIONAL_KEYS=new Set(["cibcMutualFundNavHistoryV1",INVESTMENT_CASH_HISTORY_KEY,INVESTMENT_OBSERVATIONS_KEY]);
+const CLOUD_SCALARS=["portfolioAccountCashCAD","portfolioNetDepositsCAD","questradeAccountCashCAD","questradeNetDepositsCAD","questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD"];
+const CLOUD_FINANCIAL_KEYS=["incomeTrackerLots","netWorthManualAccountsV58","personalLedgerTransactionsV513",...CLOUD_SCALARS];
+function rememberCloudEditBase(key){
+  const bases=readLocalJSON(CLOUD_EDIT_BASE_KEY,{});
+  if(!Object.prototype.hasOwnProperty.call(bases,key)){bases[key]=localStorage.getItem(key);writeLocalJSON(CLOUD_EDIT_BASE_KEY,bases);}
+}
+function cloudEqual(a,b){if(a===b)return true;try{return JSON.stringify(JSON.parse(a))===JSON.stringify(JSON.parse(b))}catch(_){return false}}
+function mergeCloudStorage(base,local,remote,{reviewScalars=false}={}){
+  const pending=readLocalJSON(CLOUD_EDIT_BASE_KEY,{}),hasBase=Boolean(base?.storage),out={...remote};const conflicts=[];
+  const fields=new Set([...Object.keys(local||{}),...Object.keys(remote||{}),...Object.keys(base?.storage||{})]);
+  for(const key of fields){
+    const l=local[key]??null,r=remote[key]??null;
+    if(cloudEqual(l,r)){if(l!==null)out[key]=l;continue;}
+    // Observed dates can be combined without rewriting trades or account balances.
+    if(key==="netWorthHistoryV58"){
+      const dates=new Map();for(const p of readJSONValue(l,[]))if(p?.date)dates.set(p.date,p);
+      for(const p of readJSONValue(r,[]))if(p?.date)dates.set(p.date,p);
+      out[key]=JSON.stringify([...dates.values()].sort((a,b)=>a.date.localeCompare(b.date)));continue;
+    }
+    if(CLOUD_OPTIONAL_KEYS.has(key)){
+      const a=readJSONValue(l,{}),b=readJSONValue(r,{});const merged={...b};
+      for(const id of new Set([...Object.keys(a),...Object.keys(b)])){
+        if(key===INVESTMENT_OBSERVATIONS_KEY){
+          merged[id]={daily:mergeObservedRows(a[id]?.daily,b[id]?.daily,"date"),intraday:mergeObservedRows(a[id]?.intraday,b[id]?.intraday,"time")};
+        }else merged[id]=mergeObservedRows(a[id],b[id],key===INVESTMENT_CASH_HISTORY_KEY?"time":"date");
+      }
+      out[key]=JSON.stringify(merged);continue;
+    }
+    if(key==="cibcMutualFundNavV512"){
+      const a=readJSONValue(l,null),b=readJSONValue(r,null);out[key]=!b||Number(a?.fetchedAt)>Number(b?.fetchedAt)?l:r;continue;
+    }
+    const knowsOld=hasBase||Object.prototype.hasOwnProperty.call(pending,key);
+    const old=hasBase?(base.storage[key]??null):pending[key];
+    if(knowsOld){
+      if(cloudEqual(l,old))continue;
+      if(cloudEqual(r,old)){if(l===null)delete out[key];else out[key]=l;continue;}
+    }else if(!CLOUD_FINANCIAL_KEYS.includes(key)){continue;}
+    if(reviewScalars&&CLOUD_SCALARS.includes(key)){if(l!==null)out[key]=l;continue;}
+    conflicts.push(key);
+  }
+  return {storage:out,conflicts};
+}
+function readJSONValue(raw,fallback){try{const x=JSON.parse(raw);return x??fallback}catch(_){return fallback}}
+function mergeObservedRows(left,right,key){
+  const map=new Map();for(const p of [...(Array.isArray(right)?right:[]),...(Array.isArray(left)?left:[])])if(p?.[key]!==undefined)map.set(String(p[key]),p);
+  return [...map.values()].sort((a,b)=>String(a[key]).localeCompare(String(b[key])));
+}
+function hydrateCloudData(storage){
+  const prior={};for(const key of CLOUD_SYNC_KEYS)prior[key]=localStorage.getItem(key);
+  if(!writeLocalJSON("portfolioBeforeConflictMergeV521",{storage:prior,at:new Date().toISOString()}))throw new Error("Unable to keep a local recovery copy");
+  cloudRestoreInProgress=true;
+  try{
+    for(const key of CLOUD_SYNC_KEYS){if(Object.prototype.hasOwnProperty.call(storage,key))localStorage.setItem(key,storage[key]);}
+    accountCash=loadNumberSetting("portfolioAccountCashCAD",accountCash);netDeposits=loadNumberSetting("portfolioNetDepositsCAD",netDeposits);
+    questradeCash=loadNumberSetting("questradeAccountCashCAD",questradeCash);questradeNetDeposits=loadNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
+    questradeCashAccountCash=loadNumberSetting("questradeCashAccountCashCAD",questradeCashAccountCash);questradeCashAccountNetDeposits=loadNumberSetting("questradeCashAccountNetDepositsCAD",questradeCashAccountNetDeposits);
+    lots=readJSONValue(storage.incomeTrackerLots,lots);
+    manualAccounts=loadManualAccounts();ledgerTransactions=loadLedgerTransactions();netWorthHistory=loadNetWorthHistory();
+    cibcNavHistory=readJSONValue(storage[CIBC_NAV_HISTORY_KEY],cibcNavHistory);loadCibcFundNavCache();
+  }catch(e){for(const key of CLOUD_SYNC_KEYS){try{if(prior[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,prior[key]);}catch(_){}}throw e;}
+  finally{cloudRestoreInProgress=false;}
+}
+async function cloudPushState(force=false,reason="manual"){
+  if(cloudSyncInFlight)return null;
+  if(!cloudSyncToken())throw new Error("Sync token is missing");
+  cloudSyncInFlight=true;let uploadedSerial=null,uploadSucceeded=false;
+  setCloudStatus("Syncing...","warn","Saving local edits without replacing unrelated cloud data.");
+  try{
+    let payload=cloudBuildPayload();uploadedSerial=cloudLocalEditSerial;
+    let body={payload,deviceId:cloudDeviceId(),baseRevision:cloudRevision(),force:false};
+    let data;
+    try{data=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});}
+    catch(e){
+      if(e.status!==409)throw e;
+      const remote=await cloudRequest("/api/cloud/state");
+      if(cloudLocalEditSerial!==uploadedSerial||investmentSettingsDirty)throw Object.assign(new Error("New local edits are waiting; retry sync after finishing the edit."),{status:409});
+      const base=readLocalJSON(CLOUD_BASELINE_KEY,null);
+      let merged=mergeCloudStorage(base,payload.storage,remote.payload?.storage||{});
+      if(merged.conflicts.length&&reason==="manual"&&merged.conflicts.every(k=>CLOUD_SCALARS.includes(k))){
+        const detail=merged.conflicts.map(k=>`${k}: this device ${payload.storage[k]} / cloud ${remote.payload.storage[k]}`).join("\n");
+        if(confirm("Keep this device's edited balances and retain the cloud's transactions/history?\n\n"+detail))merged=mergeCloudStorage(base,payload.storage,remote.payload.storage,{reviewScalars:true});
+      }
+      if(merged.conflicts.length)throw Object.assign(new Error("Both copies changed: "+merged.conflicts.join(", ")),{status:409});
+      hydrateCloudData(merged.storage);payload=cloudBuildPayload();body={payload,deviceId:cloudDeviceId(),baseRevision:Number(remote.revision),force:false};
+      // One compare-and-swap retry only. Never a blind force overwrite.
+      data=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});
+      if(!chartIsScrubbing()){renderHome();renderNetWorth();}
+    }
+    uploadSucceeded=true;
+    localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
+    localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||new Date().toISOString()));
+    writeLocalJSON(CLOUD_BASELINE_KEY,{storage:payload.storage,revision:data.revision});
+    setCloudDirty(cloudLocalEditSerial!==uploadedSerial);
+    if(!cloudDirty()){localStorage.removeItem(CLOUD_EDIT_BASE_KEY);clearTimeout(cloudSyncTimer);cloudSyncTimer=null;}
+    cloudLastError="";
+    setCloudStatus(cloudDirty()?"Sync pending":"Synced",cloudDirty()?"warn":"ok",`Cloud revision ${data.revision} \u00b7 ${new Date(data.updatedAt).toLocaleString()}`);
+    return data;
+  }catch(e){
+    cloudLastError=String(e?.message||e);
+    if(e.status===409)setCloudStatus("Changes need review","warn","Saved on this device. The cloud revision changed (possibly the daily snapshot). Unrelated history is preserved; tap Sync This Device to review overlapping balances.");
+    else setCloudStatus("Sync pending","warn","Saved on this device; cloud unavailable. "+cloudLastError);
+    throw e;
+  }finally{
+    cloudSyncInFlight=false;updateInvestmentSettingsStatus();
+    if(uploadSucceeded&&cloudDirty()&&cloudSyncEnabled()&&cloudSyncToken()){
+      clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(false,"auto").catch(()=>{}),2000);
+    }
+  }
+}
+
 const CLOUD_SYNC_ENABLED_KEY="portfolioCloudSyncEnabledV519";
 const CLOUD_SYNC_TOKEN_KEY="portfolioCloudSyncTokenV519";
 const CLOUD_SYNC_REVISION_KEY="portfolioCloudRevisionV519";
@@ -4112,7 +4644,8 @@ const CLOUD_SYNC_KEYS=[
   "netWorthManualAccountsV58","netWorthHistoryV58","personalLedgerTransactionsV513",
   "miao2026HistoryImportedV514","multiAccountMigrationV58","questradeHistoryStartV584",
   "questradeCurrentHoldingsSeedV581","cibcMutualFundMigrationV511","cibcManualAccountBackupV511",
-  "cibcMutualFundNavV512","portfolioDataResetVersion"
+  "cibcMutualFundNavV512","portfolioDataResetVersion",
+  "cibcMutualFundNavHistoryV1",INVESTMENT_CASH_HISTORY_KEY,INVESTMENT_OBSERVATIONS_KEY
 ];
 let cloudSyncTimer=null;
 let cloudSyncInFlight=false;
@@ -4182,14 +4715,14 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.20.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.21.0",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
   if(!token)throw new Error("Sync token is missing");
   const headers={"Authorization":`Bearer ${token}`,...(options.headers||{})};
   if(options.body && !headers["Content-Type"])headers["Content-Type"]="application/json";
-  const r=await fetch(cloudApiUrl(path),{...options,headers,cache:"no-store"});
+  const r=await fetch(cloudApiUrl(path),{...options,headers,cache:"no-store",signal:options.signal||AbortSignal.timeout(20000)});
   let data={};
   try{data=await r.json()}catch(e){}
   if(!r.ok){
@@ -4214,47 +4747,13 @@ async function cloudStatusCheck({quiet=false}={}){
     return null;
   }
 }
-async function cloudPushState(force=false,reason="manual"){
-  if(cloudSyncInFlight)return null;
-  if(!cloudSyncToken())throw new Error("Sync token is missing");
-  cloudSyncInFlight=true;
-  let uploadedSerial=null;
-  let uploadSucceeded=false;
-  setCloudStatus("Syncing…","warn",reason==="auto"?"Saving the latest local changes to D1.":"Saving this device to the primary cloud copy.");
-  try{
-    const body={payload:cloudBuildPayload(),deviceId:cloudDeviceId(),baseRevision:cloudRevision(),force:Boolean(force)};
-    uploadedSerial=cloudLocalEditSerial;
-    const data=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});
-    uploadSucceeded=true;
-    localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
-    localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||new Date().toISOString()));
-    setCloudDirty(cloudLocalEditSerial!==uploadedSerial);
-    cloudLastError="";
-    const extra=data?.structuredSyncWarning?` · Structured copy warning: ${data.structuredSyncWarning}`:"";
-    if(cloudDirty())setCloudStatus("Sync pending","warn","Saved on this device. Uploading the newer local changes next.");
-    else setCloudStatus("Synced","ok",`Cloud revision ${data.revision} · ${new Date(data.updatedAt).toLocaleString()}${extra}`);
-    return data;
-  }catch(e){
-    cloudLastError=String(e?.message||e);
-    if(e?.status===409)setCloudStatus("Sync conflict","warn","Cloud changed on another device. Your local changes were not overwritten. Open the app on the latest device first, or choose Restore from Cloud / Sync This Device manually.");
-    else setCloudStatus("Sync failed","err",cloudLastError);
-    throw e;
-  }finally{
-    cloudSyncInFlight=false;
-    updateInvestmentSettingsStatus();
-    if(uploadSucceeded && cloudDirty() && cloudSyncEnabled() && cloudSyncToken()){
-      clearTimeout(cloudSyncTimer);
-      cloudSyncTimer=setTimeout(()=>cloudPushState(false,"auto").catch(()=>{}),2000);
-    }
-  }
-}
 function cloudScheduleSync(){
   if(cloudRestoreInProgress || !cloudSyncEnabled() || !cloudSyncToken())return;
   if(!cloudBootstrapFinished){cloudPendingBeforeBootstrap=true;return}
   cloudLocalEditSerial++;
   setCloudDirty(true);
   clearTimeout(cloudSyncTimer);
-  cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},2000);
+  cloudSyncTimer=setTimeout(()=>{if(cloudDirty())cloudPushState(false,"auto").catch(()=>{})},2000);
 }
 function cloudApplyPayload(payload){
   if(!payload || typeof payload!=="object" || !payload.storage || typeof payload.storage!=="object")throw new Error("Cloud data format is invalid");
@@ -4263,7 +4762,7 @@ function cloudApplyPayload(payload){
     const exactReplace=Number(payload.schemaVersion||0)>=2;
     for(const key of CLOUD_SYNC_KEYS){
       if(Object.prototype.hasOwnProperty.call(payload.storage,key))localStorage.setItem(key,String(payload.storage[key]));
-      else if(exactReplace)localStorage.removeItem(key);
+      else if(exactReplace&&!CLOUD_OPTIONAL_KEYS.has(key))localStorage.removeItem(key);
     }
   }finally{cloudRestoreInProgress=false}
 }
@@ -4278,6 +4777,8 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
     if(confirmFirst && !confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return null;
     try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}catch(e){}
     cloudApplyPayload(data.payload);
+    writeLocalJSON(CLOUD_BASELINE_KEY,{storage:data.payload.storage,revision:data.revision});
+    localStorage.removeItem(CLOUD_EDIT_BASE_KEY);
     localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
     localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||""));
     setCloudDirty(false);
@@ -4303,8 +4804,7 @@ async function cloudReconcile(reason="resume"){
     if(!cloudDirty()){
       return await cloudPullLatest({confirmFirst:false,reason:"auto"});
     }
-    setCloudStatus("Sync conflict","warn",`Cloud revision ${remoteRev} is newer than this device (${localRev}), and this device also has unsynced changes. Nothing was overwritten.`);
-    return status;
+    return await cloudPushState(false,"auto");
   }
   if(remoteRev===localRev){
     if(Number(status?.schemaVersion||0)<2)return await cloudPushState(false,"upgrade");
@@ -4324,7 +4824,7 @@ async function cloudBootstrap(){
 }
 
 function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
-function saveLotsSafe(){try{localStorage.setItem("incomeTrackerLots",JSON.stringify(lots));cloudScheduleSync()}catch(e){}}
+function saveLotsSafe(){try{rememberCloudEditBase("incomeTrackerLots");localStorage.setItem("incomeTrackerLots",JSON.stringify(lots));cloudScheduleSync()}catch(e){}}
 
 const catalog = {};
 const defaultLots = [];
@@ -4397,6 +4897,7 @@ function loadCibcFundNavCache(){
       const f=CIBC_MUTUAL_FUNDS.find(x=>x.ticker===row.ticker);
       const px=Number(row.displayPrice);
       if(!f||!(px>0))continue;
+      if(row.date&&f.priceDate&&row.date<f.priceDate)continue;
       f.displayPrice=px;
       f.marketValue=Number((px*Number(f.units)).toFixed(2));
       f.priceDate=row.priceDate||f.priceDate;
@@ -4517,7 +5018,7 @@ function loadNumberSetting(key, fallback){
   }catch(e){return fallback}
 }
 function saveNumberSetting(key,value){
-  try{localStorage.setItem(key,String(value));cloudScheduleSync()}catch(e){}
+  try{rememberCloudEditBase(key);localStorage.setItem(key,String(value));cloudScheduleSync()}catch(e){}
 }
 
 // Current account values from Wealthsimple; editable in Settings.
@@ -4625,40 +5126,16 @@ function chartPeriodLabelForAccount(accountId,requestedRange){
   const d=new Date(tracking+"T00:00:00");
   return "since "+d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
 }
-function clearPortfolioChartInteraction(){
-  if(!lineChart)return;
-
-  // Old scrub handlers remain attached to the same chart container even after
-  // its SVG is replaced with an empty/loading message. Remove them explicitly.
-  lineChart.onpointerdown=null;
-  lineChart.onpointermove=null;
-  lineChart.onpointerup=null;
-  lineChart.onpointercancel=null;
-  lineChart.onlostpointercapture=null;
-
-  if(chartScrubInfo)chartScrubInfo.classList.remove("show");
-  if(chartScrubDate)chartScrubDate.textContent="";
-  if(chartScrubValue)chartScrubValue.textContent="";
-
-  // Safety cleanup if the user switched accounts while a chart was being scrubbed.
-  if(document.body.classList.contains("chartScrubbing") || document.documentElement.classList.contains("chartScrubbing")){
-    const top=parseInt(document.body.style.top||"0",10);
-    document.documentElement.classList.remove("chartScrubbing");
-    document.body.classList.remove("chartScrubbing");
-    document.body.style.top="";
-    if(Number.isFinite(top) && top!==0)window.scrollTo(0,Math.abs(top));
-  }
-}
 function resetPortfolioChartUI(accountId,requestedRange){
   clearPortfolioChartInteraction();
   const summary=portfolioSummary(accountId);
   lineChart.innerHTML=`<div class="emptyChart">Loading ${accountName(accountId)} history…</div>`;
   if(requestedRange==="ALL"){
     portfolioGain.textContent=signedMoney(summary.total)+" all time";
-    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+    portfolioGain.style.setProperty("color",summary.total>=0?"var(--green)":"var(--red)","important");
   }else{
     portfolioGain.textContent="— loading";
-    portfolioGain.style.color="var(--muted)";
+    portfolioGain.style.setProperty("color","var(--muted)","important");
   }
 }
 function renderTrackingPlaceholder(accountId,requestedRange,message){
@@ -4673,13 +5150,14 @@ function renderTrackingPlaceholder(accountId,requestedRange,message){
     : `Investment history is not available for ${accountName(accountId)}.`)}</div>`;
   if(requestedRange==="ALL"){
     portfolioGain.textContent=signedMoney(summary.total)+" all time";
-    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+    portfolioGain.style.setProperty("color",summary.total>=0?"var(--green)":"var(--red)","important");
   }else{
     portfolioGain.textContent="— history unavailable";
-    portfolioGain.style.color="var(--muted)";
+    portfolioGain.style.setProperty("color","var(--muted)","important");
   }
 }
 function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
+  clearPortfolioChartInteraction();
   if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(id))id="all";
   selectedPortfolioAccount=id;
   saveTextSafe("selectedPortfolioAccountV58",id);
@@ -4691,6 +5169,8 @@ function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
     b=>b.classList.toggle("active",b.dataset.divAccount===id)
   );
 
+  const activeAccount=document.querySelector('#portfolioAccountSwitcher [data-account="'+id+'"]');
+  if(activeAccount){const parent=activeAccount.parentElement;parent.scrollLeft=Math.max(0,activeAccount.offsetLeft-parent.offsetLeft-(parent.clientWidth-activeAccount.offsetWidth)/2);}
   // Invalidate the previous account request before anything else can repaint.
   portfolioChartRequestSeq++;
   renderHome();
@@ -4752,7 +5232,7 @@ function apiUrl(path, params={}){
   return u.toString();
 }
 async function apiQuote(symbol, range="1y", interval="1d"){
-  const r=await fetch(apiUrl("/quote",{symbol,range,interval}),{cache:"no-store"});
+  const r=await fetch(apiUrl("/quote",{symbol,range,interval}),{cache:"no-store",signal:AbortSignal.timeout(15000)});
   if(!r.ok){let msg="";try{msg=await r.text()}catch(e){};throw new Error(`${symbol}: ${r.status} ${msg}`)}
   return await r.json();
 }
@@ -4962,101 +5442,9 @@ async function syncDividendHistory(tickers){
     loadPortfolioHistory(currentPortfolioRange);
   }
 }
-async function refreshLiveData(silent=false){
-  marketApiBase=DEFAULT_MARKET_API;
-  const cibcSyncPromise=refreshCibcFundPrices(false);
-  if(!marketApiBase){
-    liveMode=false; setMarketStatus("","Connecting market data…");
-    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}`;
-    return;
-  }
-  if(!silent)setMarketStatus("loading","Refreshing market data…");
-  try{
-    const tickers=[...new Set(lots.map(l=>l.ticker))];
-    const results=await Promise.allSettled([
-      apiQuote("CAD=X","5y","1d"),
-      ...tickers.map(t=>apiQuote(t,"5y","1wk"))
-    ]);
-
-    const fxResult=results[0];
-    if(fxResult.status==="fulfilled"){
-      const fxQ=fxResult.value;
-      if(Number(fxQ.price)>0)fx=Number(fxQ.price);
-      fxHistory=(fxQ.history||[]).slice().sort((a,b)=>a.time-b.time);
-    }
-
-    const failed=[];
-    let successCount=0;
-    dividendEventsByTicker={...dividendEventsByTicker};
-
-    results.slice(1).forEach((res,i)=>{
-      const ticker=tickers[i];
-      if(res.status!=="fulfilled"){
-        failed.push(ticker);
-        console.warn("Market data unavailable for",ticker,res.reason);
-        return;
-      }
-      successCount++;
-      const q=res.value;
-      const yahooEvents=normalizeYahooDividendEvents(q.dividends||[]);
-      yahooDividendEventsByTicker[ticker]=yahooEvents;
-
-      if(isExactDividendSource(dividendSourceByTicker[ticker]) && Array.isArray(dividendEventsByTicker[ticker])){
-        // Existing cache may come from v5.0 where exact issuer history replaced older
-        // Yahoo history. Keep only truly exact cached rows, then restore older Yahoo rows.
-        const exactRows=dividendEventsByTicker[ticker].filter(e=>e && e.paymentDateEstimated===false);
-        dividendEventsByTicker[ticker]=mergeDividendEvents(yahooEvents,exactRows);
-      }else{
-        dividendEventsByTicker[ticker]=yahooEvents;
-        if(!dividendSourceByTicker[ticker])dividendSourceByTicker[ticker]="yahoo";
-      }
-
-      const events=dividendEventsByTicker[ticker]||yahooEvents;
-      catalog[ticker]={
-        ...(catalog[ticker]||{}),
-        title:q.title||ticker,
-        currency:q.currency||((ticker.endsWith(".TO")||ticker.endsWith(".NE"))?"CAD":"USD"),
-        price:Number(q.price)||0,
-        prev:Number(q.previousClose)||Number(q.price)||0,
-        annualDiv:trailingAnnualDividendPerShare(yahooEvents.length?yahooEvents:events),
-        color:colorForTicker(ticker),
-        exchange:q.exchange||"",
-        marketState:q.marketState||"",
-        regularMarketTime:q.regularMarketTime||null
-      };
-    });
-
-    if(!successCount && fxResult.status!=="fulfilled") throw new Error("All market data requests failed");
-
-    rebuildDividendPayments();
-    await cibcSyncPromise;
-    liveMode=true;
-    liveUpdatedAt=Date.now();
-    chartCache.clear();
-    saveMarketCache();
-    const tm=new Date(liveUpdatedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-    const suffix=failed.length ? ` · unavailable: ${failed.join(", ")}` : "";
-    setMarketStatus(failed.length?"error":"live",`Yahoo market data · refreshed ${tm}${suffix}`);
-    if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · Yahoo market data${failed.length ? ` · unavailable: ${failed.join(", ")}` : ""}`;
-    renderHome();
-    renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
-    renderNetWorth();
-    if(currentDetailTicker && document.getElementById("detailView").classList.contains("active"))openHoldingDetail(currentDetailTicker);
-    loadPortfolioHistory(currentPortfolioRange);
-    // Dividend history is intentionally refreshed separately and slowly so the free Alpha Vantage key is not rate-limited.
-    syncDividendHistory(tickers);
-  }catch(err){
-    console.error(err);
-    try{await cibcSyncPromise;}catch(e){}
-    renderNetWorth();
-    if(cibcFundView?.classList.contains("active"))renderCibcFundDetail();
-    setMarketStatus("error", (liveMode ? "Refresh failed · cached data · " : "Market data unavailable · demo data · ") + String(err?.message||err));
-  }
-}
-
 const portfolioRangeConfig={
   "1D":{range:"1d",interval:"5m"},
-  "1W":{range:"5d",interval:"15m"},
+  "1W":{range:"1mo",interval:"1d"},
   "1M":{range:"1mo",interval:"1d"},
   "3M":{range:"3mo",interval:"1d"},
   "6M":{range:"6mo",interval:"1d"},
@@ -5114,290 +5502,6 @@ function valueAtOrBefore(hist,t){
   return best&&Number(best.close)>0?Number(best.close):null;
 }
 function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.length-1)/(max-1);return Array.from({length:max},(_,i)=>arr[Math.round(i*step)])}
-async function loadPortfolioHistory(label){
-  currentPortfolioRange=label||"ALL";
-
-  // Freeze the exact account + range for this request.
-  const requestSeq=++portfolioChartRequestSeq;
-  const accountId=selectedPortfolioAccount;
-  const requestedRange=currentPortfolioRange;
-
-  // Clear the old account immediately, before any account-specific calculation.
-  lineChart.style.height="";
-  resetPortfolioChartUI(accountId,requestedRange);
-
-  let scopeLots=[];
-  let scopeDivs=[];
-  let trackingStart=null;
-  try{
-    scopeLots=lotsForAccount(accountId);
-    scopeDivs=dividendPaymentsForAccount(accountId);
-    trackingStart=accountTrackingStart(accountId);
-  }catch(e){
-    console.warn("portfolio chart context",e);
-    if(requestSeq===portfolioChartRequestSeq && accountId===selectedPortfolioAccount && requestedRange===currentPortfolioRange){
-      clearPortfolioChartInteraction();
-      lineChart.innerHTML=`<div class="emptyChart">Unable to prepare ${accountName(accountId)} history.</div>`;
-      portfolioGain.textContent="— history unavailable";
-      portfolioGain.style.color="var(--muted)";
-    }
-    return;
-  }
-
-  // CIBC publishes one NAV per trading day. 1D shows the current account value
-  // without inventing an intraday gain or chart. All longer ranges chart only
-  // independently observed NAVs for all three holdings on matching dates.
-  if(accountId==="cibc_mutual_fund"){
-    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    lineChart.style.height="";
-    const book=portfolioSummary(accountId);
-    if(requestedRange==="1D"){
-      clearPortfolioChartInteraction();
-      lineChart.innerHTML="";
-      lineChart.style.height="0px";
-      portfolioGain.textContent="Daily NAV";
-      portfolioGain.style.color="var(--muted)";
-      return;
-    }
-    const allDates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
-    const windowDays={"1W":7,"1M":31,"3M":93,"6M":186,"1Y":366};
-    let dates=allDates;
-    if(requestedRange==="YTD") dates=dates.filter(d=>d.slice(0,4)===String(new Date().getFullYear()));
-    else if(windowDays[requestedRange]){
-      const dt=new Date();dt.setUTCDate(dt.getUTCDate()-windowDays[requestedRange]);
-      const cutoff=dt.toISOString().slice(0,10);
-      dates=dates.filter(d=>d>=cutoff);
-    }
-    const observed=dates.map(d=>{
-      let value=0;
-      for(const f of CIBC_MUTUAL_FUNDS){
-        const row=(cibcNavHistory[f.ticker]||[]).find(x=>x.date===d);
-        if(!row||!(Number(row.price)>0))return null;
-        value+=Number(row.price)*Number(f.units);
-      }
-      return {date:d,time:Date.parse(d+"T12:00:00Z")/1000,value};
-    }).filter(Boolean);
-    if(requestedRange==="ALL"){
-      portfolioGain.textContent=signedMoney(book.total)+" all time";
-      portfolioGain.style.color=book.total<0?"var(--red)":"var(--green)";
-    }else if(observed.length>=2){
-      const change=observed.at(-1).value-observed[0].value;
-      portfolioGain.textContent=signedMoney(change)+" "+portfolioReturnPeriodLabel(requestedRange);
-      portfolioGain.style.color=change<0?"var(--red)":"var(--green)";
-    }else{
-      portfolioGain.textContent="Daily NAV";
-      portfolioGain.style.color="var(--muted)";
-    }
-    if(observed.length>=2){
-      renderLineChart(observed,null,{discrete:true,showObservedDots:true,noArea:true});
-    }else{
-      clearPortfolioChartInteraction();
-      // A single NAV cannot form a historical line. Keep an uncluttered state.
-      lineChart.innerHTML=`<div class="emptyChart">${observed.length===1?"1 NAV record":"NAV history is still building"}</div>`;
-    }
-    return;
-  }
-
-  // Cash-only account: no fabricated market-history chart.
-  if(!scopeLots.length){
-    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    renderTrackingPlaceholder(accountId,requestedRange);
-    return;
-  }
-  if(!marketApiBase||!liveMode){
-    if(requestSeq!==portfolioChartRequestSeq)return;
-    renderTrackingPlaceholder(accountId,requestedRange,"Market history is temporarily unavailable.");
-    return;
-  }
-
-  const lotKey=scopeLots.map(l=>`${l.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${l.ticker}:${l.date}:${l.shares}:${l.cost}:${l.openingPosition?1:0}`).join(";");
-  const divKey=scopeDivs.map(p=>`${p.accountId||DEFAULT_INVESTMENT_ACCOUNT}:${p.ticker}:${p.exDate||""}:${p.date}:${Number(p.amount||0).toFixed(4)}`).join(";");
-  const key="acctchart|"+accountId+"|"+requestedRange+"|"+cashForAccount(accountId).toFixed(2)+"|"+depositsForAccount(accountId).toFixed(2)+"|"+lotKey+"|"+divKey;
-
-  const applyPeriodReturn=(payload)=>{
-    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    if(requestedRange==="ALL"){
-      const summary=portfolioSummary(accountId);
-      portfolioGain.textContent=signedMoney(summary.total)+" all time";
-      portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
-    }else if(payload?.hasHistory){
-      const periodReturn=Number(payload.periodReturn)||0;
-      const labelText=payload.truncatedByTracking
-        ? chartPeriodLabelForAccount(accountId,requestedRange)
-        : portfolioReturnPeriodLabel(requestedRange);
-      portfolioGain.textContent=signedMoney(periodReturn)+" "+labelText;
-      portfolioGain.style.color=periodReturn>=0?"var(--green)":"var(--red)";
-    }else{
-      renderTrackingPlaceholder(accountId,requestedRange);
-    }
-  };
-
-  if(chartCache.has(key)){
-    const cached=chartCache.get(key);
-    if(requestSeq!==portfolioChartRequestSeq)return;
-    if(cached.hasHistory)renderLineChart(cached.data);
-    else renderTrackingPlaceholder(accountId,requestedRange);
-    applyPeriodReturn(cached);
-    return;
-  }
-
-  const cfg=requestedRange==="ALL"?allRangeConfig(accountId):(portfolioRangeConfig[requestedRange]||portfolioRangeConfig.ALL);
-
-  try{
-    const tickers=[...new Set(scopeLots.map(l=>l.ticker))];
-    const needsFx=tickers.some(t=>market(t).currency==="USD");
-    const responses=await Promise.all([
-      ...tickers.map(t=>apiQuote(t,cfg.range,cfg.interval)),
-      ...(needsFx?[apiQuote("CAD=X",cfg.range,cfg.interval)]:[])
-    ]);
-
-    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-
-    const qMap={};
-    tickers.forEach((t,i)=>qMap[t]=responses[i]);
-    const fxQ=needsFx?responses[responses.length-1]:null;
-    const fxHist=fxQ?.history||fxHistory||[];
-
-    let timeline=[...new Set(tickers.flatMap(t=>(qMap[t].history||[]).map(p=>p.time)))].sort((a,b)=>a-b);
-
-    // For snapshot/opening positions, do not invent pre-snapshot history.
-    let truncatedByTracking=false;
-    if(trackingStart){
-      const trackingTs=new Date(trackingStart+"T00:00:00").getTime()/1000;
-      const originalFirst=timeline[0]||0;
-      timeline=timeline.filter(t=>t>=trackingTs);
-      truncatedByTracking=Boolean(originalFirst && originalFirst<trackingTs);
-    }
-
-    if(!timeline.length){
-      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
-      chartCache.set(key,payload);
-      renderTrackingPlaceholder(accountId,requestedRange);
-      return;
-    }
-
-    const pointDate=t=>new Date(t*1000).toISOString().slice(0,10);
-    const cadPriceAt=(ticker,t)=>{
-      const px=valueAtOrBefore(qMap[ticker].history,t);
-      if(!(px>0))return null;
-      if(market(ticker).currency!=="USD")return px;
-      return px*(valueAtOrBefore(fxHist,t)||fx);
-    };
-
-    let startIx=-1;
-    for(let i=0;i<timeline.length;i++){
-      const d=pointDate(timeline[i]);
-      let v=0;
-      for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,d,accountId);
-        if(!(sh>0))continue;
-        const px=cadPriceAt(ticker,timeline[i]);
-        if(px>0)v+=sh*px;
-      }
-      if(v>0){startIx=i;break;}
-    }
-
-    if(startIx<0){
-      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
-      chartCache.set(key,payload);
-      renderTrackingPlaceholder(accountId,requestedRange);
-      return;
-    }
-
-    let growth=1;
-    const growthPoints=[{time:timeline[startIx],growth:1}];
-
-    for(let i=startIx+1;i<timeline.length;i++){
-      const prevT=timeline[i-1],currT=timeline[i];
-      const prevDate=pointDate(prevT),currDate=pointDate(currT);
-      let prevValue=0,sameSharesEndValue=0;
-      for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,prevDate,accountId);
-        if(!(sh>0))continue;
-        const p0=cadPriceAt(ticker,prevT),p1=cadPriceAt(ticker,currT);
-        if(!(p0>0)||!(p1>0))continue;
-        prevValue+=sh*p0;
-        sameSharesEndValue+=sh*p1;
-      }
-      if(prevValue>0){
-        const dividends=scopeDivs
-          .filter(p=>p.date>prevDate&&p.date<=currDate)
-          .reduce((s,p)=>s+Number(p.amount||0),0);
-        let r=(sameSharesEndValue+dividends-prevValue)/prevValue;
-        if(Number.isFinite(r)){
-          if(r<-0.95)r=-0.95;
-          if(r>5)r=5;
-          growth*=1+r;
-        }
-      }
-      growthPoints.push({time:currT,growth});
-    }
-
-    // On the first tracking day Yahoo daily history may contain only one point.
-    // Add the live current value as the second point so switching accounts still
-    // produces an account-specific chart instead of leaving the prior chart onscreen.
-    const summary=portfolioSummary(accountId);
-    const currentValue=summary.accountValue;
-    const nowSec=Math.floor(Date.now()/1000);
-
-    if(growthPoints.length===1){
-      const firstT=growthPoints[0].time;
-      const firstDate=pointDate(firstT);
-      let firstHoldings=0;
-      for(const ticker of tickers){
-        const sh=sharesHeldOn(ticker,firstDate,accountId);
-        const px=cadPriceAt(ticker,firstT);
-        if(sh>0 && px>0)firstHoldings+=sh*px;
-      }
-      const firstAccountValue=firstHoldings+cashForAccount(accountId);
-      const data=[
-        {time:firstT,value:firstAccountValue},
-        {time:Math.max(nowSec,firstT+60),value:currentValue}
-      ];
-      const payload={
-        data,
-        periodReturn:currentValue-firstAccountValue,
-        periodPct:firstAccountValue?((currentValue/firstAccountValue)-1)*100:0,
-        hasHistory:true,
-        truncatedByTracking:true
-      };
-      chartCache.set(key,payload);
-      renderLineChart(data);
-      applyPeriodReturn(payload);
-      return;
-    }
-
-    if(!(growth>0)){
-      const payload={data:[],periodReturn:0,hasHistory:false,truncatedByTracking};
-      chartCache.set(key,payload);
-      renderTrackingPlaceholder(accountId,requestedRange);
-      return;
-    }
-
-    const startEquivalent=currentValue/growth;
-    let adjusted=growthPoints.map(p=>({time:p.time,value:startEquivalent*p.growth}));
-    adjusted=sampleArray(adjusted,220);
-    if(adjusted.length)adjusted[adjusted.length-1].value=currentValue;
-
-    const payload={
-      data:adjusted,
-      periodReturn:currentValue-startEquivalent,
-      periodPct:(growth-1)*100,
-      hasHistory:adjusted.length>=2,
-      truncatedByTracking
-    };
-    chartCache.set(key,payload);
-
-    if(requestSeq!==portfolioChartRequestSeq || accountId!==selectedPortfolioAccount || requestedRange!==currentPortfolioRange)return;
-    renderLineChart(adjusted);
-    applyPeriodReturn(payload);
-  }catch(e){
-    console.warn("history",e);
-    if(requestSeq===portfolioChartRequestSeq && accountId===selectedPortfolioAccount){
-      renderTrackingPlaceholder(accountId,requestedRange,"Unable to load account history right now.");
-    }
-  }
-}
 function market(t){
   if(!catalog[t]){
     catalog[t]={title:t,currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:0,prev:0,annualDiv:0,color:colorForTicker(t)};
@@ -5448,7 +5552,7 @@ function positions(accountId="all"){
     const avg=p.costTotal/p.shares;
     const mv=toCAD(p.shares*q.price,q.currency);
     const bv=toCAD(p.costTotal,q.currency);
-    const today=toCAD(p.shares*(q.price-q.prev),q.currency);
+    const today=q.dailyBaselineAvailable===false?0:toCAD(p.shares*(q.price-q.prev),q.currency);
     const todayPct=q.prev>0?(q.price/q.prev-1)*100:0;
     const annual=toCAD(p.shares*q.annualDiv,q.currency);
     return {...p,avg,mv,bv,today,todayPct,annual,...q};
@@ -5480,6 +5584,7 @@ function portfolioSummary(accountId="all"){
   return {ps,mv,bv,annual,divAll,accountValue,capital,total,totalPct,yieldPct:mv?annual/mv*100:0};
 }
 function renderHome(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
   const summary=portfolioSummary(selectedPortfolioAccount);
   const ps=summary.ps.sort((a,b)=>a.ticker.localeCompare(b.ticker,undefined,{numeric:true,sensitivity:"base"}));
   const divs=dividendPaymentsForAccount(selectedPortfolioAccount);
@@ -5492,7 +5597,7 @@ function renderHome(){
   portfolioValue.textContent=fmt(summary.accountValue);
   if(currentPortfolioRange==="ALL"){
     portfolioGain.textContent=signedMoney(summary.total)+" all time";
-    portfolioGain.style.color=summary.total>=0?"var(--green)":"var(--red)";
+    portfolioGain.style.setProperty("color",summary.total>=0?"var(--green)":"var(--red)","important");
   }
   mvMetric.textContent=fmt0(summary.bv);
   retMetric.textContent=(summary.total>=0?"+":"-")+fmt0(Math.abs(summary.total));
@@ -5528,183 +5633,6 @@ function renderHome(){
     <div class="monthMini"><div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div><div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div></div>`).join(""):`<div class="emptyIncome">No dividend income yet.</div>`;
   bindHoldingRows();
   if(netWorthView?.classList.contains("active"))renderNetWorth();
-}
-function renderLineChart(data,total,options={}){
-  const w=520,h=220,pad=8;
-  if(!Array.isArray(data) || data.length<2){
-    clearPortfolioChartInteraction();
-    lineChart.innerHTML=`<div class="emptyChart">${lots.length ? "Loading investment history…" : "Add your first holding to start tracking your investments."}</div>`;
-    return;
-  }
-
-  const cleanData=data
-    .map(x=>({time:Number(x.time),value:Number(x.value)}))
-    .filter(x=>Number.isFinite(x.time)&&Number.isFinite(x.value));
-
-  if(cleanData.length<2){
-    clearPortfolioChartInteraction();
-    lineChart.innerHTML=`<div class="emptyChart">Investment history unavailable.</div>`;
-    return;
-  }
-
-  const vals=cleanData.map(x=>x.value);
-  let min=Math.min(...vals),max=Math.max(...vals);
-  if(max===min){max=min+1}
-
-  const pointXY=cleanData.map((p,i)=>({
-    ...p,
-    x:pad+i*(w-pad*2)/(cleanData.length-1),
-    y:h-pad-(p.value-min)/(max-min)*(h-pad*2)
-  }));
-
-  const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const navColor=options.discrete&&cleanData.at(-1).value<cleanData[0].value?"#e15360":"#159447";
-  const observedDots=options.showObservedDots?pointXY.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#fff" stroke="${navColor}" stroke-width="3"/>`).join(""):"";
-
-  clearPortfolioChartInteraction();
-  lineChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#159447" stop-opacity=".25"/>
-        <stop offset="100%" stop-color="#159447" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    ${options.noArea?"":`<path d="${d} L ${w-pad} ${h-pad} L ${pad} ${h-pad} Z" fill="url(#g)"/>`}
-    <path d="${d}" fill="none" stroke="${navColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    ${observedDots}
-
-    <g id="chartCrosshair" style="display:none;pointer-events:none">
-      <line id="chartVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
-      <line id="chartHLine" x1="${pad}" x2="${w-pad}" y1="0" y2="0" stroke="#a7aaa8" stroke-width="1" stroke-dasharray="4 4"/>
-      <circle id="chartPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#159447" stroke-width="3"/>
-    </g>
-  </svg>`;
-
-  const svg=lineChart.querySelector("svg");
-  const cross=svg.querySelector("#chartCrosshair");
-  const vLine=svg.querySelector("#chartVLine");
-  const hLine=svg.querySelector("#chartHLine");
-  const dot=svg.querySelector("#chartPoint");
-
-  let scrubbing=false;
-  let scrubScrollY=0;
-
-  function lockPageScroll(){
-    scrubScrollY=window.scrollY || window.pageYOffset || 0;
-    document.documentElement.classList.add("chartScrubbing");
-    document.body.classList.add("chartScrubbing");
-    document.body.style.top=`-${scrubScrollY}px`;
-  }
-
-  function unlockPageScroll(){
-    document.documentElement.classList.remove("chartScrubbing");
-    document.body.classList.remove("chartScrubbing");
-    document.body.style.top="";
-    window.scrollTo(0,scrubScrollY);
-  }
-
-  function formatScrubDate(sec){
-    const d=new Date(sec*1000);
-    if(currentPortfolioRange==="1D"){
-      return d.toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-    }
-    return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
-  }
-
-  let rafId=0;
-  let pendingClientX=null;
-
-  function applyScrub(clientX){
-    const rect=lineChart.getBoundingClientRect();
-    if(!rect.width)return;
-
-    // Map the finger continuously into chart coordinates.
-    let ratio=(clientX-rect.left)/rect.width;
-    ratio=Math.max(0,Math.min(1,ratio));
-
-    const floatIndex=ratio*(pointXY.length-1);
-    if(options.discrete){
-      const p=pointXY[Math.round(floatIndex)];
-      vLine.setAttribute("x1",p.x);vLine.setAttribute("x2",p.x);
-      hLine.setAttribute("y1",p.y);hLine.setAttribute("y2",p.y);
-      dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);
-      cross.style.display="";
-      chartScrubDate.textContent=new Date(p.time*1000).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"});
-      chartScrubValue.textContent=fmt(p.value);
-      chartScrubInfo.classList.add("show");
-      return;
-    }
-    const i0=Math.floor(floatIndex);
-    const i1=Math.min(pointXY.length-1,i0+1);
-    const f=floatIndex-i0;
-
-    const a=pointXY[i0];
-    const b=pointXY[i1];
-
-    const x=a.x+(b.x-a.x)*f;
-    const y=a.y+(b.y-a.y)*f;
-    const value=a.value+(b.value-a.value)*f;
-    const time=a.time+(b.time-a.time)*f;
-
-    vLine.setAttribute("x1",x); vLine.setAttribute("x2",x);
-    hLine.setAttribute("y1",y); hLine.setAttribute("y2",y);
-    dot.setAttribute("cx",x); dot.setAttribute("cy",y);
-    cross.style.display="";
-
-    const dateText=formatScrubDate(time);
-    chartScrubDate.textContent=dateText;
-    chartScrubValue.textContent=fmt(value);
-    chartScrubInfo.classList.add("show");
-
-  }
-
-  function selectAtClientX(clientX){
-    pendingClientX=clientX;
-    if(rafId)return;
-    rafId=requestAnimationFrame(()=>{
-      rafId=0;
-      if(pendingClientX!=null)applyScrub(pendingClientX);
-    });
-  }
-
-  function endScrub(){
-    if(!scrubbing)return;
-    scrubbing=false;
-    cross.style.display="none";
-    chartScrubInfo.classList.remove("show");
-    if(rafId){cancelAnimationFrame(rafId);rafId=0}
-    pendingClientX=null;
-    unlockPageScroll();
-  }
-
-  let activePointerId=null;
-
-  lineChart.onpointerdown=e=>{
-    if(e.pointerType==="mouse" && e.button!==0)return;
-    if(activePointerId!==null)return;
-    activePointerId=e.pointerId;
-    scrubbing=true;
-    lockPageScroll();
-    e.preventDefault();
-    try{lineChart.setPointerCapture(e.pointerId)}catch(_){}
-    applyScrub(e.clientX);
-  };
-
-  lineChart.onpointermove=e=>{
-    if(!scrubbing || e.pointerId!==activePointerId)return;
-    e.preventDefault();
-    selectAtClientX(e.clientX);
-  };
-
-  const finishPointer=e=>{
-    if(activePointerId!==null && e && e.pointerId!==undefined && e.pointerId!==activePointerId)return;
-    endScrub();
-    activePointerId=null;
-  };
-
-  lineChart.onpointerup=finishPointer;
-  lineChart.onpointercancel=finishPointer;
-  lineChart.onlostpointercapture=finishPointer;
 }
 function monthlySeries(range){
   const now=new Date(); const year=now.getFullYear();
@@ -5945,6 +5873,7 @@ function saveInvestmentAccountSettings({focusInvalid=false}={}){
   try{
     for(const {field,value} of changed){
       previous.push({key:field.key,value:localStorage.getItem(field.key)});
+      rememberCloudEditBase(field.key);
       localStorage.setItem(field.key,String(value));
     }
     // Record pending edits before any asynchronous cloud operation can start.
@@ -5961,6 +5890,7 @@ function saveInvestmentAccountSettings({focusInvalid=false}={}){
   investmentSettingsDirty=false;
   if(changed.length){
     settingsLastSaved=true;
+    recordCashAnchor();recordAccountObservation();
     cloudLocalEditSerial++;
     chartCache.clear();
     portfolioChartRequestSeq++;
@@ -6059,21 +5989,10 @@ window.addEventListener("pagehide",()=>{
   if(settingsModal.classList.contains("show"))saveInvestmentAccountSettings();
 });
 if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
-  if(!saveInvestmentAccountSettings({focusInvalid:true}))return;
   try{
-    const token=String(cloudSyncTokenInput?.value||"").trim();
-    if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);
-    localStorage.setItem(CLOUD_SYNC_ENABLED_KEY,cloudSyncEnabledInput?.checked?"1":"0");
-    const status=await cloudStatusCheck({quiet:true});
-    const remoteRev=Math.max(0,Number(status?.revision||0)||0);
-    const localRev=cloudRevision();
-    let force=false;
-    if(status?.hasCloudState && remoteRev>localRev){
-      force=confirm(`Cloud revision ${remoteRev} is newer than this device (${localRev}).\n\nSync This Device will replace the newer cloud copy with this device. Continue?`);
-      if(!force)return;
-    }
-    await cloudPushState(force,"manual");
-  }catch(e){alert(`Cloud sync failed: ${String(e?.message||e)}`)}
+    if(!saveInvestmentAccountSettings({focusInvalid:true})||!saveCloudSettingsFromForm())return;
+    await cloudPushState(false,"manual");
+  }catch(e){alert(`Sync is pending: ${String(e?.message||e)}. Your local data is kept.`)}
 };
 if(cloudRestoreBtn)cloudRestoreBtn.onclick=async()=>{
   try{
@@ -6167,7 +6086,7 @@ function loadManualAccounts(){
 }
 function saveManualAccounts(){
   manualAccounts.forEach(normalizeManualHistory);
-  try{localStorage.setItem(NET_WORTH_ACCOUNTS_KEY,JSON.stringify(manualAccounts));cloudScheduleSync()}catch(e){}
+  try{rememberCloudEditBase(NET_WORTH_ACCOUNTS_KEY);localStorage.setItem(NET_WORTH_ACCOUNTS_KEY,JSON.stringify(manualAccounts));cloudScheduleSync()}catch(e){}
 }
 function loadNetWorthHistory(){
   try{
@@ -6241,7 +6160,7 @@ function loadLedgerTransactions(){
   }catch(e){return []}
 }
 function saveLedgerTransactions(){
-  try{localStorage.setItem(LEDGER_TRANSACTIONS_KEY,JSON.stringify(ledgerTransactions));cloudScheduleSync()}catch(e){}
+  try{rememberCloudEditBase(LEDGER_TRANSACTIONS_KEY);localStorage.setItem(LEDGER_TRANSACTIONS_KEY,JSON.stringify(ledgerTransactions));cloudScheduleSync()}catch(e){}
 }
 let ledgerTransactions=loadLedgerTransactions();
 let ledgerMonth=localDateISO().slice(0,7);
@@ -7200,7 +7119,7 @@ function setHomeGrowthSummary(snapshot=null){
   if(!netWorthReturn)return;
   let base;
   let growth;
-  if(snapshot && Number.isFinite(Number(snapshot.base)) && Number.isFinite(Number(snapshot.growth))){
+  if(snapshot && chartFinite(snapshot.base) && chartFinite(snapshot.growth)){
     base=Number(snapshot.base);
     growth=Number(snapshot.growth);
   }else if(snapshot){
@@ -7221,172 +7140,6 @@ function setHomeGrowthSummary(snapshot=null){
   netWorthReturn.title=`Net asset base ${fmt(base)} · Credit card/debts excluded`;
 }
 function setNetWorthReturn(){setHomeGrowthSummary();}
-function renderNetWorthChart(){
-  if(!netWorthChart)return;
-
-  const rows=netWorthRowsForRange(currentNetWorthRange);
-
-  if(rows.length<2){
-    netWorthChart.innerHTML='<div class="netWorthChartEmpty">Net worth history will build automatically as your investments and account balances update.</div>';
-    setNetWorthReturn();
-    if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
-    netWorthChart.onpointerdown=null;
-    netWorthChart.onpointermove=null;
-    netWorthChart.onpointerup=null;
-    netWorthChart.onpointercancel=null;
-    netWorthChart.onlostpointercapture=null;
-    return;
-  }
-
-  const firstValue=rows[0].value;
-  const lastValue=rows[rows.length-1].value;
-  setNetWorthReturn();
-
-  const w=520,h=220,pad=8;
-  const vals=rows.map(x=>x.value);
-  let min=Math.min(...vals),max=Math.max(...vals);
-  if(max===min){max=min+1}
-  const spread=max-min;
-  min-=spread*.06;
-  max+=spread*.06;
-
-  // IMPORTANT: x-position is based on the real calendar date, not row index.
-  const dayMs=86400000;
-  const startMs=parseLocalDate(rows[0].date).getTime();
-  const endMs=parseLocalDate(rows[rows.length-1].date).getTime();
-  const totalMs=Math.max(dayMs,endMs-startMs);
-
-  const pointXY=rows.map(p=>{
-    const t=parseLocalDate(p.date).getTime();
-    const x=pad+(w-pad*2)*((t-startMs)/totalMs);
-    const y=h-pad-(p.value-min)/(max-min)*(h-pad*2);
-    return {...p,time:t/1000,x,y};
-  });
-
-  const d=pointXY.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-
-  netWorthChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Net worth history">
-    <defs>
-      <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#159447" stop-opacity=".25"/>
-        <stop offset="100%" stop-color="#159447" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <path d="${d} L ${pointXY[pointXY.length-1].x.toFixed(1)} ${h-pad} L ${pointXY[0].x.toFixed(1)} ${h-pad} Z" fill="url(#netWorthGradient)"/>
-    <path d="${d}" fill="none" stroke="#159447" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <g id="netWorthCrosshair" style="display:none;pointer-events:none">
-      <line id="netWorthVLine" x1="0" x2="0" y1="${pad}" y2="${h-pad}" stroke="#a7aaa8" stroke-width="1"/>
-      <line id="netWorthHLine" x1="${pad}" x2="${w-pad}" y1="0" y2="0" stroke="#a7aaa8" stroke-width="1" stroke-dasharray="4 4"/>
-      <circle id="netWorthPoint" cx="0" cy="0" r="5.5" fill="#fff" stroke="#159447" stroke-width="3"/>
-    </g>
-  </svg>`;
-
-  const svg=netWorthChart.querySelector("svg");
-  const cross=svg.querySelector("#netWorthCrosshair");
-  const vLine=svg.querySelector("#netWorthVLine");
-  const hLine=svg.querySelector("#netWorthHLine");
-  const dot=svg.querySelector("#netWorthPoint");
-
-  const currentNetWorth=netWorthTotals().total;
-  const currentMeta=netWorthMeta.textContent;
-  let scrubbing=false;
-  let scrubScrollY=0;
-  let activePointerId=null;
-
-  function lockPageScroll(){
-    scrubScrollY=window.scrollY || window.pageYOffset || 0;
-    document.documentElement.classList.add("chartScrubbing");
-    document.body.classList.add("chartScrubbing");
-    document.body.style.top=`-${scrubScrollY}px`;
-  }
-  function unlockPageScroll(){
-    document.documentElement.classList.remove("chartScrubbing");
-    document.body.classList.remove("chartScrubbing");
-    document.body.style.top="";
-    window.scrollTo(0,scrubScrollY);
-  }
-  function formatNetWorthScrubDate(sec){
-    return new Date(sec*1000).toLocaleDateString("en-CA",{
-      month:"short",day:"numeric",year:"numeric"
-    });
-  }
-
-  // Snap to the nearest REAL saved daily snapshot.
-  // No interpolation between dates and no invented intraday values.
-  function nearestSnapshot(clientX){
-    const rect=netWorthChart.getBoundingClientRect();
-    if(!rect.width)return pointXY[0];
-
-    let ratio=(clientX-rect.left)/rect.width;
-    ratio=Math.max(0,Math.min(1,ratio));
-    const svgX=ratio*w;
-
-    let nearest=pointXY[0];
-    let best=Math.abs(svgX-nearest.x);
-    for(let i=1;i<pointXY.length;i++){
-      const dist=Math.abs(svgX-pointXY[i].x);
-      if(dist<best){
-        best=dist;
-        nearest=pointXY[i];
-      }
-    }
-    return nearest;
-  }
-
-  function applyScrub(clientX){
-    const p=nearestSnapshot(clientX);
-
-    vLine.setAttribute("x1",p.x);vLine.setAttribute("x2",p.x);
-    hLine.setAttribute("y1",p.y);hLine.setAttribute("y2",p.y);
-    dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);
-    cross.style.display="";
-
-    netWorthScrubDate.textContent=formatNetWorthScrubDate(p.time);
-    netWorthScrubValue.textContent=fmt(p.value);
-    netWorthScrubInfo.classList.add("show");
-
-    netWorthValue.textContent=fmt(p.value);
-    netWorthMeta.textContent=formatNetWorthScrubDate(p.time);
-    setHomeGrowthSummary(p);
-  }
-  function endScrub(){
-    if(!scrubbing)return;
-    scrubbing=false;
-    cross.style.display="none";
-    netWorthScrubInfo.classList.remove("show");
-
-    netWorthValue.textContent=fmt(currentNetWorth);
-    netWorthMeta.textContent=currentMeta;
-    setNetWorthReturn();
-
-    unlockPageScroll();
-  }
-
-  netWorthChart.onpointerdown=e=>{
-    if(e.pointerType==="mouse" && e.button!==0)return;
-    if(activePointerId!==null)return;
-    activePointerId=e.pointerId;
-    scrubbing=true;
-    lockPageScroll();
-    e.preventDefault();
-    try{netWorthChart.setPointerCapture(e.pointerId)}catch(_){}
-    applyScrub(e.clientX);
-  };
-  netWorthChart.onpointermove=e=>{
-    if(!scrubbing || e.pointerId!==activePointerId)return;
-    e.preventDefault();
-    applyScrub(e.clientX);
-  };
-  const finishPointer=e=>{
-    if(activePointerId!==null && e && e.pointerId!==undefined && e.pointerId!==activePointerId)return;
-    endScrub();
-    activePointerId=null;
-  };
-  netWorthChart.onpointerup=finishPointer;
-  netWorthChart.onpointercancel=finishPointer;
-  netWorthChart.onlostpointercapture=finishPointer;
-}
 function relativeUpdatedText(dateStr){
   if(!dateStr)return "—";
   const today=parseLocalDate(localDateISO());
@@ -7398,6 +7151,7 @@ function relativeUpdatedText(dateStr){
   return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
 }
 function renderNetWorth(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
   if(!netWorthValue)return;
   const totals=netWorthTotals();
   const cashAssets=manualAccounts.filter(a=>a.type==="asset"&&a.category!=="other_asset");
@@ -7539,52 +7293,6 @@ function manualHistoryRangeRows(a,range){
   const before=rows.filter(r=>r.date<cutoffISO);
   if(before.length)inRange.unshift({date:cutoffISO,value:before[before.length-1].value,carried:true});
   return inRange;
-}
-function renderManualAccountChart(){
-  const a=getManualAccount(currentManualDetailId);
-  if(!a||!manualAccountChart)return;
-  const rows=manualHistoryRangeRows(a,currentManualAccountRange);
-  if(rows.length<2){
-    const only=rows[0];
-    if(only){
-      manualAccountChart.innerHTML=`<div class="manualAccountChartEmpty">
-        <div><strong>${a.currency} ${Number(only.value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><br>
-        <span style="font-size:12px">First saved value · ${parseLocalDate(only.date).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</span><br>
-        <span style="font-size:12px">Add another dated update to start the chart.</span></div>
-      </div>`;
-    }else{
-      manualAccountChart.innerHTML='<div class="manualAccountChartEmpty">Add a dated value to start this account’s history.</div>';
-    }
-    return;
-  }
-  const w=560,h=300,padX=8,padTop=28,padBottom=26;
-  const dates=rows.map(r=>parseLocalDate(r.date).getTime());
-  const vals=rows.map(r=>Number(r.value));
-  let min=Math.min(...vals),max=Math.max(...vals);
-  const spread=Math.max(1,max-min);
-  min-=spread*.08; max+=spread*.08;
-  const minT=Math.min(...dates),maxT=Math.max(...dates);
-  const x=t=>padX+(w-padX*2)*(maxT===minT?0:(t-minT)/(maxT-minT));
-  const y=v=>padTop+(h-padTop-padBottom)*(1-(v-min)/(max-min));
-  let path=`M ${x(dates[0]).toFixed(2)} ${y(vals[0]).toFixed(2)}`;
-  let area=`M ${x(dates[0]).toFixed(2)} ${(h-padBottom).toFixed(2)} L ${x(dates[0]).toFixed(2)} ${y(vals[0]).toFixed(2)}`;
-  for(let i=1;i<rows.length;i++){
-    const xi=x(dates[i]).toFixed(2), yi=y(vals[i]).toFixed(2);
-    path+=` H ${xi} V ${yi}`;
-    area+=` H ${xi} V ${yi}`;
-  }
-  area+=` L ${x(dates[dates.length-1]).toFixed(2)} ${(h-padBottom).toFixed(2)} Z`;
-  const first=rows[0],last=rows[rows.length-1];
-  const delta=Number(last.value)-Number(first.value);
-  const deltaPrefix=delta>=0?"+":"−";
-  const deltaText=`${deltaPrefix}${Math.abs(delta).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} ${a.currency}`;
-  manualAccountChart.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="${a.name} value history">
-    <defs><linearGradient id="manualAccountArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--teal)" stop-opacity=".18"/><stop offset="100%" stop-color="var(--teal)" stop-opacity=".02"/></linearGradient></defs>
-    <path d="${area}" fill="url(#manualAccountArea)"/>
-    <path d="${path}" fill="none" stroke="var(--teal)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-    <circle cx="${x(dates[dates.length-1])}" cy="${y(vals[vals.length-1])}" r="4.5" fill="var(--teal)"/>
-    <text x="12" y="18" class="manualDetailDelta">${deltaText}</text>
-  </svg>`;
 }
 function renderManualAccountDetail(){
   const a=getManualAccount(currentManualDetailId);
@@ -8055,6 +7763,7 @@ if(marketApiBase && loadMarketCache()){
   setMarketStatus("live",`Cached market data · ${tm}`);
   if(fxStatus)fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)} · cached`;
 }
+recordCashAnchor();
 setSelectedPortfolioAccount(selectedPortfolioAccount,{refreshChart:false});
 bindHoldingRows();
 renderDividends("1M");
@@ -8062,13 +7771,16 @@ renderNetWorth();
 renderTransactions();
 renderStats();
 if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
-setInterval(()=>{if(marketApiBase)refreshLiveData(true)},300000);
+setInterval(()=>{
+  if(document.visibilityState!=="visible"||settingsModal?.classList.contains("show")||chartIsScrubbing())return;
+  if((homeView?.classList.contains("active")||netWorthView?.classList.contains("active"))&&Date.now()-lastQuoteAttemptAt>=55000)refreshLiveData(true);
+},60000);
 setInterval(()=>{
   if(document.visibilityState==="visible"&&cloudSyncEnabled()&&cloudSyncToken()&&!cloudSyncInFlight&&!cloudPullInFlight)cloudReconcile("poll").catch(()=>{});
 },60000);
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
-    if(marketApiBase)refreshLiveData(true);
+    if(marketApiBase&&Date.now()-lastQuoteAttemptAt>15000)refreshLiveData(true);
     if(cloudSyncEnabled()&&cloudSyncToken()&&Date.now()-cloudLastRemoteCheckAt>10000)cloudReconcile("resume").catch(()=>{});
   }else if(cloudSyncEnabled()&&cloudSyncToken()&&cloudDirty()&&!cloudSyncInFlight){
     clearTimeout(cloudSyncTimer);

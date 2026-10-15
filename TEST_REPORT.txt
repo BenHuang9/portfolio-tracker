@@ -1,0 +1,43 @@
+Isolated Chromium browser tests, mocked market/cloud/storage responses.
+Not a production or iPhone Safari test.
+
+PASS: startup no runtime errors
+PASS: cash account with holdings has daily chart
+PASS: one selectable amount per daily date
+PASS: cash not multiplied by stock growth
+PASS: chart endpoints and live total agree
+PASS: drag never interpolates invented amounts
+PASS: release restores current hero
+PASS: no body scroll lock
+PASS: wealthsimple_tfsa 1D timestamps
+PASS: wealthsimple_tfsa daily baseline not long range metadata
+PASS: questrade_tfsa 1D timestamps
+PASS: questrade_tfsa daily baseline not long range metadata
+PASS: questrade_cash 1D timestamps
+PASS: questrade_cash daily baseline not long range metadata
+PASS: foreground poll changes current amount
+PASS: CIBC 1D only published NAV point
+PASS: cash-only still uses same chart renderer
+PASS: no horizontal overflow
+PASS: Home same point renderer
+PASS: manual balance uses same point renderer
+PASS: all UI tests have no runtime errors
+PASS: 320px viewport does not overflow
+PASS: cloud initial sync exists
+PASS: cron-only conflict merged without force
+PASS: edited cash reaches cloud
+PASS: server daily history retained
+PASS: cloud sync pending flag clears after actual acknowledgement
+PASS: overlapping balance changes stop instead of overwrite
+PASS: explicit scalar review keeps local balance only
+PASS: conflict merge retained unrelated transactions
+PASS: quote polling alone does not produce D1 writes
+PASS: cloud tests no runtime exceptions
+PASS: touch displays vertical marker
+PASS: touch updates hero to selected actual value
+PASS: touch release resets marker and amount
+PASS: account switching cannot restore previous account amount
+PASS: daily baseline uses quote session not wall-clock date
+PASS: network failure keeps last known balance
+PASS: network failure is labelled, not live
+PASS: touch and failure tests no runtime exceptions
