@@ -1,68 +1,45 @@
-Portfolio 5.21.2 - Scroll recovery verification
+Portfolio 5.21.3 - Test scope and observed results
 
-Source: supplied portfolio_chart_stability_v5_21_1.zip.
-Change scope: shared chart input handling, page overflow/scroll chaining,
-paint deferral during native scrolling, removal of the old global touchend
-cancellation. Chart values, histories and financial/storage logic are unchanged.
+Baseline: supplied portfolio_scroll_recovery_v5_21_2.zip.
 
-Reproduction in the old renderer (Chromium touch input):
-- Touch chart, wait 350ms, then drag vertically: document moved 0px.
-- Normal vertical flick was manually scrolled and had no native momentum.
+Reproduced failure in 5.21.2:
+Hold 350ms, move horizontally 18px, then move downward 145px without lifting.
+The page moved 0px. The chart cancelled 11 touchmove events.
 
-After the fix:
-- A vertical drag after a hold returns to browser scrolling.
-- Entire-app tests measured 145px page movement for the same 160px finger move
-  on Home and each tested Investment chart; the bank view moved to its bottom.
-- Horizontal/diagonal inspection and a stationary value still work.
-- Touch release/cancel clears inspection; rendering resumes after input ends.
+Same gesture in 5.21.3:
+393px viewport: page moved upward 101px during the gesture, then continued
+with native momentum. No touch event was cancelled.
+320px viewport: page moved upward 102px during the gesture. No touch event
+was cancelled.
 
-Environment: system Chromium, Playwright + CDP touchscreen input.
-Data: isolated, mocked quote responses and in-memory localStorage.
-No live account access, no real cloud writes or deployment.
-Not tested on a physical iPhone; Safari/WebKit runtime was unavailable.
+Checks:
+- Direct down/up drag after a stationary hold (350ms and 1200ms).
+- Small horizontal wobble before vertical intent.
+- Stationary reading, horizontal reading and touch release.
+- Wealthsimple 1D (minute-data fixture) and ALL (daily-data fixture).
+- Questrade TFSA 1M, Questrade Cash 1D, CIBC 1D/ALL, Home and bank detail.
+- Touch cancellation, subsequent navigation and absence of leaked busy state.
+- Cash Balance save and unchanged lots, transactions and deposits.
+- No non-passive touchmove listener on the charts.
+- No page horizontal overflow at 320px and 393px.
+- No runtime errors, no real market calls, no real cloud writes.
+- Nineteen calculation/save/sync functions compared source-identical to 5.21.2.
+- JavaScript syntax checks: inline application script and service worker pass.
 
-Whole-application checks:
-PASS: startup
-PASS: investment_intraday_loaded
-PASS: investment_hold_then_scroll
-PASS: held_point_not_repainted
-PASS: release_recovery
-PASS: transactions_tap
-PASS: rapid_stats_tap
-PASS: home_hold_then_scroll
-PASS: questrade_cash/1D_scroll
-PASS: cibc_mutual_fund/1D_scroll
-PASS: cibc_mutual_fund/ALL_scroll
-PASS: questrade_tfsa/1M_scroll
-PASS: daily_unique_dates
-PASS: bank_hold_then_scroll
-PASS: interrupted_touch_clears_state
-PASS: no_financial_changes_from_gestures
-PASS: cash_save_still_works
-PASS: settings_closes
-PASS: no_horizontal_overflow_393
-PASS: no_cloud_writes_from_test
-PASS: no_horizontal_overflow_320
-PASS: no_runtime_errors
+40 checks passed across 320/393px daily fixtures. The repeated 393px suite
+with the primary Investment view set to 1D passed 20 checks.
 
-Source-identical business functions:
-positions
-portfolioSummary
-cashForAccount
-depositsForAccount
-netWorthTotals
-netAssetBaseSummary
-currentInvestmentGrowth
-saveInvestmentAccountSettings
-recordNetWorthSnapshot
-accountLedgerRows
-recomputeManualAccountFromLedger
-txSignedDeltaForAccount
-cloudPushState
-mergeCloudStorage
-refreshLiveData
-dailyQuoteBaseline
-saveLedgerTransactions
-recordCashAnchor
+IMPORTANT TEST BOUNDARY:
+The "inspect_then_down" check verifies no app cancellation, cleanup and a
+working NEXT vertical gesture. It does not claim immediate vertical movement
+after an 80px horizontal gesture. Chromium direction-rails that existing
+horizontal gesture even with no app preventing touch events. The next vertical
+gesture moved 130px; no scroll/page lock remained.
 
-JavaScript syntax checks: application inline script and sw.js passed.
+Environment:
+System Chromium through Playwright/CDP touch input. Full supplied application
+HTML, isolated memory localStorage, mocked quotes/NAV, cloud sync disabled.
+Navigation is sandboxed; tests use set_content, not the deployed site.
+WebKit could not be installed (download DNS unavailable). No physical iPhone,
+iOS Safari or installed PWA verification has been performed. UI display files
+are prepared only; no deployment to the user's GitHub/Cloudflare was made.

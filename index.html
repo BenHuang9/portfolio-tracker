@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- 5.21.3 Scroll First: passive chart touch input, no touch cancellation -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -25,7 +26,7 @@
   --shadow:0 8px 24px rgba(0,0,0,.06);
 }
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-y}
+html,body{margin:0;width:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}
 body{min-height:100vh}
 button,input{font:inherit}
 .app{width:100%;max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:calc(48px + env(safe-area-inset-bottom));overflow-x:hidden}
@@ -143,8 +144,8 @@ html,body{
   -webkit-user-select:none;
   user-select:none;
 }
-body{touch-action:pan-y;}
-.divChartOuter,.monthStrip{touch-action:pan-x;}
+body{touch-action:manipulation;}
+.divChartOuter,.monthStrip{touch-action:manipulation;}
 input,button{touch-action:manipulation;}
 
 
@@ -3077,9 +3078,9 @@ html,body{
 /* 5.21 unified value charts: identical geometry, touch rules and point selection. */
 #lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{
  position:relative;display:block;box-sizing:border-box;height:250px!important;min-height:250px!important;
- overflow:hidden;touch-action:pan-y!important;user-select:none;-webkit-user-select:none;max-width:100%;
+ overflow:hidden;touch-action:manipulation!important;user-select:none;-webkit-user-select:none;max-width:100%;
 }
-.unifiedValueChart svg{display:block;width:100%;height:100%;}
+.unifiedValueChart svg{display:block;width:100%;height:100%;pointer-events:none;}
 #lineChart.unifiedValueChart path.unifiedStroke,.unifiedValueChart .unifiedStroke{stroke:var(--value-chart-color)!important;}
 #lineChart.unifiedValueChart .unifiedGhost,.unifiedValueChart .unifiedGhost{stroke:#d4d9d6!important;}
 #lineChart.unifiedValueChart circle.unifiedDot,.unifiedValueChart circle.unifiedDot{stroke:var(--value-chart-color)!important;stroke-width:2px;fill:var(--card,#fff);}
@@ -3717,6 +3718,7 @@ html,body,.app{overscroll-behavior-y:auto;}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.21.3</div>
   </div>
 </div>
 
@@ -4225,7 +4227,7 @@ function drawValueChart(el,input,options={}){
   const rows=chartPrepare(input,grain);
   const money=options.money||fmt;
   el.classList.add("unifiedValueChart");el.style.height="";
-  el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);
+  el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);el.dataset.chartInput="passive-scroll-5.21.3";
   el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
   if(!rows.length){disposeValueChart(el);el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
   const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
@@ -4258,30 +4260,17 @@ function drawValueChart(el,input,options={}){
     </svg>`;
   const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
   let opts=options,pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
-  let gesture=null,holdTimer=0,layoutRelease=null,disposed=false;
+  let gesture=null,holdTimer=0,disposed=false;
   const listenerRemovers=[];
   const dateEl=meta.querySelector('[data-point-date]'),valueEl=meta.querySelector('[data-point-value]');
   function listen(target,name,fn,settings){
     target.addEventListener(name,fn,settings);
     listenerRemovers.push(()=>target.removeEventListener(name,fn,settings));
   }
-  function freezeLayout(){
-    if(layoutRelease)return;
-    const roots=(opts.layoutRoots||[]).filter(Boolean),saved=[];
-    for(const root of roots){
-      const height=root.getBoundingClientRect().height;
-      if(!height)continue;
-      const props=['height','min-height','max-height'];
-      saved.push([root,props.map(k=>[k,root.style.getPropertyValue(k),root.style.getPropertyPriority(k)])]);
-      for(const k of props)root.style.setProperty(k,height+'px','important');
-    }
-    layoutRelease=()=>{for(const [root,props] of saved)for(const [key,value,priority] of props){if(value)root.style.setProperty(key,value,priority);else root.style.removeProperty(key);}layoutRelease=null;};
-  }
   function select(index){
     if(disposed)return;
     index=Math.max(0,Math.min(points.length-1,index));
     if(showing&&selected===index)return;
-    freezeLayout();
     const p=points[index];selected=index;showing=true;el.dataset.chartScrubbing="true";
     cross.style.display="";vline.setAttribute("x1",p.x);vline.setAttribute("x2",p.x);dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);clip.setAttribute("width",String(p.x+0.6));
     dateEl.textContent=chartLabel(p,grain);valueEl.textContent=(opts.money||fmt)(p.value);meta.classList.add('show');
@@ -4308,8 +4297,7 @@ function drawValueChart(el,input,options={}){
     cross.style.display="none";clip.setAttribute("width",String(w));meta.classList.remove('show');
     el.dataset.chartScrubbing="false";
     delete el.dataset.selectedDate;delete el.dataset.selectedTime;delete el.dataset.selectedValue;
-    try{if(reset)opts.onReset?.();}
-    finally{if(layoutRelease)layoutRelease();}
+    if(reset)opts.onReset?.();
   }
   function finish({paint=true}={}){
     clearTimeout(holdTimer);holdTimer=0;
@@ -4321,44 +4309,54 @@ function drawValueChart(el,input,options={}){
       if(paint)queueChartPaint();
     }
   }
+  // Touch is observed, never captured or cancelled. The browser remains free to
+  // scroll from ANY part of the chart, even after a hold or horizontal movement.
   function begin(kind,id,x,y){
     if(disposed)return;
     if(gesture||showing)finish({paint:false});
     clearTimeout(chartPaintTimer);chartPaintTimer=0;
     pointer=id;el.dataset.chartInteracting="true";
-    gesture={kind,axis:kind==='mouse'?'scrub':'pending',startX:x,startY:y,lastX:x,rect:el.getBoundingClientRect()};
+    gesture={kind,axis:kind==='mouse'?'inspect':'pending',startX:x,startY:y,lastX:x,lastY:y,rect:el.getBoundingClientRect(),scrollY:window.scrollY};
     if(kind==='mouse')select(nearest(x,false));
     else holdTimer=setTimeout(()=>{
       holdTimer=0;
       if(!gesture||gesture.axis!=='pending')return;
-      // A hold shows the value, but never takes ownership of vertical scrolling.
       gesture.axis='hold';select(nearest(gesture.lastX,false));
     },250);
   }
-  function move(x,y,event){
+  function yieldToScroll(){
+    chartNativeScrollUntil=performance.now()+250;
+    finish();
+  }
+  function move(x,y){
     if(!gesture)return;
-    gesture.lastX=x;
     const dx=x-gesture.startX,dy=y-gesture.startY;
-    if(gesture.axis==='pending'||gesture.axis==='hold'){
-      // Vertical intent wins, even after a hold: no preventDefault, no scrollTop writes.
-      if(Math.abs(dy)>=8&&Math.abs(dy)>=Math.abs(dx)*.85){finish();return;}
-      if(Math.abs(dx)>=8&&Math.abs(dx)>Math.abs(dy)*1.3){
-        clearTimeout(holdTimer);holdTimer=0;gesture.axis='scrub';
-      }else{
-        if(Math.hypot(dx,dy)>6){clearTimeout(holdTimer);holdTimer=0;}
-        return;
+    const lastDx=x-gesture.lastX,lastDy=y-gesture.lastY;
+    gesture.lastX=x;gesture.lastY=y;
+    if(gesture.kind==='touch'){
+      // Once native scroll has moved the viewport, stop changing the reading.
+      if(Math.abs(window.scrollY-gesture.scrollY)>1){yieldToScroll();return;}
+      // Vertical movement wins, including a direction change after inspection.
+      // This is a visual reset only: no preventDefault, scrollTo or style lock.
+      if((Math.abs(dy)>=8&&Math.abs(dy)>=Math.abs(dx)*.8) ||
+         (gesture.axis==='inspect'&&Math.abs(lastDy)>10&&Math.abs(lastDy)>Math.abs(lastDx)*1.2)){
+        yieldToScroll();return;
+      }
+      if(gesture.axis==='pending'||gesture.axis==='hold'){
+        if(Math.abs(dx)>=10&&Math.abs(dx)>Math.abs(dy)*1.5){
+          clearTimeout(holdTimer);holdTimer=0;gesture.axis='inspect';
+        }else{
+          if(Math.hypot(dx,dy)>6){clearTimeout(holdTimer);holdTimer=0;}
+          return;
+        }
       }
     }
-    if(gesture.axis!=='scrub')return;
-    if(gesture.kind==='touch'){
-      // A non-cancelable event means native scrolling already started. Let it finish.
-      if(!event.cancelable){finish();return;}
-      event.preventDefault();
-    }
+    if(gesture.axis!=='inspect')return;
     pendingX=x;if(!raf)raf=requestAnimationFrame(()=>{raf=0;flushSelection();});
   }
-  // Touch Events own touch inspection. The browser owns vertical pan + inertia.
-  // Do not also capture Pointer Events for the same finger on iOS.
+  // All TouchEvent listeners are passive, including touchmove. A cancelable
+  // listener with a conditional preventDefault was still blocking iOS scrolling
+  // in 5.21.2; removing just the document listener was insufficient.
   listen(el,'touchstart',e=>{
     if(e.touches.length!==1){finish();return;}
     const t=e.changedTouches[0];if(t)begin('touch','touch:'+t.identifier,t.clientX,t.clientY);
@@ -4368,38 +4366,39 @@ function drawValueChart(el,input,options={}){
     if(e.touches.length!==1){finish();return;}
     const t=Array.from(e.touches).find(t=>'touch:'+t.identifier===pointer);
     if(!t){finish();return;}
-    move(t.clientX,t.clientY,e);
-  },{passive:false});
+    move(t.clientX,t.clientY);
+  },{passive:true});
   const touchEnd=e=>{
     if(gesture?.kind!=='touch')return;
     if(Array.from(e.touches||[]).some(t=>'touch:'+t.identifier===pointer))return;
-    flushSelection();finish();
+    finish();
   };
   const touchCancel=e=>{
     if(gesture?.kind==='touch'&&(!e.touches?.length||Array.from(e.changedTouches||[]).some(t=>'touch:'+t.identifier===pointer)))finish();
   };
   listen(document,'touchend',touchEnd,{capture:true,passive:true});
   listen(document,'touchcancel',touchCancel,{capture:true,passive:true});
-  // Mouse / pen retain click-and-drag and keyboard inspection.
+  // Mouse is separate; touch/pen PointerEvents are left to the browser. Touch
+  // input is already handled above and is never processed a second time.
   el.onpointerdown=e=>{
-    if(e.pointerType==='touch'||e.isPrimary===false||e.button!==0)return;
-    e.preventDefault();begin('mouse',e.pointerId,e.clientX,e.clientY);
+    if(e.pointerType!=='mouse'||e.isPrimary===false||e.button!==0)return;
+    begin('mouse',e.pointerId,e.clientX,e.clientY);
     try{el.setPointerCapture(pointer)}catch(_){}
   };
   el.onpointermove=e=>{
     if(gesture?.kind!=='mouse'||e.pointerId!==pointer)return;
-    if(e.pointerType==='mouse'&&e.buttons===0){finish();return;}
-    move(e.clientX,e.clientY,e);
+    if(e.buttons===0){finish();return;}
+    move(e.clientX,e.clientY);
   };
   const pointerEnd=e=>{
     if(gesture?.kind!=='mouse'||e.pointerId!==pointer)return;
-    if(e.type==='pointerup')flushSelection();
     finish();
   };
   listen(document,'pointerup',pointerEnd,{capture:true,passive:true});
   listen(document,'pointercancel',pointerEnd,{capture:true,passive:true});
   el.onlostpointercapture=pointerEnd;
-  listen(el,'contextmenu',e=>{if(gesture)e.preventDefault();},{passive:false});
+  // No contextmenu cancellation for fingers. CSS suppresses text callouts on
+  // the decorative chart, without intercepting native touch/scroll behaviour.
   el.setAttribute('tabindex','0');
   el.onkeydown=e=>{
     if(!['ArrowLeft','ArrowRight','Escape'].includes(e.key))return;
@@ -4561,7 +4560,7 @@ function setPortfolioChartNote(text){
 function renderLineChart(data,total,options={}){
   const accountId=selectedPortfolioAccount,range=currentPortfolioRange;
   const gain=portfolioGain.textContent,gainColor=portfolioGain.style.color;
-  drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,layoutRoots:[portfolioValue.closest('.hero')],grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
+  drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
     portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
   },onReset(){
     portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
@@ -4688,7 +4687,7 @@ function renderNetWorthChart(){
   if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
   const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
   setNetWorthReturn();
-  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,layoutRoots:[netWorthValue.closest('.wealthHero')],label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
 }
 function renderManualAccountChart(){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}
@@ -4696,7 +4695,7 @@ function renderManualAccountChart(){
   const rows=manualHistoryRangeRows(a,currentManualAccountRange).filter(p=>!p.carried).map(p=>({...p,time:chartDayTime(p.date)}));
   const money=n=>(a.type==="liability"?"-":"")+new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency}).format(n);
   const prior=manualDetailEquivalent.textContent;
-  drawValueChart(manualAccountChart,rows,{grain:"daily",scope:a.id+"|"+currentManualAccountRange,layoutRoots:[manualDetailBalance.closest('.manualDetailHero')],label:a.name+" balance history",step:true,money,onSelect(p){manualDetailBalance.textContent=money(p.value);manualDetailEquivalent.textContent=chartLabel(p,"daily");},onReset(){manualDetailBalance.textContent=money(manualCurrentValue(a));manualDetailEquivalent.textContent=prior;}});
+  drawValueChart(manualAccountChart,rows,{grain:"daily",scope:a.id+"|"+currentManualAccountRange,label:a.name+" balance history",step:true,money,onSelect(p){manualDetailBalance.textContent=money(p.value);manualDetailEquivalent.textContent=chartLabel(p,"daily");},onReset(){manualDetailBalance.textContent=money(manualCurrentValue(a));manualDetailEquivalent.textContent=prior;}});
 }
 
 /* Safe three-way conflict resolution. Cron-only revisions are not user edits. */
@@ -7978,8 +7977,8 @@ document.addEventListener("visibilitychange",()=>{
 window.addEventListener("online",()=>{if(cloudSyncEnabled()&&cloudSyncToken())cloudReconcile("online").catch(()=>{})});
 setTimeout(()=>cloudBootstrap(),800);
 
-/* 5.21.2: do not install document-level touchmove/touchend preventDefault handlers.
-   Inputs and buttons use CSS touch-action; chart cancellation is chart-local only. */
+/* 5.21.3: chart gestures use passive TouchEvents exclusively on touchscreens.
+   Never cancel touchmove anywhere in a chart, or change document scrolling/height. */
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
