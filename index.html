@@ -4218,7 +4218,14 @@ function drawValueChart(el,input,options={}){
   if(!el)return;
   if(chartControllers.get(el)?.busy()){chartPendingPaint=true;return;}
   const grain=options.grain||"daily";
-  const rows=chartPrepare(input,grain);
+  const prepared=chartPrepare(input,grain);
+  // Stock intraday charts show the US regular session only (09:30–16:00 ET).
+  const sessionDate=prepared.at(-1)?.date;
+  const sessionEnd=sessionDate?chartDayEnd(sessionDate):0;
+  const openTime=sessionEnd-(14*3600+29*60+59); // 09:30:00 ET
+  const closeTime=sessionEnd-(7*3600+59*60+59); // 16:00:00 ET
+  const sessionRows=grain==='intraday'&&sessionDate?prepared.filter(r=>r.date===sessionDate&&r.time>=openTime&&r.time<=closeTime):prepared;
+  const rows=sessionRows.length?sessionRows:prepared;
   const money=options.money||fmt;
   el.classList.add("unifiedValueChart");el.style.height="";
   el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);
@@ -4230,7 +4237,11 @@ function drawValueChart(el,input,options={}){
   if(previous?.signature===signature){previous.updateOptions(options);return;}
   disposeValueChart(el);
   const left=12,right=w-12,top=45,bottom=h-28;
-  const minT=rows[0].time,maxT=rows.at(-1).time;
+  // US regular trading hours only. The axis is fixed independently of available quotes.
+  const firstTime=rows[0].time,lastTime=rows.at(-1).time;
+  const showSession=grain==='intraday'&&sessionRows.length>0;
+  const minT=showSession?openTime:firstTime;
+  const maxT=showSession?closeTime:lastTime;
   let minV=Math.min(...rows.map(r=>r.value)),maxV=Math.max(...rows.map(r=>r.value));
   const valueSpan=Math.max(maxV-minV,Math.abs(maxV)*0.002,1);
   const middle=(maxV+minV)/2;minV=middle-valueSpan*.62;maxV=middle+valueSpan*.62;
@@ -4250,7 +4261,7 @@ function drawValueChart(el,input,options={}){
       <g clip-path="url(#${id}-left)">${area?`<path d="${area}" fill="url(#${id}-area)"/>`:""}<path class="unifiedStroke" d="${path}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
       ${points.length===1?`<circle class="unifiedDot" cx="${last.x}" cy="${last.y}" r="4"/>`:""}
       <g data-cross style="display:none"><line x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#a7aaa8" stroke-width="1"/><circle class="unifiedDot" r="4"/></g>
-      <text x="${left}" y="${h-6}" class="unifiedAxis">${xLabel(points[0])}</text>${points.length>1?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${xLabel(last)}</text>`:""}
+      <text x="${left}" y="${h-6}" class="unifiedAxis">${showSession?'9:30 AM':xLabel(points[0])}</text>${(points.length>1||showSession)?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${showSession?'4:00 PM':xLabel(last)}</text>`:""}
     </svg>`;
   const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
   let opts=options,pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
