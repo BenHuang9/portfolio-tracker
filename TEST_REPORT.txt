@@ -1,43 +1,69 @@
-Isolated Chromium browser tests, mocked market/cloud/storage responses.
-Not a production or iPhone Safari test.
+Portfolio 5.21.1 test report
 
-PASS: startup no runtime errors
-PASS: cash account with holdings has daily chart
-PASS: one selectable amount per daily date
-PASS: cash not multiplied by stock growth
-PASS: chart endpoints and live total agree
-PASS: drag never interpolates invented amounts
-PASS: release restores current hero
-PASS: no body scroll lock
-PASS: wealthsimple_tfsa 1D timestamps
-PASS: wealthsimple_tfsa daily baseline not long range metadata
-PASS: questrade_tfsa 1D timestamps
-PASS: questrade_tfsa daily baseline not long range metadata
-PASS: questrade_cash 1D timestamps
-PASS: questrade_cash daily baseline not long range metadata
-PASS: foreground poll changes current amount
-PASS: CIBC 1D only published NAV point
-PASS: cash-only still uses same chart renderer
-PASS: no horizontal overflow
-PASS: Home same point renderer
-PASS: manual balance uses same point renderer
-PASS: all UI tests have no runtime errors
-PASS: 320px viewport does not overflow
-PASS: cloud initial sync exists
-PASS: cron-only conflict merged without force
-PASS: edited cash reaches cloud
-PASS: server daily history retained
-PASS: cloud sync pending flag clears after actual acknowledgement
-PASS: overlapping balance changes stop instead of overwrite
-PASS: explicit scalar review keeps local balance only
-PASS: conflict merge retained unrelated transactions
-PASS: quote polling alone does not produce D1 writes
-PASS: cloud tests no runtime exceptions
-PASS: touch displays vertical marker
-PASS: touch updates hero to selected actual value
-PASS: touch release resets marker and amount
-PASS: account switching cannot restore previous account amount
-PASS: daily baseline uses quote session not wall-clock date
-PASS: network failure keeps last known balance
-PASS: network failure is labelled, not live
-PASS: touch and failure tests no runtime exceptions
+Environment: system Chromium; isolated mocked data; no live account access.
+Mobile widths: 393px and 320px. Not iPhone Safari verification.
+
+PASS: full app startup
+PASS: long press shows selected date
+PASS: long press does not change page or chart geometry
+PASS: diagonal scrub remains captured
+PASS: diagonal scrub never scrolls the page
+PASS: stationary finger has no repeated text writes
+PASS: refresh attempts cannot reset a held point
+PASS: no SVG replacement during inspection
+PASS: release restores current amount exactly once
+PASS: release has one amount reset
+PASS: queued refresh preserves existing SVG if values unchanged
+PASS: release returns to identical page geometry
+PASS: horizontal intent selects immediately
+PASS: after horizontal intent vertical drift does not cancel
+PASS: vertical intent scrolls the page
+PASS: vertical scrolling does not flash historical amounts
+PASS: quiet background request keeps existing graph visible
+PASS: late asynchronous history response cannot replace touched graph
+PASS: new quote receipt does not flicker while held
+PASS: new quotes still apply after release
+PASS: cloud polls / restore wait for active gesture
+PASS: keyboard selection supported
+PASS: Escape clears selection
+PASS: cancel then lostcapture resets only once
+PASS: questrade_cash/1D shared stable chart
+PASS: questrade_cash/1D restores current amount
+PASS: cibc_mutual_fund/1D shared stable chart
+PASS: cibc_mutual_fund/1D restores current amount
+PASS: cibc_mutual_fund/ALL shared stable chart
+PASS: cibc_mutual_fund/ALL restores current amount
+PASS: questrade_tfsa/1M shared stable chart
+PASS: questrade_tfsa/1M restores current amount
+PASS: 1M still has one selectable point per date
+PASS: 1D still contains real intraday minute timestamps
+PASS: Home chart stays fixed while inspecting
+PASS: Home latest amount restored
+PASS: bank chart does not gain height when date appears
+PASS: bank current balance restored
+PASS: switch account cannot restore old amount
+PASS: no body fixed-position / horizontal overflow
+PASS: no database writes from these read/gesture tests
+PASS: no browser runtime errors
+PASS: 320px chart geometry stable
+PASS: 320px no horizontal overflow
+PASS: 320px no runtime errors
+
+45 browser checks passed.
+
+Unchanged financial/storage function bodies (exact source comparison):
+positions: unchanged
+portfolioSummary: unchanged
+cashForAccount: unchanged
+depositsForAccount: unchanged
+netWorthTotals: unchanged
+netAssetBaseSummary: unchanged
+currentInvestmentGrowth: unchanged
+saveInvestmentAccountSettings: unchanged
+recordNetWorthSnapshot: unchanged
+accountLedgerRows: unchanged
+recomputeManualAccountFromLedger: unchanged
+txSignedDeltaForAccount: unchanged
+cloudPushState: unchanged
+
+Node syntax checks: inline application script and service worker passed.

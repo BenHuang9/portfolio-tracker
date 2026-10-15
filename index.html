@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
 <title>Income Portfolio Tracker</title>
-<!-- 5.21.0: unified observed-point charts and low-write foreground quotes -->
+<!-- 5.21.1: stable chart gestures and deferred paint; financial calculations unchanged -->
 <!-- UI unified V5.20.1; CSS-only changes -->
 <!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
@@ -3090,7 +3090,7 @@ html,body{
 /* 5.21 unified value charts: identical geometry, touch rules and point selection. */
 #lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{
  position:relative;display:block;box-sizing:border-box;height:250px!important;min-height:250px!important;
- overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none;max-width:100%;
+ overflow:hidden;touch-action:none!important;user-select:none;-webkit-user-select:none;max-width:100%;
 }
 .unifiedValueChart svg{display:block;width:100%;height:100%;}
 #lineChart.unifiedValueChart path.unifiedStroke,.unifiedValueChart .unifiedStroke{stroke:var(--value-chart-color)!important;}
@@ -3106,6 +3106,17 @@ html,body{
 #chartScrubInfo,#netWorthScrubInfo{display:none!important;}
 #portfolioGain{min-height:24px;line-height:1.35;}
 @media(min-width:700px){#lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{height:300px!important;min-height:300px!important;}}
+
+
+/* 5.21.1: reserve display space; never animate chart geometry or amount changes. */
+.unifiedValueChart{overflow-anchor:none;overscroll-behavior:contain;-webkit-tap-highlight-color:transparent;}
+.unifiedValueChart *{transition:none!important;animation:none!important;}
+.unifiedChartMeta{white-space:nowrap;}
+#portfolioGain{height:26px;min-height:26px;max-height:26px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}
+#portfolioValue,#netWorthValue,#manualDetailBalance{font-variant-numeric:tabular-nums;transition:none!important;animation:none!important;}
+#manualDetailEquivalent,#manualDetailEquivalent:empty{display:block!important;min-height:20px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#netWorthMeta{min-height:20px;white-space:nowrap;}
+@media(max-width:360px){#portfolioGain{font-size:15px;}}
 
 </style>
 
@@ -4172,22 +4183,52 @@ function chartLabel(p,grain){
   if(grain==="intraday")return new Date(p.time*1000).toLocaleString("en-CA",{timeZone:CHART_ZONE,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+" ET";
   return new Date(chartDayTime(p.date)*1000).toLocaleDateString("en-CA",{timeZone:"UTC",month:"short",day:"numeric",year:"numeric"});
 }
-function chartIsScrubbing(){return Boolean(document.querySelector('[data-chart-scrubbing="true"]'))}
+let chartPaintTimer=0;
+let chartDeferredStatus=null;
+function chartIsScrubbing(){return Boolean(document.querySelector('[data-chart-interacting="true"],[data-chart-scrubbing="true"]'))}
+function queueChartPaint(){
+  clearTimeout(chartPaintTimer);
+  if(!chartPendingPaint)return;
+  chartPaintTimer=setTimeout(()=>{
+    chartPaintTimer=0;
+    if(chartIsScrubbing())return;
+    chartPendingPaint=false;
+    const deferred=chartDeferredStatus;chartDeferredStatus=null;
+    paintAfterQuotes();
+    if(deferred)setMarketStatus(deferred.type,deferred.text);
+  },300);
+}
 function disposeValueChart(el){
+  if(!el)return;
   chartControllers.get(el)?.destroy();chartControllers.delete(el);
-  if(el){for(const name of ["onpointerdown","onpointermove","onpointerup","onpointercancel","onlostpointercapture","onpointerleave","onkeydown"])el[name]=null;el.dataset.chartScrubbing="false";}
+  for(const name of ["onpointerdown","onpointermove","onpointerup","onpointercancel","onlostpointercapture","onpointerleave","onkeydown","onblur"])el[name]=null;
+  el.dataset.chartScrubbing="false";el.dataset.chartInteracting="false";
+}
+function cancelValueChartGestures(){
+  for(const el of document.querySelectorAll('.unifiedValueChart'))chartControllers.get(el)?.cancel();
+}
+function chartScrollContainer(el){
+  for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement){
+    const css=getComputedStyle(p);
+    if(/auto|scroll/.test(css.overflowY)&&p.scrollHeight>p.clientHeight+1)return p;
+  }
+  return document.scrollingElement||document.documentElement;
 }
 function drawValueChart(el,input,options={}){
   if(!el)return;
-  disposeValueChart(el);
+  if(chartControllers.get(el)?.busy()){chartPendingPaint=true;return;}
   const grain=options.grain||"daily";
   const rows=chartPrepare(input,grain);
   const money=options.money||fmt;
   el.classList.add("unifiedValueChart");el.style.height="";
   el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);
   el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
-  if(!rows.length){el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
+  if(!rows.length){disposeValueChart(el);el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
   const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
+  const signature=JSON.stringify([options.scope||options.label||"",grain,Boolean(options.step),options.color||"",w,h,rows]);
+  const previous=chartControllers.get(el);
+  if(previous?.signature===signature){previous.updateOptions(options);return;}
+  disposeValueChart(el);
   const left=12,right=w-12,top=45,bottom=h-28;
   const minT=rows[0].time,maxT=rows.at(-1).time;
   let minV=Math.min(...rows.map(r=>r.value)),maxV=Math.max(...rows.map(r=>r.value));
@@ -4212,32 +4253,122 @@ function drawValueChart(el,input,options={}){
       <text x="${left}" y="${h-6}" class="unifiedAxis">${xLabel(points[0])}</text>${points.length>1?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${xLabel(last)}</text>`:""}
     </svg>`;
   const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
-  let pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
+  let opts=options,pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
+  let gesture=null,holdTimer=0,layoutRelease=null,disposed=false;
+  const dateEl=meta.querySelector('[data-point-date]'),valueEl=meta.querySelector('[data-point-value]');
+  function freezeLayout(){
+    if(layoutRelease)return;
+    const roots=(opts.layoutRoots||[]).filter(Boolean),saved=[];
+    for(const root of roots){
+      const height=root.getBoundingClientRect().height;
+      if(!height)continue;
+      const props=['height','min-height','max-height'];
+      saved.push([root,props.map(k=>[k,root.style.getPropertyValue(k),root.style.getPropertyPriority(k)])]);
+      for(const k of props)root.style.setProperty(k,height+'px','important');
+    }
+    layoutRelease=()=>{for(const [root,props] of saved)for(const [key,value,priority] of props){if(value)root.style.setProperty(key,value,priority);else root.style.removeProperty(key);}layoutRelease=null;};
+  }
   function select(index){
-    index=Math.max(0,Math.min(points.length-1,index));const p=points[index];selected=index;showing=true;
+    if(disposed)return;
+    index=Math.max(0,Math.min(points.length-1,index));
+    if(showing&&selected===index)return; // A still finger must not repeatedly mutate text/layout.
+    freezeLayout();
+    const p=points[index];selected=index;showing=true;el.dataset.chartScrubbing="true";
     cross.style.display="";vline.setAttribute("x1",p.x);vline.setAttribute("x2",p.x);dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);clip.setAttribute("width",String(p.x+0.6));
-    meta.querySelector('[data-point-date]').textContent=chartLabel(p,grain);meta.querySelector('[data-point-value]').textContent=money(p.value);meta.classList.add('show');
+    dateEl.textContent=chartLabel(p,grain);valueEl.textContent=(opts.money||fmt)(p.value);meta.classList.add('show');
     el.dataset.selectedDate=p.date;el.dataset.selectedTime=String(p.time);el.dataset.selectedValue=String(p.value);
-    options.onSelect?.(p,index);
+    opts.onSelect?.(p,index);
   }
-  function nearest(clientX){
-    const rect=el.getBoundingClientRect();const x=(clientX-rect.left)/(rect.width||1)*w;
+  function nearest(clientX,stable=true){
+    // Freeze coordinates for the whole gesture: selecting a date cannot move its hit target.
+    const rect=gesture?.rect||el.getBoundingClientRect(),x=(clientX-rect.left)/(rect.width||1)*w;
     let lo=0,hi=points.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(points[mid].x<x)lo=mid+1;else hi=mid;}
-    if(lo>0&&Math.abs(points[lo-1].x-x)<=Math.abs(points[lo].x-x))lo--;return lo;
+    if(lo>0&&Math.abs(points[lo-1].x-x)<=Math.abs(points[lo].x-x))lo--;
+    if(stable&&showing&&selected>=0&&Math.abs(lo-selected)===1){
+      const midpoint=(points[lo].x+points[selected].x)/2;
+      const tolerance=Math.min(2,Math.abs(points[lo].x-points[selected].x)*.12);
+      if(Math.abs(x-midpoint)<tolerance)return selected;
+    }
+    return lo;
   }
-  function reset(){
-    if(raf)cancelAnimationFrame(raf);raf=0;pendingX=null;pointer=null;el.dataset.chartScrubbing="false";
+  function flushSelection(){
+    if(raf)cancelAnimationFrame(raf);raf=0;
+    if(pendingX!==null){const x=pendingX;pendingX=null;select(nearest(x));}
+  }
+  function clearSelection(){
     cross.style.display="none";clip.setAttribute("width",String(w));meta.classList.remove('show');
-    if(showing){showing=false;options.onReset?.();}
-    if(chartPendingPaint){chartPendingPaint=false;setTimeout(()=>paintAfterQuotes(),0);}
+    if(showing){showing=false;opts.onReset?.();}
+    selected=-1;el.dataset.chartScrubbing="false";
+    delete el.dataset.selectedDate;delete el.dataset.selectedTime;delete el.dataset.selectedValue;
+    if(layoutRelease)layoutRelease();
   }
-  el.onpointerdown=e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if(pointer!==null)return;pointer=e.pointerId;if(e.pointerType==="mouse")e.preventDefault();el.dataset.chartScrubbing="true";try{el.setPointerCapture(pointer)}catch(_){}select(nearest(e.clientX));};
-  el.onpointermove=e=>{if(pointer===null||e.pointerId!==pointer)return;pendingX=e.clientX;if(!raf)raf=requestAnimationFrame(()=>{raf=0;if(pendingX!==null)select(nearest(pendingX));});};
-  const end=e=>{if(pointer!==null&&e?.pointerId!==undefined&&e.pointerId!==pointer)return;reset();};
-  el.onpointerup=end;el.onpointercancel=end;el.onlostpointercapture=end;
-  el.setAttribute("tabindex","0");el.onkeydown=e=>{if(!["ArrowLeft","ArrowRight","Escape"].includes(e.key))return;e.preventDefault();if(e.key==="Escape")reset();else select((selected<0?points.length-1:selected)+(e.key==="ArrowRight"?1:-1));};
-  chartControllers.set(el,{rows,points,select,destroy(){if(raf)cancelAnimationFrame(raf);if(showing)options.onReset?.();el.dataset.chartScrubbing="false";}});
+  function finish({paint=true}={}){
+    clearTimeout(holdTimer);holdTimer=0;
+    if(raf)cancelAnimationFrame(raf);raf=0;pendingX=null;
+    const held=pointer;pointer=null;gesture=null;el.dataset.chartInteracting="false";
+    clearSelection();
+    if(held!==null){try{if(el.hasPointerCapture(held))el.releasePointerCapture(held)}catch(_){} }
+    if(paint)queueChartPaint();
+  }
+  function startScrub(){
+    if(!gesture||gesture.axis==='scroll')return;
+    clearTimeout(holdTimer);holdTimer=0;gesture.axis='scrub';
+    select(nearest(gesture.lastX,false));
+  }
+  el.onpointerdown=e=>{
+    if(e.isPrimary===false||(e.pointerType==="mouse"&&e.button!==0)||pointer!==null)return;
+    if(e.cancelable)e.preventDefault();
+    clearTimeout(chartPaintTimer);chartPaintTimer=0;
+    pointer=e.pointerId;el.dataset.chartInteracting="true";
+    const scroller=chartScrollContainer(el);
+    gesture={axis:e.pointerType==="mouse"?'scrub':'pending',startX:e.clientX,startY:e.clientY,lastX:e.clientX,scrollTop:scroller.scrollTop,scroller,rect:el.getBoundingClientRect()};
+    try{el.setPointerCapture(pointer)}catch(_){}
+    if(gesture.axis==='scrub')startScrub();
+    else holdTimer=setTimeout(startScrub,160);
+  };
+  el.onpointermove=e=>{
+    if(pointer===null||e.pointerId!==pointer||!gesture)return;
+    if(e.cancelable)e.preventDefault();
+    gesture.lastX=e.clientX;
+    const dx=e.clientX-gesture.startX,dy=e.clientY-gesture.startY;
+    if(gesture.axis==='pending'){
+      if(Math.abs(dy)>=9&&Math.abs(dy)>Math.abs(dx)*1.25){gesture.axis='scroll';clearTimeout(holdTimer);holdTimer=0;}
+      else if(Math.abs(dx)>=6&&Math.abs(dx)>=Math.abs(dy)*.8)startScrub();
+    }
+    if(gesture.axis==='scroll'){
+      // Touch ownership is limited to the chart. Do not fix or reposition the body.
+      gesture.scroller.scrollTop=Math.max(0,Math.min(gesture.scroller.scrollHeight-gesture.scroller.clientHeight,gesture.scrollTop-dy));
+      return;
+    }
+    if(gesture.axis!=='scrub')return;
+    pendingX=e.clientX;if(!raf)raf=requestAnimationFrame(()=>{raf=0;flushSelection();});
+  };
+  el.onpointerup=e=>{
+    if(pointer===null||e.pointerId!==pointer)return;
+    if(e.cancelable)e.preventDefault();
+    if(gesture?.axis==='pending')startScrub();
+    flushSelection();finish();
+  };
+  // A cancelled touch (notification/backgrounding) ends once. A subsequent lostcapture
+  // must not call onReset a second time or trigger another asynchronous re-render.
+  const cancel=e=>{if(pointer===null||e?.pointerId!==undefined&&e.pointerId!==pointer)return;finish();};
+  el.onpointercancel=cancel;el.onlostpointercapture=cancel;
+  el.setAttribute("tabindex","0");
+  el.onkeydown=e=>{
+    if(!["ArrowLeft","ArrowRight","Escape"].includes(e.key))return;
+    e.preventDefault();
+    if(e.key==="Escape"){finish();return;}
+    el.dataset.chartInteracting="true";
+    select((selected<0?points.length-1:selected)+(e.key==="ArrowRight"?1:-1));
+  };
+  el.onblur=()=>{if(pointer===null)finish();};
+  chartControllers.set(el,{
+    rows,points,signature,select,updateOptions(next){opts=next},
+    busy(){return pointer!==null||showing},cancel(){finish();},
+    destroy(){finish({paint:false});disposed=true;}
+  });
 }
+
 function readLocalJSON(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")||fallback}catch(_){return fallback}}
 function writeLocalJSON(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch(_){return false}}
 function recordCashAnchor(){
@@ -4386,7 +4517,7 @@ function setPortfolioChartNote(text){
 function renderLineChart(data,total,options={}){
   const accountId=selectedPortfolioAccount,range=currentPortfolioRange;
   const gain=portfolioGain.textContent,gainColor=portfolioGain.style.color;
-  drawValueChart(lineChart,data,{...options,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
+  drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,layoutRoots:[portfolioValue.closest('.hero')],grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
     portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
   },onReset(){
     portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
@@ -4400,11 +4531,17 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}
   currentPortfolioRange=label||"ALL";
   const seq=++portfolioChartRequestSeq,id=selectedPortfolioAccount,range=currentPortfolioRange;
-  const isCurrent=()=>seq===portfolioChartRequestSeq&&id===selectedPortfolioAccount&&range===currentPortfolioRange;
+  const isCurrent=()=>{
+    if(seq!==portfolioChartRequestSeq||id!==selectedPortfolioAccount||range!==currentPortfolioRange)return false;
+    if(chartIsScrubbing()){chartPendingPaint=true;return false;}
+    return true;
+  };
   const summary=portfolioSummary(id),scope=lotsForAccount(id);
-  clearPortfolioChartInteraction();lineChart.style.height="";
+  const keepChart=quiet&&lineChart.dataset.valueChartScope===id+"|"+range&&chartControllers.has(lineChart);
+  if(!keepChart)clearPortfolioChartInteraction();
+  lineChart.style.height="";lineChart.dataset.valueChartScope=id+"|"+range;
   portfolioValue.textContent=fmt(summary.accountValue);
-  updateValueSource();setPortfolioChartNote("");
+  updateValueSource();if(!keepChart)setPortfolioChartNote("");
   if(!quiet){lineChart.innerHTML='<div class="unifiedEmpty">Loading history...</div>';}
   const allTime=()=>setPortfolioPeriodGain(portfolioSummary(id).total,"ALL");
   if(id==="cibc_mutual_fund"){
@@ -4502,18 +4639,20 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
   }
 }
 function renderNetWorthChart(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
   if(!netWorthChart)return;
   if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
   const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
   setNetWorthReturn();
-  drawValueChart(netWorthChart,rows,{grain:"daily",label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,layoutRoots:[netWorthValue.closest('.wealthHero')],label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
 }
 function renderManualAccountChart(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
   const a=getManualAccount(currentManualDetailId);if(!a||!manualAccountChart)return;
   const rows=manualHistoryRangeRows(a,currentManualAccountRange).filter(p=>!p.carried).map(p=>({...p,time:chartDayTime(p.date)}));
   const money=n=>(a.type==="liability"?"-":"")+new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency}).format(n);
   const prior=manualDetailEquivalent.textContent;
-  drawValueChart(manualAccountChart,rows,{grain:"daily",label:a.name+" balance history",step:true,money,onSelect(p){manualDetailBalance.textContent=money(p.value);manualDetailEquivalent.textContent=chartLabel(p,"daily");},onReset(){manualDetailBalance.textContent=money(manualCurrentValue(a));manualDetailEquivalent.textContent=prior;}});
+  drawValueChart(manualAccountChart,rows,{grain:"daily",scope:a.id+"|"+currentManualAccountRange,layoutRoots:[manualDetailBalance.closest('.manualDetailHero')],label:a.name+" balance history",step:true,money,onSelect(p){manualDetailBalance.textContent=money(p.value);manualDetailEquivalent.textContent=chartLabel(p,"daily");},onReset(){manualDetailBalance.textContent=money(manualCurrentValue(a));manualDetailEquivalent.textContent=prior;}});
 }
 
 /* Safe three-way conflict resolution. Cron-only revisions are not user edits. */
@@ -4715,7 +4854,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.21.0",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.21.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -4768,12 +4907,12 @@ function cloudApplyPayload(payload){
 }
 async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
   if(cloudPullInFlight)return null;
-  if(!confirmFirst && (settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
+  if(!confirmFirst && (chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
   cloudPullInFlight=true;
   try{
     const data=await cloudRequest("/api/cloud/state");
     if(!data?.payload)throw new Error("No cloud data exists yet");
-    if(!confirmFirst && (settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
+    if(!confirmFirst && (chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
     if(confirmFirst && !confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return null;
     try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}catch(e){}
     cloudApplyPayload(data.payload);
@@ -4792,7 +4931,7 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
 async function cloudRestoreFromServer(){return cloudPullLatest({confirmFirst:true,reason:"manual"})}
 async function cloudReconcile(reason="resume"){
   if(!cloudSyncEnabled() || !cloudSyncToken())return null;
-  if(settingsModal?.classList.contains("show") || cloudSyncInFlight || cloudPullInFlight)return null;
+  if(chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudSyncInFlight || cloudPullInFlight)return null;
   const status=await cloudStatusCheck({quiet:true});
   if(!status)return null;
   const remoteRev=Math.max(0,Number(status.revision||0)||0);
@@ -5199,6 +5338,7 @@ function colorForTicker(t){
   return palette[h%palette.length];
 }
 function setMarketStatus(type,text){
+  if(chartIsScrubbing()){chartDeferredStatus={type,text};chartPendingPaint=true;return;}
   if(!marketStatus||!marketStatusText)return;
   marketStatus.className="marketStatus"+(type?" "+type:"");
   marketStatusText.textContent=text;
@@ -5757,6 +5897,7 @@ function renderDividends(range="1M"){
 }
 
 function showView(name){
+  cancelValueChartGestures();
   document.body.classList.remove("manualDetailOpen");
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
@@ -5923,6 +6064,7 @@ function saveCloudSettingsFromForm(){
   return true;
 }
 function openSettings(){
+  cancelValueChartGestures();
   if(settingsModal.classList.contains("show"))return;
   for(const field of investmentSettingsFields){
     if(field.el){field.el.value=Number(field.get()||0).toFixed(2);field.el.removeAttribute("aria-invalid")}
@@ -7295,6 +7437,7 @@ function manualHistoryRangeRows(a,range){
   return inRange;
 }
 function renderManualAccountDetail(){
+  if(chartIsScrubbing()){chartPendingPaint=true;return;}
   const a=getManualAccount(currentManualDetailId);
   if(!a)return;
   normalizeManualHistory(a);
@@ -7779,6 +7922,7 @@ setInterval(()=>{
   if(document.visibilityState==="visible"&&cloudSyncEnabled()&&cloudSyncToken()&&!cloudSyncInFlight&&!cloudPullInFlight)cloudReconcile("poll").catch(()=>{});
 },60000);
 document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible")cancelValueChartGestures();
   if(document.visibilityState==="visible"){
     if(marketApiBase&&Date.now()-lastQuoteAttemptAt>15000)refreshLiveData(true);
     if(cloudSyncEnabled()&&cloudSyncToken()&&Date.now()-cloudLastRemoteCheckAt>10000)cloudReconcile("resume").catch(()=>{});
@@ -7824,6 +7968,7 @@ if ("serviceWorker" in navigator) {
 
 
 window.addEventListener("blur",()=>{
+  cancelValueChartGestures();
   if(document.body.classList.contains("chartScrubbing")){
     document.documentElement.classList.remove("chartScrubbing");
     document.body.classList.remove("chartScrubbing");

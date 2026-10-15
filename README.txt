@@ -1,44 +1,36 @@
-Portfolio 5.21.0 - Consistent account charts
+Portfolio 5.21.1 - Stable chart interaction
+Based on the supplied portfolio_charts_consistent_v5_21.zip.
 
-INSTALL (2 FILES ONLY)
-Replace index.html and sw.js in your EXISTING GitHub website folder, then Commit and Push.
-Keep the current Cloudflare Worker, D1 schema, Cron and Sync Token unchanged.
+INSTALL
+Replace ONLY index.html and sw.js in your existing GitHub website folder.
+Commit and Push. Close/reopen the web app after deployment.
+No Python, no dependency installation, no database migration.
 Do not clear browser data. Do not use Restore from Cloud to install this update.
+Keep the existing Cloudflare Worker, D1 database, Cron and Sync Token unchanged.
 
-CHANGES
-- One renderer for Investment, Home Net Worth and bank/credit-card account value charts.
-- Drag selects an actual stored/data-source point. No interpolated tooltip prices.
-- The hero amount changes while dragging; release restores the current amount.
-- Same vertical guide, selected dot, faded right-hand segment and chart geometry.
-- Normal vertical page scrolling is preserved; chart gestures no longer fix the entire body.
-- Investment 1D uses intraday one-minute quote bars and checks for updates every 60 seconds
-  while the app is visible. Actual quote time is displayed, not just request time.
-- Investment 1W and longer select one amount per actual date, including Questrade Cash.
-- Questrade Cash with holdings is valued as holdings plus cash. Cash is never multiplied
-  by the stock-growth curve. A genuinely cash-only account uses saved balance observations.
-- CIBC 1D remains a single latest published NAV observation, not an intraday stock chart.
-  Longer CIBC ranges use its existing dated NAV records; no invented backfill.
-- Long-range chart previous-close fields are NOT used for daily return calculations.
-  The preceding daily candle is selected relative to the quote's actual session date.
-- Existing Total Return / Net Deposit definitions and saved user records are retained.
+FIXES
+- Chart gestures have one owner and a direction decision: a horizontal drag or
+  deliberate hold selects points; a vertical-first drag scrolls the nearest page
+  container without briefly showing and cancelling a historical amount.
+- Vertical drift during an already-active scrub no longer gives the gesture back
+  to browser scrolling. The whole body is never fixed or repositioned.
+- Still finger = still value. Text is changed only on entering a different real
+  data point; a small boundary tolerance prevents flicker near the midpoint.
+- Quote/history responses arriving while a chart is held do not dispose the chart
+  or reset the selected value. Automatic cloud pulls also wait for the gesture.
+- Quiet refresh retains the existing graph; identical series keep the same SVG.
+- Chart/hero geometry is held fixed while selecting dates. Bank-account date
+  labels have reserved space so they cannot push the chart downward.
+- Pointer release/cancel/lost-capture cleanup is idempotent; current amounts are
+  restored once, not repeatedly. Pending visual refresh is coalesced after release.
 
-CLOUD CONFLICTS
-A baseline-aware merge preserves non-overlapping edits and server-created daily snapshots.
-True overlapping changes stop for review, rather than silently force-overwriting cloud data.
-For a pre-existing conflict without enough baseline history, tap Sync This Device to review
-which local balance to keep. This path preserves unrelated cloud transactions/history.
-New quote checks do not perform D1 writes. The current low-write Worker stays in place.
-Intraday observation storage is compact and bounded; daily observations are retained.
+UNCHANGED
+- Values, quote sources, current-amount calculations and return formulas.
+- Daily vs intraday chart data and real-point-only selection.
+- Cash Balance Save Fix; transaction, account and investment records.
+- Cloud merge/write logic, Worker/D1/Cron behavior and low-write protection.
 
-LIMITS / HONEST DATA LABELS
-The Yahoo proxy is not a guaranteed real-time broker stream. It may be delayed or unavailable,
-and its regular-session quote need not match Wealthsimple extended-hours/overnight prices.
-Historical cash before this app recorded it is estimated using the latest known cash amount;
-this is labeled under the chart. It is not a complete brokerage account-statement reconstruction.
-Mutual-fund historical NAV is limited to the real dates already available.
-
-TESTS
-40 isolated Chromium checks passed at 393px and 320px, including CDP touch events,
-quote refresh, no duplicate daily tooltip values, correct cash weighting, missing data,
-cloud conflicts and no D1 writes from quote polling alone. Fixtures were simulated.
-Not deployed for you; not tested on a physical iPhone / Safari. See TEST_REPORT.txt.
+TEST LIMITS
+Tested with isolated system Chromium at 393px and 320px mobile dimensions using
+CDP touch input and mocked market/cloud responses. Not deployed for the user.
+Not tested on a physical iPhone or Safari. See TEST_REPORT.txt.
