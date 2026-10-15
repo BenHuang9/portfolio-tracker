@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
 <title>Income Portfolio Tracker</title>
-<!-- 5.21.1: stable chart gestures and deferred paint; financial calculations unchanged -->
+<!-- 5.21.2: native vertical scrolling; chart-only horizontal inspection; no manual scroll lock -->
 <!-- UI unified V5.20.1; CSS-only changes -->
 <!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
 <!-- v5.8.4 Questrade history from Jan 1 2025 -->
@@ -601,20 +601,7 @@ input,button{touch-action:manipulation;}
 }
 
 
-/* v4.5 Freeze page while scrubbing chart */
-html.chartScrubbing,
-body.chartScrubbing{
-  overscroll-behavior:none;
-}
-body.chartScrubbing{
-  position:fixed;
-  left:0;
-  right:0;
-  width:100%;
-  overflow:hidden;
-  touch-action:none;
-}
-
+/* Chart inspection never fixes or locks the page. */
 
 /* v5.3 Home/UI cleanup */
 .homeTopbar{
@@ -3090,7 +3077,7 @@ html,body{
 /* 5.21 unified value charts: identical geometry, touch rules and point selection. */
 #lineChart.unifiedValueChart,#netWorthChart.unifiedValueChart,#manualAccountChart.unifiedValueChart{
  position:relative;display:block;box-sizing:border-box;height:250px!important;min-height:250px!important;
- overflow:hidden;touch-action:none!important;user-select:none;-webkit-user-select:none;max-width:100%;
+ overflow:hidden;touch-action:pan-y!important;user-select:none;-webkit-user-select:none;max-width:100%;
 }
 .unifiedValueChart svg{display:block;width:100%;height:100%;}
 #lineChart.unifiedValueChart path.unifiedStroke,.unifiedValueChart .unifiedStroke{stroke:var(--value-chart-color)!important;}
@@ -3109,7 +3096,7 @@ html,body{
 
 
 /* 5.21.1: reserve display space; never animate chart geometry or amount changes. */
-.unifiedValueChart{overflow-anchor:none;overscroll-behavior:contain;-webkit-tap-highlight-color:transparent;}
+.unifiedValueChart{overflow-anchor:none;overscroll-behavior:auto;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
 .unifiedValueChart *{transition:none!important;animation:none!important;}
 .unifiedChartMeta{white-space:nowrap;}
 #portfolioGain{height:26px;min-height:26px;max-height:26px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}
@@ -3118,6 +3105,10 @@ html,body{
 #netWorthMeta{min-height:20px;white-space:nowrap;}
 @media(max-width:360px){#portfolioGain{font-size:15px;}}
 
+
+/* Native page scroll must chain to the document, not stop at BODY. */
+html,body,.app{overscroll-behavior-y:auto;}
+@supports(overflow:clip){body,.app{overflow-x:clip!important;overflow-y:visible!important;}}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -4185,19 +4176,39 @@ function chartLabel(p,grain){
 }
 let chartPaintTimer=0;
 let chartDeferredStatus=null;
-function chartIsScrubbing(){return Boolean(document.querySelector('[data-chart-interacting="true"],[data-chart-scrubbing="true"]'))}
+let chartNativeScrollUntil=0;
+function chartIsScrubbing(){
+  return performance.now()<chartNativeScrollUntil || Boolean(document.querySelector('[data-chart-interacting="true"],[data-chart-scrubbing="true"]'));
+}
 function queueChartPaint(){
   clearTimeout(chartPaintTimer);
-  if(!chartPendingPaint)return;
+  if(!chartPendingPaint && performance.now()>=chartNativeScrollUntil)return;
   chartPaintTimer=setTimeout(()=>{
     chartPaintTimer=0;
+    if(performance.now()<chartNativeScrollUntil){queueChartPaint();return;}
     if(chartIsScrubbing())return;
+    if(!chartPendingPaint)return;
     chartPendingPaint=false;
     const deferred=chartDeferredStatus;chartDeferredStatus=null;
     paintAfterQuotes();
     if(deferred)setMarketStatus(deferred.type,deferred.text);
-  },300);
+  },Math.max(250,chartNativeScrollUntil-performance.now()+40));
 }
+// Scroll and momentum stay with the browser. Only postpone expensive rendering.
+document.addEventListener('scroll',()=>{
+  chartNativeScrollUntil=performance.now()+200;
+  for(const el of document.querySelectorAll('.unifiedValueChart'))chartControllers.get(el)?.nativeScroll?.();
+  queueChartPaint();
+},{capture:true,passive:true});
+function cancelChartsFromOutside(event){
+  if(!event.target?.closest?.('.unifiedValueChart')){
+    chartNativeScrollUntil=0;
+    cancelValueChartGestures();
+  }
+}
+document.addEventListener('touchstart',cancelChartsFromOutside,{capture:true,passive:true});
+document.addEventListener('pointerdown',cancelChartsFromOutside,{capture:true,passive:true});
+window.addEventListener('pagehide',()=>cancelValueChartGestures());
 function disposeValueChart(el){
   if(!el)return;
   chartControllers.get(el)?.destroy();chartControllers.delete(el);
@@ -4207,25 +4218,11 @@ function disposeValueChart(el){
 function cancelValueChartGestures(){
   for(const el of document.querySelectorAll('.unifiedValueChart'))chartControllers.get(el)?.cancel();
 }
-function chartScrollContainer(el){
-  for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement){
-    const css=getComputedStyle(p);
-    if(/auto|scroll/.test(css.overflowY)&&p.scrollHeight>p.clientHeight+1)return p;
-  }
-  return document.scrollingElement||document.documentElement;
-}
 function drawValueChart(el,input,options={}){
   if(!el)return;
   if(chartControllers.get(el)?.busy()){chartPendingPaint=true;return;}
   const grain=options.grain||"daily";
-  const prepared=chartPrepare(input,grain);
-  // Stock intraday charts show the US regular session only (09:30–16:00 ET).
-  const sessionDate=prepared.at(-1)?.date;
-  const sessionEnd=sessionDate?chartDayEnd(sessionDate):0;
-  const openTime=sessionEnd-(14*3600+29*60+59); // 09:30:00 ET
-  const closeTime=sessionEnd-(7*3600+59*60+59); // 16:00:00 ET
-  const sessionRows=grain==='intraday'&&sessionDate?prepared.filter(r=>r.date===sessionDate&&r.time>=openTime&&r.time<=closeTime):prepared;
-  const rows=sessionRows.length?sessionRows:prepared;
+  const rows=chartPrepare(input,grain);
   const money=options.money||fmt;
   el.classList.add("unifiedValueChart");el.style.height="";
   el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);
@@ -4237,11 +4234,7 @@ function drawValueChart(el,input,options={}){
   if(previous?.signature===signature){previous.updateOptions(options);return;}
   disposeValueChart(el);
   const left=12,right=w-12,top=45,bottom=h-28;
-  // US regular trading hours only. The axis is fixed independently of available quotes.
-  const firstTime=rows[0].time,lastTime=rows.at(-1).time;
-  const showSession=grain==='intraday'&&sessionRows.length>0;
-  const minT=showSession?openTime:firstTime;
-  const maxT=showSession?closeTime:lastTime;
+  const minT=rows[0].time,maxT=rows.at(-1).time;
   let minV=Math.min(...rows.map(r=>r.value)),maxV=Math.max(...rows.map(r=>r.value));
   const valueSpan=Math.max(maxV-minV,Math.abs(maxV)*0.002,1);
   const middle=(maxV+minV)/2;minV=middle-valueSpan*.62;maxV=middle+valueSpan*.62;
@@ -4261,12 +4254,17 @@ function drawValueChart(el,input,options={}){
       <g clip-path="url(#${id}-left)">${area?`<path d="${area}" fill="url(#${id}-area)"/>`:""}<path class="unifiedStroke" d="${path}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
       ${points.length===1?`<circle class="unifiedDot" cx="${last.x}" cy="${last.y}" r="4"/>`:""}
       <g data-cross style="display:none"><line x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#a7aaa8" stroke-width="1"/><circle class="unifiedDot" r="4"/></g>
-      <text x="${left}" y="${h-6}" class="unifiedAxis">${showSession?'9:30 AM':xLabel(points[0])}</text>${(points.length>1||showSession)?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${showSession?'4:00 PM':xLabel(last)}</text>`:""}
+      <text x="${left}" y="${h-6}" class="unifiedAxis">${xLabel(points[0])}</text>${points.length>1?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${xLabel(last)}</text>`:""}
     </svg>`;
   const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
   let opts=options,pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
   let gesture=null,holdTimer=0,layoutRelease=null,disposed=false;
+  const listenerRemovers=[];
   const dateEl=meta.querySelector('[data-point-date]'),valueEl=meta.querySelector('[data-point-value]');
+  function listen(target,name,fn,settings){
+    target.addEventListener(name,fn,settings);
+    listenerRemovers.push(()=>target.removeEventListener(name,fn,settings));
+  }
   function freezeLayout(){
     if(layoutRelease)return;
     const roots=(opts.layoutRoots||[]).filter(Boolean),saved=[];
@@ -4282,7 +4280,7 @@ function drawValueChart(el,input,options={}){
   function select(index){
     if(disposed)return;
     index=Math.max(0,Math.min(points.length-1,index));
-    if(showing&&selected===index)return; // A still finger must not repeatedly mutate text/layout.
+    if(showing&&selected===index)return;
     freezeLayout();
     const p=points[index];selected=index;showing=true;el.dataset.chartScrubbing="true";
     cross.style.display="";vline.setAttribute("x1",p.x);vline.setAttribute("x2",p.x);dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);clip.setAttribute("width",String(p.x+0.6));
@@ -4291,7 +4289,6 @@ function drawValueChart(el,input,options={}){
     opts.onSelect?.(p,index);
   }
   function nearest(clientX,stable=true){
-    // Freeze coordinates for the whole gesture: selecting a date cannot move its hit target.
     const rect=gesture?.rect||el.getBoundingClientRect(),x=(clientX-rect.left)/(rect.width||1)*w;
     let lo=0,hi=points.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(points[mid].x<x)lo=mid+1;else hi=mid;}
     if(lo>0&&Math.abs(points[lo-1].x-x)<=Math.abs(points[lo].x-x))lo--;
@@ -4307,76 +4304,116 @@ function drawValueChart(el,input,options={}){
     if(pendingX!==null){const x=pendingX;pendingX=null;select(nearest(x));}
   }
   function clearSelection(){
+    const reset=showing;showing=false;selected=-1;
     cross.style.display="none";clip.setAttribute("width",String(w));meta.classList.remove('show');
-    if(showing){showing=false;opts.onReset?.();}
-    selected=-1;el.dataset.chartScrubbing="false";
+    el.dataset.chartScrubbing="false";
     delete el.dataset.selectedDate;delete el.dataset.selectedTime;delete el.dataset.selectedValue;
-    if(layoutRelease)layoutRelease();
+    try{if(reset)opts.onReset?.();}
+    finally{if(layoutRelease)layoutRelease();}
   }
   function finish({paint=true}={}){
     clearTimeout(holdTimer);holdTimer=0;
     if(raf)cancelAnimationFrame(raf);raf=0;pendingX=null;
     const held=pointer;pointer=null;gesture=null;el.dataset.chartInteracting="false";
-    clearSelection();
-    if(held!==null){try{if(el.hasPointerCapture(held))el.releasePointerCapture(held)}catch(_){} }
-    if(paint)queueChartPaint();
-  }
-  function startScrub(){
-    if(!gesture||gesture.axis==='scroll')return;
-    clearTimeout(holdTimer);holdTimer=0;gesture.axis='scrub';
-    select(nearest(gesture.lastX,false));
-  }
-  el.onpointerdown=e=>{
-    if(e.isPrimary===false||(e.pointerType==="mouse"&&e.button!==0)||pointer!==null)return;
-    if(e.cancelable)e.preventDefault();
-    clearTimeout(chartPaintTimer);chartPaintTimer=0;
-    pointer=e.pointerId;el.dataset.chartInteracting="true";
-    const scroller=chartScrollContainer(el);
-    gesture={axis:e.pointerType==="mouse"?'scrub':'pending',startX:e.clientX,startY:e.clientY,lastX:e.clientX,scrollTop:scroller.scrollTop,scroller,rect:el.getBoundingClientRect()};
-    try{el.setPointerCapture(pointer)}catch(_){}
-    if(gesture.axis==='scrub')startScrub();
-    else holdTimer=setTimeout(startScrub,160);
-  };
-  el.onpointermove=e=>{
-    if(pointer===null||e.pointerId!==pointer||!gesture)return;
-    if(e.cancelable)e.preventDefault();
-    gesture.lastX=e.clientX;
-    const dx=e.clientX-gesture.startX,dy=e.clientY-gesture.startY;
-    if(gesture.axis==='pending'){
-      if(Math.abs(dy)>=9&&Math.abs(dy)>Math.abs(dx)*1.25){gesture.axis='scroll';clearTimeout(holdTimer);holdTimer=0;}
-      else if(Math.abs(dx)>=6&&Math.abs(dx)>=Math.abs(dy)*.8)startScrub();
+    try{clearSelection();}
+    finally{
+      if(typeof held==='number'){try{if(el.hasPointerCapture(held))el.releasePointerCapture(held)}catch(_){} }
+      if(paint)queueChartPaint();
     }
-    if(gesture.axis==='scroll'){
-      // Touch ownership is limited to the chart. Do not fix or reposition the body.
-      gesture.scroller.scrollTop=Math.max(0,Math.min(gesture.scroller.scrollHeight-gesture.scroller.clientHeight,gesture.scrollTop-dy));
-      return;
+  }
+  function begin(kind,id,x,y){
+    if(disposed)return;
+    if(gesture||showing)finish({paint:false});
+    clearTimeout(chartPaintTimer);chartPaintTimer=0;
+    pointer=id;el.dataset.chartInteracting="true";
+    gesture={kind,axis:kind==='mouse'?'scrub':'pending',startX:x,startY:y,lastX:x,rect:el.getBoundingClientRect()};
+    if(kind==='mouse')select(nearest(x,false));
+    else holdTimer=setTimeout(()=>{
+      holdTimer=0;
+      if(!gesture||gesture.axis!=='pending')return;
+      // A hold shows the value, but never takes ownership of vertical scrolling.
+      gesture.axis='hold';select(nearest(gesture.lastX,false));
+    },250);
+  }
+  function move(x,y,event){
+    if(!gesture)return;
+    gesture.lastX=x;
+    const dx=x-gesture.startX,dy=y-gesture.startY;
+    if(gesture.axis==='pending'||gesture.axis==='hold'){
+      // Vertical intent wins, even after a hold: no preventDefault, no scrollTop writes.
+      if(Math.abs(dy)>=8&&Math.abs(dy)>=Math.abs(dx)*.85){finish();return;}
+      if(Math.abs(dx)>=8&&Math.abs(dx)>Math.abs(dy)*1.3){
+        clearTimeout(holdTimer);holdTimer=0;gesture.axis='scrub';
+      }else{
+        if(Math.hypot(dx,dy)>6){clearTimeout(holdTimer);holdTimer=0;}
+        return;
+      }
     }
     if(gesture.axis!=='scrub')return;
-    pendingX=e.clientX;if(!raf)raf=requestAnimationFrame(()=>{raf=0;flushSelection();});
-  };
-  el.onpointerup=e=>{
-    if(pointer===null||e.pointerId!==pointer)return;
-    if(e.cancelable)e.preventDefault();
-    if(gesture?.axis==='pending')startScrub();
+    if(gesture.kind==='touch'){
+      // A non-cancelable event means native scrolling already started. Let it finish.
+      if(!event.cancelable){finish();return;}
+      event.preventDefault();
+    }
+    pendingX=x;if(!raf)raf=requestAnimationFrame(()=>{raf=0;flushSelection();});
+  }
+  // Touch Events own touch inspection. The browser owns vertical pan + inertia.
+  // Do not also capture Pointer Events for the same finger on iOS.
+  listen(el,'touchstart',e=>{
+    if(e.touches.length!==1){finish();return;}
+    const t=e.changedTouches[0];if(t)begin('touch','touch:'+t.identifier,t.clientX,t.clientY);
+  },{passive:true});
+  listen(el,'touchmove',e=>{
+    if(gesture?.kind!=='touch')return;
+    if(e.touches.length!==1){finish();return;}
+    const t=Array.from(e.touches).find(t=>'touch:'+t.identifier===pointer);
+    if(!t){finish();return;}
+    move(t.clientX,t.clientY,e);
+  },{passive:false});
+  const touchEnd=e=>{
+    if(gesture?.kind!=='touch')return;
+    if(Array.from(e.touches||[]).some(t=>'touch:'+t.identifier===pointer))return;
     flushSelection();finish();
   };
-  // A cancelled touch (notification/backgrounding) ends once. A subsequent lostcapture
-  // must not call onReset a second time or trigger another asynchronous re-render.
-  const cancel=e=>{if(pointer===null||e?.pointerId!==undefined&&e.pointerId!==pointer)return;finish();};
-  el.onpointercancel=cancel;el.onlostpointercapture=cancel;
-  el.setAttribute("tabindex","0");
+  const touchCancel=e=>{
+    if(gesture?.kind==='touch'&&(!e.touches?.length||Array.from(e.changedTouches||[]).some(t=>'touch:'+t.identifier===pointer)))finish();
+  };
+  listen(document,'touchend',touchEnd,{capture:true,passive:true});
+  listen(document,'touchcancel',touchCancel,{capture:true,passive:true});
+  // Mouse / pen retain click-and-drag and keyboard inspection.
+  el.onpointerdown=e=>{
+    if(e.pointerType==='touch'||e.isPrimary===false||e.button!==0)return;
+    e.preventDefault();begin('mouse',e.pointerId,e.clientX,e.clientY);
+    try{el.setPointerCapture(pointer)}catch(_){}
+  };
+  el.onpointermove=e=>{
+    if(gesture?.kind!=='mouse'||e.pointerId!==pointer)return;
+    if(e.pointerType==='mouse'&&e.buttons===0){finish();return;}
+    move(e.clientX,e.clientY,e);
+  };
+  const pointerEnd=e=>{
+    if(gesture?.kind!=='mouse'||e.pointerId!==pointer)return;
+    if(e.type==='pointerup')flushSelection();
+    finish();
+  };
+  listen(document,'pointerup',pointerEnd,{capture:true,passive:true});
+  listen(document,'pointercancel',pointerEnd,{capture:true,passive:true});
+  el.onlostpointercapture=pointerEnd;
+  listen(el,'contextmenu',e=>{if(gesture)e.preventDefault();},{passive:false});
+  el.setAttribute('tabindex','0');
   el.onkeydown=e=>{
-    if(!["ArrowLeft","ArrowRight","Escape"].includes(e.key))return;
+    if(!['ArrowLeft','ArrowRight','Escape'].includes(e.key))return;
     e.preventDefault();
-    if(e.key==="Escape"){finish();return;}
-    el.dataset.chartInteracting="true";
-    select((selected<0?points.length-1:selected)+(e.key==="ArrowRight"?1:-1));
+    if(e.key==='Escape'){finish();return;}
+    el.dataset.chartInteracting='true';
+    select((selected<0?points.length-1:selected)+(e.key==='ArrowRight'?1:-1));
   };
   el.onblur=()=>{if(pointer===null)finish();};
   chartControllers.set(el,{
     rows,points,signature,select,updateOptions(next){opts=next},
     busy(){return pointer!==null||showing},cancel(){finish();},
-    destroy(){finish({paint:false});disposed=true;}
+    nativeScroll(){if(gesture||showing)finish();},
+    destroy(){try{finish({paint:false});}finally{disposed=true;for(const remove of listenerRemovers)remove();}}
   });
 }
 
@@ -4513,12 +4550,8 @@ function clearPortfolioChartInteraction(){
   if(chartScrubInfo)chartScrubInfo.classList.remove("show");
   if(chartScrubDate)chartScrubDate.textContent="";
   if(chartScrubValue)chartScrubValue.textContent="";
-  // Clean up old-version scroll locks, but this renderer never locks the page.
-  if(document.body.classList.contains("chartScrubbing")){
-    const top=parseInt(document.body.style.top||"0",10);
-    document.body.classList.remove("chartScrubbing");document.documentElement.classList.remove("chartScrubbing");document.body.style.top="";
-    if(top)window.scrollTo(0,Math.abs(top));
-  }
+  document.body.classList.remove('chartScrubbing');
+  document.documentElement.classList.remove('chartScrubbing');
 }
 function setPortfolioChartNote(text){
   let el=document.getElementById('portfolioChartNote');
@@ -7945,49 +7978,15 @@ document.addEventListener("visibilitychange",()=>{
 window.addEventListener("online",()=>{if(cloudSyncEnabled()&&cloudSyncToken())cloudReconcile("online").catch(()=>{})});
 setTimeout(()=>cloudBootstrap(),800);
 
-/* v1.8 iOS zoom lock */
-(function () {
-  const prevent = (e) => e.preventDefault();
-
-  // Safari gesture events (pinch zoom).
-  ["gesturestart", "gesturechange", "gestureend"].forEach((name) => {
-    document.addEventListener(name, prevent, { passive: false });
-  });
-
-  // Prevent two-finger browser zoom while keeping one-finger vertical scrolling.
-  document.addEventListener("touchmove", function (e) {
-    if (e.touches && e.touches.length > 1) {
-      e.preventDefault();
-    }
-  }, { passive: false });
-
-  // Prevent double-tap zoom.
-  let lastTouchEnd = 0;
-  document.addEventListener("touchend", function (e) {
-    const now = Date.now();
-    if (now - lastTouchEnd <= 300) {
-      e.preventDefault();
-    }
-    lastTouchEnd = now;
-  }, { passive: false });
-})();
-
+/* 5.21.2: do not install document-level touchmove/touchend preventDefault handlers.
+   Inputs and buttons use CSS touch-action; chart cancellation is chart-local only. */
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 }
 
 
-window.addEventListener("blur",()=>{
-  cancelValueChartGestures();
-  if(document.body.classList.contains("chartScrubbing")){
-    document.documentElement.classList.remove("chartScrubbing");
-    document.body.classList.remove("chartScrubbing");
-    const top=parseInt(document.body.style.top||"0",10);
-    document.body.style.top="";
-    if(Number.isFinite(top)) window.scrollTo(0,Math.abs(top));
-  }
-});
+window.addEventListener("blur",()=>{cancelValueChartGestures();});
 
 </script>
 

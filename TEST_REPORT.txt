@@ -1,69 +1,68 @@
-Portfolio 5.21.1 test report
+Portfolio 5.21.2 - Scroll recovery verification
 
-Environment: system Chromium; isolated mocked data; no live account access.
-Mobile widths: 393px and 320px. Not iPhone Safari verification.
+Source: supplied portfolio_chart_stability_v5_21_1.zip.
+Change scope: shared chart input handling, page overflow/scroll chaining,
+paint deferral during native scrolling, removal of the old global touchend
+cancellation. Chart values, histories and financial/storage logic are unchanged.
 
-PASS: full app startup
-PASS: long press shows selected date
-PASS: long press does not change page or chart geometry
-PASS: diagonal scrub remains captured
-PASS: diagonal scrub never scrolls the page
-PASS: stationary finger has no repeated text writes
-PASS: refresh attempts cannot reset a held point
-PASS: no SVG replacement during inspection
-PASS: release restores current amount exactly once
-PASS: release has one amount reset
-PASS: queued refresh preserves existing SVG if values unchanged
-PASS: release returns to identical page geometry
-PASS: horizontal intent selects immediately
-PASS: after horizontal intent vertical drift does not cancel
-PASS: vertical intent scrolls the page
-PASS: vertical scrolling does not flash historical amounts
-PASS: quiet background request keeps existing graph visible
-PASS: late asynchronous history response cannot replace touched graph
-PASS: new quote receipt does not flicker while held
-PASS: new quotes still apply after release
-PASS: cloud polls / restore wait for active gesture
-PASS: keyboard selection supported
-PASS: Escape clears selection
-PASS: cancel then lostcapture resets only once
-PASS: questrade_cash/1D shared stable chart
-PASS: questrade_cash/1D restores current amount
-PASS: cibc_mutual_fund/1D shared stable chart
-PASS: cibc_mutual_fund/1D restores current amount
-PASS: cibc_mutual_fund/ALL shared stable chart
-PASS: cibc_mutual_fund/ALL restores current amount
-PASS: questrade_tfsa/1M shared stable chart
-PASS: questrade_tfsa/1M restores current amount
-PASS: 1M still has one selectable point per date
-PASS: 1D still contains real intraday minute timestamps
-PASS: Home chart stays fixed while inspecting
-PASS: Home latest amount restored
-PASS: bank chart does not gain height when date appears
-PASS: bank current balance restored
-PASS: switch account cannot restore old amount
-PASS: no body fixed-position / horizontal overflow
-PASS: no database writes from these read/gesture tests
-PASS: no browser runtime errors
-PASS: 320px chart geometry stable
-PASS: 320px no horizontal overflow
-PASS: 320px no runtime errors
+Reproduction in the old renderer (Chromium touch input):
+- Touch chart, wait 350ms, then drag vertically: document moved 0px.
+- Normal vertical flick was manually scrolled and had no native momentum.
 
-45 browser checks passed.
+After the fix:
+- A vertical drag after a hold returns to browser scrolling.
+- Entire-app tests measured 145px page movement for the same 160px finger move
+  on Home and each tested Investment chart; the bank view moved to its bottom.
+- Horizontal/diagonal inspection and a stationary value still work.
+- Touch release/cancel clears inspection; rendering resumes after input ends.
 
-Unchanged financial/storage function bodies (exact source comparison):
-positions: unchanged
-portfolioSummary: unchanged
-cashForAccount: unchanged
-depositsForAccount: unchanged
-netWorthTotals: unchanged
-netAssetBaseSummary: unchanged
-currentInvestmentGrowth: unchanged
-saveInvestmentAccountSettings: unchanged
-recordNetWorthSnapshot: unchanged
-accountLedgerRows: unchanged
-recomputeManualAccountFromLedger: unchanged
-txSignedDeltaForAccount: unchanged
-cloudPushState: unchanged
+Environment: system Chromium, Playwright + CDP touchscreen input.
+Data: isolated, mocked quote responses and in-memory localStorage.
+No live account access, no real cloud writes or deployment.
+Not tested on a physical iPhone; Safari/WebKit runtime was unavailable.
 
-Node syntax checks: inline application script and service worker passed.
+Whole-application checks:
+PASS: startup
+PASS: investment_intraday_loaded
+PASS: investment_hold_then_scroll
+PASS: held_point_not_repainted
+PASS: release_recovery
+PASS: transactions_tap
+PASS: rapid_stats_tap
+PASS: home_hold_then_scroll
+PASS: questrade_cash/1D_scroll
+PASS: cibc_mutual_fund/1D_scroll
+PASS: cibc_mutual_fund/ALL_scroll
+PASS: questrade_tfsa/1M_scroll
+PASS: daily_unique_dates
+PASS: bank_hold_then_scroll
+PASS: interrupted_touch_clears_state
+PASS: no_financial_changes_from_gestures
+PASS: cash_save_still_works
+PASS: settings_closes
+PASS: no_horizontal_overflow_393
+PASS: no_cloud_writes_from_test
+PASS: no_horizontal_overflow_320
+PASS: no_runtime_errors
+
+Source-identical business functions:
+positions
+portfolioSummary
+cashForAccount
+depositsForAccount
+netWorthTotals
+netAssetBaseSummary
+currentInvestmentGrowth
+saveInvestmentAccountSettings
+recordNetWorthSnapshot
+accountLedgerRows
+recomputeManualAccountFromLedger
+txSignedDeltaForAccount
+cloudPushState
+mergeCloudStorage
+refreshLiveData
+dailyQuoteBaseline
+saveLedgerTransactions
+recordCashAnchor
+
+JavaScript syntax checks: application inline script and sw.js passed.
