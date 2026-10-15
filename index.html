@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
 <title>Income Portfolio Tracker</title>
 <!-- UI unified V5.20.1; CSS-only changes -->
 <!-- v5.20.1 D1 Write Hotfix: cloud-first sync with low-write structured refresh -->
@@ -3064,6 +3065,26 @@ html,body{
  .breakdownSeg,.quickKeypad button{transition:none!important}
 }
 
+
+/* Cash Balance Save Fix: scoped Settings controls; no chart/layout redesign. */
+#settingsModal .settingsStickyHeader{
+  position:sticky;top:-18px;z-index:5;background:#fff;
+  margin:-18px -20px 16px;padding:18px 20px 12px;
+  border-bottom:1px solid var(--line);
+}
+#settingsModal .settingsStickyHeader .sheetHead{margin-bottom:6px;gap:12px}
+#settingsModal .settingsHeadActions{display:flex;align-items:center;gap:10px;flex:none}
+#settingsModal .settingsSaveBtn{
+  min-height:40px;min-width:66px;padding:8px 15px;border-radius:20px;
+  border:1px solid #b5e5d5;background:#e8f7f1;color:#12775c;
+  font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;
+}
+#settingsModal .settingsSaveBtn:active{background:#d6eee4}
+#settingsModal .settingsSaveStatus{min-height:18px;color:var(--muted);font-size:11px;line-height:1.4;font-weight:650}
+#settingsModal .settingsSaveStatus[data-state="error"]{color:var(--red)}
+#settingsModal .settingsSaveStatus[data-state="saved"]{color:#12775c}
+#settingsModal .field input[aria-invalid="true"]{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
+
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3589,7 +3610,16 @@ html,body{
 
 <div class="modal" id="settingsModal">
   <div class="sheet">
-    <div class="sheetHead"><h2>Settings</h2><button class="close" id="closeSettings">×</button></div>
+    <div class="settingsStickyHeader">
+      <div class="sheetHead">
+        <h2>Settings</h2>
+        <div class="settingsHeadActions">
+          <button type="button" class="settingsSaveBtn" id="saveSettingsTop">Save</button>
+          <button type="button" class="close" id="closeSettings" aria-label="Close settings">&#215;</button>
+        </div>
+      </div>
+      <div id="investmentSettingsStatus" class="settingsSaveStatus" role="status" aria-live="polite">Balances save when you finish editing.</div>
+    </div>
     <div class="settingsSectionTitle">Investment Accounts</div>
     <div class="accountSettingsBlock">
       <div class="accountSettingsTitle">Wealthsimple TFSA</div>
@@ -3597,11 +3627,11 @@ html,body{
       <div class="settingsGrid">
         <div class="field">
           <label>Cash Balance (CAD)</label>
-          <input id="accountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="406.21"/>
+          <input id="accountCashInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="406.21"/>
         </div>
         <div class="field">
           <label>Net Deposits (CAD)</label>
-          <input id="netDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="30250.00"/>
+          <input id="netDepositsInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="30250.00"/>
         </div>
       </div>
     </div>
@@ -3611,11 +3641,11 @@ html,body{
       <div class="settingsGrid">
         <div class="field">
           <label>Cash Balance (CAD)</label>
-          <input id="questradeCashInput" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+          <input id="questradeCashInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="0.00"/>
         </div>
         <div class="field">
           <label>Net Deposits (CAD)</label>
-          <input id="questradeNetDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
+          <input id="questradeNetDepositsInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="0.00"/>
         </div>
       </div>
     </div>
@@ -3625,11 +3655,11 @@ html,body{
       <div class="settingsGrid">
         <div class="field">
           <label>Cash Balance (CAD)</label>
-          <input id="questradeCashAccountCashInput" type="number" step="0.01" inputmode="decimal" placeholder="2976.76"/>
+          <input id="questradeCashAccountCashInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="2976.76"/>
         </div>
         <div class="field">
           <label>Net Deposits (CAD)</label>
-          <input id="questradeCashAccountNetDepositsInput" type="number" step="0.01" inputmode="decimal" placeholder="3000.00"/>
+          <input id="questradeCashAccountNetDepositsInput" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="investmentSettingsStatus" placeholder="3000.00"/>
         </div>
       </div>
     </div>
@@ -4092,6 +4122,10 @@ let cloudBootstrapFinished=false;
 let cloudPendingBeforeBootstrap=false;
 let cloudLastError="";
 let cloudLastRemoteCheckAt=0;
+let cloudLocalEditSerial=0;
+let investmentSettingsDirty=false;
+let settingsSaveError="";
+let settingsLastSaved=false;
 function cloudSyncEnabled(){try{return localStorage.getItem(CLOUD_SYNC_ENABLED_KEY)==="1"}catch(e){return false}}
 function cloudSyncToken(){try{return String(localStorage.getItem(CLOUD_SYNC_TOKEN_KEY)||"").trim()}catch(e){return ""}}
 function cloudRevision(){try{return Math.max(0,Number(localStorage.getItem(CLOUD_SYNC_REVISION_KEY)||0)||0)}catch(e){return 0}}
@@ -4184,27 +4218,40 @@ async function cloudPushState(force=false,reason="manual"){
   if(cloudSyncInFlight)return null;
   if(!cloudSyncToken())throw new Error("Sync token is missing");
   cloudSyncInFlight=true;
+  let uploadedSerial=null;
+  let uploadSucceeded=false;
   setCloudStatus("Syncing…","warn",reason==="auto"?"Saving the latest local changes to D1.":"Saving this device to the primary cloud copy.");
   try{
     const body={payload:cloudBuildPayload(),deviceId:cloudDeviceId(),baseRevision:cloudRevision(),force:Boolean(force)};
+    uploadedSerial=cloudLocalEditSerial;
     const data=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});
+    uploadSucceeded=true;
     localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(data.revision||0));
     localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(data.updatedAt||new Date().toISOString()));
-    setCloudDirty(false);
+    setCloudDirty(cloudLocalEditSerial!==uploadedSerial);
     cloudLastError="";
     const extra=data?.structuredSyncWarning?` · Structured copy warning: ${data.structuredSyncWarning}`:"";
-    setCloudStatus("Synced","ok",`Cloud revision ${data.revision} · ${new Date(data.updatedAt).toLocaleString()}${extra}`);
+    if(cloudDirty())setCloudStatus("Sync pending","warn","Saved on this device. Uploading the newer local changes next.");
+    else setCloudStatus("Synced","ok",`Cloud revision ${data.revision} · ${new Date(data.updatedAt).toLocaleString()}${extra}`);
     return data;
   }catch(e){
     cloudLastError=String(e?.message||e);
     if(e?.status===409)setCloudStatus("Sync conflict","warn","Cloud changed on another device. Your local changes were not overwritten. Open the app on the latest device first, or choose Restore from Cloud / Sync This Device manually.");
     else setCloudStatus("Sync failed","err",cloudLastError);
     throw e;
-  }finally{cloudSyncInFlight=false}
+  }finally{
+    cloudSyncInFlight=false;
+    updateInvestmentSettingsStatus();
+    if(uploadSucceeded && cloudDirty() && cloudSyncEnabled() && cloudSyncToken()){
+      clearTimeout(cloudSyncTimer);
+      cloudSyncTimer=setTimeout(()=>cloudPushState(false,"auto").catch(()=>{}),2000);
+    }
+  }
 }
 function cloudScheduleSync(){
   if(cloudRestoreInProgress || !cloudSyncEnabled() || !cloudSyncToken())return;
   if(!cloudBootstrapFinished){cloudPendingBeforeBootstrap=true;return}
+  cloudLocalEditSerial++;
   setCloudDirty(true);
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer=setTimeout(()=>{cloudPushState(false,"auto").catch(()=>{})},2000);
@@ -4222,10 +4269,12 @@ function cloudApplyPayload(payload){
 }
 async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
   if(cloudPullInFlight)return null;
+  if(!confirmFirst && (settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
   cloudPullInFlight=true;
   try{
     const data=await cloudRequest("/api/cloud/state");
     if(!data?.payload)throw new Error("No cloud data exists yet");
+    if(!confirmFirst && (settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
     if(confirmFirst && !confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return null;
     try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}catch(e){}
     cloudApplyPayload(data.payload);
@@ -4242,6 +4291,7 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
 async function cloudRestoreFromServer(){return cloudPullLatest({confirmFirst:true,reason:"manual"})}
 async function cloudReconcile(reason="resume"){
   if(!cloudSyncEnabled() || !cloudSyncToken())return null;
+  if(settingsModal?.classList.contains("show") || cloudSyncInFlight || cloudPullInFlight)return null;
   const status=await cloudStatusCheck({quiet:true});
   if(!status)return null;
   const remoteRev=Math.max(0,Number(status.revision||0)||0);
@@ -4250,7 +4300,7 @@ async function cloudReconcile(reason="resume"){
     return await cloudPushState(false,"first backup");
   }
   if(remoteRev>localRev){
-    if(localRev===0 || !cloudDirty()){
+    if(!cloudDirty()){
       return await cloudPullLatest({confirmFirst:false,reason:"auto"});
     }
     setCloudStatus("Sync conflict","warn",`Cloud revision ${remoteRev} is newer than this device (${localRev}), and this device also has unsynced changes. Nothing was overwritten.`);
@@ -5830,67 +5880,186 @@ document.getElementById("detailAddLotBtn").onclick=()=>{
   if(fAccount && selectedPortfolioAccount!=="all")fAccount.value=selectedPortfolioAccount;
 };
 
+// One save path for all six investment-account amounts. It does not add ledger entries.
+const investmentSettingsFields=[
+  {el:accountCashInput,key:"portfolioAccountCashCAD",label:"Wealthsimple Cash Balance",get:()=>accountCash,set:v=>{accountCash=v}},
+  {el:netDepositsInput,key:"portfolioNetDepositsCAD",label:"Wealthsimple Net Deposits",get:()=>netDeposits,set:v=>{netDeposits=v}},
+  {el:questradeCashInput,key:"questradeAccountCashCAD",label:"Questrade TFSA Cash Balance",get:()=>questradeCash,set:v=>{questradeCash=v}},
+  {el:questradeNetDepositsInput,key:"questradeNetDepositsCAD",label:"Questrade TFSA Net Deposits",get:()=>questradeNetDeposits,set:v=>{questradeNetDeposits=v}},
+  {el:questradeCashAccountCashInput,key:"questradeCashAccountCashCAD",label:"Questrade Cash Balance",get:()=>questradeCashAccountCash,set:v=>{questradeCashAccountCash=v}},
+  {el:questradeCashAccountNetDepositsInput,key:"questradeCashAccountNetDepositsCAD",label:"Questrade Cash Net Deposits",get:()=>questradeCashAccountNetDeposits,set:v=>{questradeCashAccountNetDeposits=v}}
+];
+function updateInvestmentSettingsStatus(){
+  const el=document.getElementById("investmentSettingsStatus");
+  if(!el)return;
+  if(settingsSaveError){el.textContent=settingsSaveError;el.dataset.state="error";return}
+  if(investmentSettingsDirty){el.textContent="Finish editing or tap Save to save your changes.";el.dataset.state="pending";return}
+  if(settingsLastSaved){
+    el.dataset.state="saved";
+    el.textContent=cloudSyncEnabled()&&cloudDirty()
+      ?"Saved on this device. Cloud sync pending."
+      :"Saved on this device.";
+    return;
+  }
+  el.dataset.state="";
+  el.textContent="Balances save when you finish editing.";
+}
+function parseInvestmentSettingsAmount(raw){
+  let text=String(raw??"").trim().replace(/^(?:CAD\s*)?(?:C?\$\s*)?/i,"").trim();
+  if(!text)throw new Error("Enter an amount, or 0.");
+  // Accept grouped CAD amounts and a decimal comma, but not malformed grouping.
+  if(/^\d+,\d{1,2}$/.test(text))text=text.replace(",",".");
+  if(!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{0,2})?$/.test(text)){
+    throw new Error("Use a non-negative amount with up to 2 decimal places.");
+  }
+  const value=Number(text.replaceAll(",",""));
+  if(!Number.isFinite(value)||value<0||!Number.isSafeInteger(Math.round(value*100))){
+    throw new Error("Enter a valid amount.");
+  }
+  return Math.round(value*100)/100;
+}
+function saveInvestmentAccountSettings({focusInvalid=false}={}){
+  if(!settingsModal?.classList.contains("show"))return true;
+  const parsed=[];
+  let invalid=null;
+  for(const field of investmentSettingsFields){
+    if(!field.el)continue;
+    try{
+      const value=parseInvestmentSettingsAmount(field.el.value);
+      field.el.removeAttribute("aria-invalid");
+      parsed.push({field,value});
+    }catch(e){
+      field.el.setAttribute("aria-invalid","true");
+      if(!invalid)invalid={field,message:`${field.label}: ${e.message}`};
+    }
+  }
+  if(invalid){
+    investmentSettingsDirty=true;
+    settingsSaveError=invalid.message;
+    updateInvestmentSettingsStatus();
+    if(focusInvalid)invalid.field.el.focus();
+    return false;
+  }
+  const changed=parsed.filter(({field,value})=>Number(field.get())!==value);
+  const previous=[];
+  try{
+    for(const {field,value} of changed){
+      previous.push({key:field.key,value:localStorage.getItem(field.key)});
+      localStorage.setItem(field.key,String(value));
+    }
+    // Record pending edits before any asynchronous cloud operation can start.
+    if(changed.length)localStorage.setItem(CLOUD_SYNC_DIRTY_KEY,"1");
+  }catch(e){
+    for(const old of previous){try{if(old.value===null)localStorage.removeItem(old.key);else localStorage.setItem(old.key,old.value)}catch(ignore){}}
+    settingsSaveError="Could not save on this device. Keep Settings open and try again.";
+    investmentSettingsDirty=true;
+    updateInvestmentSettingsStatus();
+    return false;
+  }
+  for(const {field,value} of parsed){field.set(value);field.el.value=value.toFixed(2)}
+  settingsSaveError="";
+  investmentSettingsDirty=false;
+  if(changed.length){
+    settingsLastSaved=true;
+    cloudLocalEditSerial++;
+    chartCache.clear();
+    portfolioChartRequestSeq++;
+    // Local account totals update before any market or cloud request is awaited.
+    try{renderHome();renderNetWorth()}catch(e){console.error("Account display refresh failed",e)}
+    loadPortfolioHistory(currentPortfolioRange).catch(e=>console.warn("Chart refresh unavailable",e));
+    cloudScheduleSync();
+  }
+  updateInvestmentSettingsStatus();
+  return true;
+}
+function saveCloudSettingsFromForm(){
+  const token=String(cloudSyncTokenInput?.value||"").trim();
+  const enabled=Boolean(cloudSyncEnabledInput?.checked);
+  if(enabled&&!token){
+    settingsSaveError="Enter your Sync Token, or turn off Automatic cloud sync.";
+    updateInvestmentSettingsStatus();
+    return false;
+  }
+  const changed=token!==cloudSyncToken()||enabled!==cloudSyncEnabled();
+  try{
+    if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);else localStorage.removeItem(CLOUD_SYNC_TOKEN_KEY);
+    localStorage.setItem(CLOUD_SYNC_ENABLED_KEY,enabled?"1":"0");
+  }catch(e){
+    settingsSaveError="Cloud settings could not be saved on this device.";
+    updateInvestmentSettingsStatus();return false;
+  }
+  if(changed&&enabled&&token)setTimeout(()=>cloudBootstrap(),0);
+  if(enabled&&token&&cloudDirty())cloudScheduleSync();
+  return true;
+}
 function openSettings(){
-  if(accountCashInput)accountCashInput.value=Number(accountCash||0).toFixed(2);
-  if(netDepositsInput)netDepositsInput.value=Number(netDeposits||0).toFixed(2);
-  if(questradeCashInput)questradeCashInput.value=Number(questradeCash||0).toFixed(2);
-  if(questradeNetDepositsInput)questradeNetDepositsInput.value=Number(questradeNetDeposits||0).toFixed(2);
-  if(questradeCashAccountCashInput)questradeCashAccountCashInput.value=Number(questradeCashAccountCash||0).toFixed(2);
-  if(questradeCashAccountNetDepositsInput)questradeCashAccountNetDepositsInput.value=Number(questradeCashAccountNetDeposits||0).toFixed(2);
+  if(settingsModal.classList.contains("show"))return;
+  for(const field of investmentSettingsFields){
+    if(field.el){field.el.value=Number(field.get()||0).toFixed(2);field.el.removeAttribute("aria-invalid")}
+  }
+  investmentSettingsDirty=false;
+  settingsSaveError="";
+  settingsLastSaved=false;
   apiBaseInput.value=DEFAULT_MARKET_API;
   apiBaseInput.readOnly=true;
   if(cloudSyncTokenInput)cloudSyncTokenInput.value=cloudSyncToken();
   if(cloudSyncEnabledInput)cloudSyncEnabledInput.checked=cloudSyncEnabled();
   if(cloudSyncEnabled()&&cloudSyncToken())cloudStatusCheck();
-  else setCloudStatus("Not configured","","Create the D1 database and Worker secret first, then enable cloud sync here.");
-  fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" · market data":" · demo"}`;
+  else setCloudStatus("Not configured","","Cloud sync is optional. Balances are still saved on this device.");
+  fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" \u00b7 market data":" \u00b7 demo"}`;
   settingsModal.classList.add("show");
+  const sheet=settingsModal.querySelector(".sheet");if(sheet)sheet.scrollTop=0;
+  updateInvestmentSettingsStatus();
 }
-function closeSettingsFn(){settingsModal.classList.remove("show")}
+function closeSettingsFn(){
+  if(!settingsModal.classList.contains("show"))return true;
+  if(!saveInvestmentAccountSettings({focusInvalid:true}) || !saveCloudSettingsFromForm())return false;
+  settingsModal.classList.remove("show");
+  return true;
+}
+async function saveSettingsAndRefresh(refreshMarket=false){
+  if(!saveInvestmentAccountSettings({focusInvalid:true}) || !saveCloudSettingsFromForm())return;
+  marketApiBase=DEFAULT_MARKET_API;
+  settingsLastSaved=true;settingsSaveError="";updateInvestmentSettingsStatus();
+  if(refreshMarket){
+    settingsModal.classList.remove("show");
+    await refreshLiveData(false);
+  }
+}
+for(const field of investmentSettingsFields){
+  if(!field.el)continue;
+  field.el.addEventListener("input",()=>{
+    investmentSettingsDirty=true;settingsSaveError="";
+    field.el.removeAttribute("aria-invalid");updateInvestmentSettingsStatus();
+  });
+  const finish=()=>saveInvestmentAccountSettings();
+  field.el.addEventListener("change",finish);
+  field.el.addEventListener("blur",finish);
+  field.el.addEventListener("keydown",event=>{
+    if(event.key==="Enter"){event.preventDefault();if(saveInvestmentAccountSettings({focusInvalid:true}))field.el.blur()}
+  });
+}
 if(settingsBtn)settingsBtn.onclick=openSettings;
 if(navSettings)navSettings.onclick=openSettings;
 if(closeSettings)closeSettings.onclick=closeSettingsFn;
 settingsModal.onclick=e=>{if(e.target===settingsModal)closeSettingsFn()};
-saveSettings.onclick=async()=>{
-  const nextCash=Number(accountCashInput?.value||0);
-  const nextDeposits=Number(netDepositsInput?.value||0);
-  accountCash=Number.isFinite(nextCash)?Math.max(0,nextCash):0;
-  netDeposits=Number.isFinite(nextDeposits)?Math.max(0,nextDeposits):0;
-  const nextQCash=Number(questradeCashInput?.value||0);
-  const nextQDeposits=Number(questradeNetDepositsInput?.value||0);
-  questradeCash=Number.isFinite(nextQCash)?Math.max(0,nextQCash):0;
-  questradeNetDeposits=Number.isFinite(nextQDeposits)?Math.max(0,nextQDeposits):0;
-
-  const nextQCashAccountCash=Number(questradeCashAccountCashInput?.value||0);
-  const nextQCashAccountDeposits=Number(questradeCashAccountNetDepositsInput?.value||0);
-  questradeCashAccountCash=Number.isFinite(nextQCashAccountCash)?Math.max(0,nextQCashAccountCash):0;
-  questradeCashAccountNetDeposits=Number.isFinite(nextQCashAccountDeposits)?Math.max(0,nextQCashAccountDeposits):0;
-
-  saveNumberSetting("portfolioAccountCashCAD",accountCash);
-  saveNumberSetting("portfolioNetDepositsCAD",netDeposits);
-  saveNumberSetting("questradeAccountCashCAD",questradeCash);
-  saveNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
-  saveNumberSetting("questradeCashAccountCashCAD",questradeCashAccountCash);
-  saveNumberSetting("questradeCashAccountNetDepositsCAD",questradeCashAccountNetDeposits);
-
-  try{
-    const token=String(cloudSyncTokenInput?.value||"").trim();
-    if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);else localStorage.removeItem(CLOUD_SYNC_TOKEN_KEY);
-    localStorage.setItem(CLOUD_SYNC_ENABLED_KEY,cloudSyncEnabledInput?.checked?"1":"0");
-  }catch(e){}
-  if(cloudSyncEnabled()&&cloudSyncToken())setTimeout(()=>cloudBootstrap(),0);
-
-  marketApiBase=DEFAULT_MARKET_API;
-  try{localStorage.removeItem("marketApiBase")}catch(e){}
-
-  chartCache.clear();
-  renderHome();
-  renderNetWorth();
-  closeSettingsFn();
+const saveSettingsTop=document.getElementById("saveSettingsTop");
+if(saveSettingsTop)saveSettingsTop.onclick=()=>saveSettingsAndRefresh(false);
+saveSettings.onclick=()=>saveSettingsAndRefresh(true);
+refreshData.onclick=async()=>{
+  if(!saveInvestmentAccountSettings({focusInvalid:true}))return;
   await refreshLiveData(false);
 };
-refreshData.onclick=async()=>{await refreshLiveData(false)};
+// Persist completed edits before the browser is backgrounded, without replacing
+// empty/invalid input with zero. No new ledger transactions are generated.
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden" && settingsModal.classList.contains("show"))saveInvestmentAccountSettings();
+});
+window.addEventListener("pagehide",()=>{
+  if(settingsModal.classList.contains("show"))saveInvestmentAccountSettings();
+});
 if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
+  if(!saveInvestmentAccountSettings({focusInvalid:true}))return;
   try{
     const token=String(cloudSyncTokenInput?.value||"").trim();
     if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);
