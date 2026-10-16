@@ -1,0 +1,1 @@
+v5.22.4 Dividend month toggle. Selecting 6M initially shows total across all months and every bar purple. Tap a month to filter its dividend details and dim other bars; tap same month again to restore all months. Selecting another time range resets month filter. No Worker/D1 changes.

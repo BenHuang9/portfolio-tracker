@@ -3134,6 +3134,11 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
 .dividendSelectedEyebrow{font-size:11px;letter-spacing:.07em;font-weight:800;color:#8651c7;}
 .dividendDetailHeader+.sectionSub{font-size:13px;line-height:1.4;color:var(--muted);}
 .dividendEmpty{display:flex;align-items:center;justify-content:center;min-height:110px;color:var(--muted);padding:24px}
+
+/* v5.22.4: all visible months highlighted unless a month is selected */
+.dividendBar .bar{background:linear-gradient(180deg,#a957ee,#8b46d7)!important;opacity:1!important;box-shadow:none!important}
+.divChart.hasMonthSelection .dividendBar:not(.selected) .bar{background:linear-gradient(180deg,#d9c8ef,#bfaae0)!important;opacity:.56!important}
+.divChart:not(.hasMonthSelection) .dividendBar::after{display:none}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -5923,7 +5928,7 @@ function renderDividends(range="1M",resetSelection=false){
     buckets.get(key).push(p);
   });
   const keys=[...buckets.keys()].sort();
-  if(!selectedDividendBucket||!buckets.has(selectedDividendBucket))selectedDividendBucket=keys.at(-1)||null;
+  if(selectedDividendBucket&&!buckets.has(selectedDividendBucket))selectedDividendBucket=null;
   const displayed=selectedDividendBucket?(buckets.get(selectedDividendBucket)||[]):allPayments;
   const total=displayed.reduce((sum,p)=>sum+Number(p.amount||0),0);
   divTotal.textContent=fmt(total);
@@ -5937,6 +5942,7 @@ function renderDividends(range="1M",resetSelection=false){
   // In monthly ranges, each bar represents one calendar month.
   const chart=keys.map(key=>({key,label:dividendBucketLabel(key,monthly),amount:buckets.get(key).reduce((sum,p)=>sum+Number(p.amount||0),0)}));
   const max=Math.max(...chart.map(x=>x.amount),1);
+  divChart.classList.toggle("hasMonthSelection",Boolean(selectedDividendBucket));
   divChart.innerHTML=chart.map(x=>`<button type="button" class="barItem dividendBar${selectedDividendBucket===x.key?" selected":""}" data-div-key="${x.key}" aria-pressed="${selectedDividendBucket===x.key}" aria-label="${x.label}: ${fmt(x.amount)}; ${selectedDividendBucket===x.key?"selected":"view dividend details"}">
     <span class="bar" style="height:${Math.max(2,x.amount/max*220)}px"></span>
     <span class="barLabel">${x.label}</span><span class="barAmt">${fmt(x.amount)}</span>
@@ -5968,8 +5974,7 @@ document.getElementById("divChart").addEventListener("click",e=>{
   const target=e.target.closest("[data-div-key]");
   if(!target)return;
   const key=target.dataset.divKey;
-  if(selectedDividendBucket===key)return;
-  selectedDividendBucket=key;
+  selectedDividendBucket=(selectedDividendBucket===key)?null:key;
   const scroll=document.querySelector(".divChartOuter");
   const oldLeft=scroll?.scrollLeft||0;
   renderDividends(selectedDividendRange||"1M");
