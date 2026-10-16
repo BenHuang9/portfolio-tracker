@@ -3139,6 +3139,35 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
 .dividendBar .bar{background:linear-gradient(180deg,#a957ee,#8b46d7)!important;opacity:1!important;box-shadow:none!important}
 .divChart.hasMonthSelection .dividendBar:not(.selected) .bar{background:linear-gradient(180deg,#d9c8ef,#bfaae0)!important;opacity:.56!important}
 .divChart:not(.hasMonthSelection) .dividendBar::after{display:none}
+
+/* V5.22.5 — single consistent Blossom-inspired holding return equation */
+.holdingReturnTriple{
+  display:grid;grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr) 14px minmax(0,1fr);
+  align-items:center;gap:3px;width:100%;
+}
+.holdingReturnTriple .holdingReturnRow{
+  min-width:0;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
+}
+.holdingReturnTriple .holdingReturnRow .label{
+  font-size:clamp(9px,2.45vw,12px);line-height:1.25;letter-spacing:0;
+  text-transform:none;white-space:nowrap;
+}
+.holdingReturnTriple .holdingReturnValue{
+  width:100%;font-size:clamp(12px,3.05vw,19px);line-height:1.15;
+  text-align:center;letter-spacing:-.035em;white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.holdingReturnTriple .holdingReturnPct{
+  width:100%;font-size:clamp(10px,2.65vw,13px);line-height:1.2;
+  margin-top:0;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.holdingReturnTriple .holdingReturnOperator{
+  text-align:center;color:var(--muted);font-size:19px;font-weight:700;line-height:1;
+}
+@media(max-width:360px){
+  .holdingReturnTriple{grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr) 10px minmax(0,1fr);gap:1px}
+  .holdingReturnTriple .holdingReturnValue{font-size:11px}
+  .holdingReturnTriple .holdingReturnOperator{font-size:15px}
+}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3572,19 +3601,23 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
 
       <div class="holdingDivider"></div>
 
-      <div class="holdingReturnStack">
+      <div class="holdingReturnStack holdingReturnTriple" aria-label="Return breakdown">
         <div class="holdingReturnRow">
-          <div class="label">Stock Return</div>
+          <div class="label">Price Gain</div>
           <div class="holdingReturnValue" id="detailStockReturn">$0</div>
-          <div class="holdingReturnPct" id="detailStockReturnPct">+0.00% Excl. Dividends</div>
+          <div class="holdingReturnPct" id="detailStockReturnPct">+0.00%</div>
         </div>
-
-        <div class="holdingReturnInnerDivider"></div>
-
+        <span class="holdingReturnOperator" aria-hidden="true">+</span>
+        <div class="holdingReturnRow">
+          <div class="label">Dividends</div>
+          <div class="holdingReturnValue" id="detailDividendsReturn">$0</div>
+          <div class="holdingReturnPct" id="detailDividendsReturnPct">+0.00%</div>
+        </div>
+        <span class="holdingReturnOperator" aria-hidden="true">=</span>
         <div class="holdingReturnRow">
           <div class="label">Total Return</div>
           <div class="holdingReturnValue" id="detailTotal">$0</div>
-          <div class="holdingReturnPct" id="detailTotalPct">+0.00% Incl. Dividends</div>
+          <div class="holdingReturnPct" id="detailTotalPct">+0.00%</div>
         </div>
       </div>
     </div>
@@ -7940,17 +7973,25 @@ function openHoldingDetail(ticker){
   const stockReturnEl = document.getElementById("detailStockReturn");
   const stockReturnPct = p.bv ? capital / p.bv * 100 : 0;
   const stockReturnPctEl = document.getElementById("detailStockReturnPct");
-  stockReturnEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital)) + " CAD";
+  stockReturnEl.textContent = (capital>=0?"+":"-") + fmt(Math.abs(capital));
   stockReturnEl.className = "holdingReturnValue " + (capital>=0 ? "pos" : "neg");
-  stockReturnPctEl.textContent = pct(stockReturnPct) + " Excl. Dividends";
+  stockReturnPctEl.textContent = pct(stockReturnPct);
   stockReturnPctEl.className = "holdingReturnPct " + (capital>=0 ? "pos" : "neg");
+
+  const dividendsReturnEl = document.getElementById("detailDividendsReturn");
+  const dividendsReturnPctEl = document.getElementById("detailDividendsReturnPct");
+  const dividendsReturnPct = p.bv ? received / p.bv * 100 : 0;
+  dividendsReturnEl.textContent = (received>=0?"+":"-") + fmt(Math.abs(received));
+  dividendsReturnEl.className = "holdingReturnValue " + (received>=0 ? "pos" : "neg");
+  dividendsReturnPctEl.textContent = pct(dividendsReturnPct);
+  dividendsReturnPctEl.className = "holdingReturnPct " + (received>=0 ? "pos" : "neg");
 
   const totalEl = document.getElementById("detailTotal");
   const totalPct = p.bv ? total / p.bv * 100 : 0;
   const totalPctEl = document.getElementById("detailTotalPct");
-  totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total)) + " CAD";
+  totalEl.textContent = (total>=0?"+":"-") + fmt(Math.abs(total));
   totalEl.className = "holdingReturnValue " + (total>=0 ? "pos" : "neg");
-  totalPctEl.textContent = pct(totalPct) + " Incl. Dividends";
+  totalPctEl.textContent = pct(totalPct);
   totalPctEl.className = "holdingReturnPct " + (total>=0 ? "pos" : "neg");
 
   document.getElementById("detailMonthlyDiv").textContent = fmt(p.annual/12);

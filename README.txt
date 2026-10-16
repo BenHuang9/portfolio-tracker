@@ -1,1 +1,1 @@
-v5.22.4 Dividend month toggle. Selecting 6M initially shows total across all months and every bar purple. Tap a month to filter its dividend details and dim other bars; tap same month again to restore all months. Selecting another time range resets month filter. No Worker/D1 changes.
+V5.22.5 Holding Detail UI: Price Gain + Dividends = Total Return. All percentages use Book Value as denominator. Base: V5.22.4. Only index.html and sw.js need deploying to GitHub Pages. Cloudflare Worker/D1 unchanged.
