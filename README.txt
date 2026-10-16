@@ -1,3 +1,1 @@
-Portfolio icon update (based on V5.22.8)
-Replace all files in your GitHub Pages repo root. Keep market-worker.js, D1 and cloud setup unchanged.
-On iPhone delete ONLY the Home Screen shortcut (do not clear Safari website data), then open the site in Safari and Add to Home Screen again to refresh the cached icon.
+Portfolio V5.23.2 UI/cache fix only. Replace ONLY index.html and sw.js in your repository. Do NOT delete or reinstall the iPhone home-screen app or clear its site data. Auto sync remains paused. This update makes the file chooser labeled and bumps the service-worker cache. Do not click Confirm recovery until the read-only result is reviewed. No Worker update is included.

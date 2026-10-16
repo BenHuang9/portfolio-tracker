@@ -3832,7 +3832,9 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. No cloud upload or restore.</div>
       <div class="settingsSectionTitle" style="margin-top:16px">Safe cloud recovery</div>
       <div class="accountSettingsSub">Only use on your iPhone home-screen app. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync remains paused.</div>
-      <input id="recoveryBackupFile" type="file" accept="application/json,.json" style="max-width:100%;margin:12px 0"/>
+      <label for="recoveryBackupFile" style="display:block;font-weight:600;margin:12px 0 6px">Step 1 — Select iPhone JSON backup</label>
+      <input id="recoveryBackupFile" type="file" accept=".json,application/json" style="display:block;width:100%;max-width:100%;margin:8px 0 14px;font-size:16px"/>
+      <div class="cloudSyncMeta" style="margin-bottom:10px">Tap Choose File / 选取文件 above. Select the original portfolio-local-backup JSON from Files.</div>
       <button class="secondaryBtn" id="recoveryPreviewBtn" type="button" style="width:100%">Check backup and cloud (read-only)</button>
       <div class="cloudSyncMeta" id="recoveryReviewText" role="status">No recovery has been performed.</div>
       <button class="primary" id="recoveryCommitBtn" type="button" style="width:100%;display:none">Confirm one-time cloud recovery</button>
