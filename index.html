@@ -3830,6 +3830,12 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
         <button class="secondaryBtn" id="exportLocalBackupBtn" type="button" style="width:100%">Export Local Backup (JSON)</button>
       </div>
       <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. No cloud upload or restore.</div>
+      <div class="settingsSectionTitle" style="margin-top:16px">Safe cloud recovery</div>
+      <div class="accountSettingsSub">Only use on your iPhone home-screen app. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync remains paused.</div>
+      <input id="recoveryBackupFile" type="file" accept="application/json,.json" style="max-width:100%;margin:12px 0"/>
+      <button class="secondaryBtn" id="recoveryPreviewBtn" type="button" style="width:100%">Check backup and cloud (read-only)</button>
+      <div class="cloudSyncMeta" id="recoveryReviewText" role="status">No recovery has been performed.</div>
+      <button class="primary" id="recoveryCommitBtn" type="button" style="width:100%;display:none">Confirm one-time cloud recovery</button>
     </div>
 
     <div class="settingsSectionTitle">Market Data</div>
@@ -6420,6 +6426,89 @@ if(exportLocalBackupBtn)exportLocalBackupBtn.onclick=async()=>{
     if(exportLocalBackupStatus)exportLocalBackupStatus.textContent="Export failed: "+String(error?.message||error);
   }finally{exportLocalBackupBtn.textContent=original;}
 };
+
+/* V5.23.1: one-time recovery, intentionally never part of background sync. */
+const recoveryFileEl=document.getElementById("recoveryBackupFile");
+const recoveryPreviewBtn=document.getElementById("recoveryPreviewBtn");
+const recoveryCommitBtn=document.getElementById("recoveryCommitBtn");
+const recoveryReviewText=document.getElementById("recoveryReviewText");
+let recoveryReview=null;
+function recoveryReport(message){if(recoveryReviewText)recoveryReviewText.textContent=message;}
+function recoveryArray(storage,key){const v=JSON.parse(storage[key]||"[]");if(!Array.isArray(v))throw new Error(key+" is not an array");return v;}
+function recoveryIdentity(row,key){
+  if(key==="personalLedgerTransactionsV513")return String(row.id||"");
+  // The lot structure has no guaranteed stable row ID; use the entire original
+  // economic trade signature so that two distinct trades cannot collapse.
+  return JSON.stringify([row.id||null,row.accountId||"",row.ticker||"",row.date||"",Number(row.shares),Number(row.cost),Boolean(row.openingPosition)]);
+}
+function recoveryRemoteUnique(localStorageData,remoteStorage,key){
+  const local=recoveryArray(localStorageData,key),remote=recoveryArray(remoteStorage,key);
+  const seen=new Set(local.map(x=>recoveryIdentity(x,key)));
+  return {local:local.length,remote:remote.length,unique:remote.filter(x=>!seen.has(recoveryIdentity(x,key)))};
+}
+function recoveryAccountBalance(storage,name){
+  const a=JSON.parse(storage.netWorthManualAccountsV58||"[]");
+  return a.find(x=>String(x.name||"").toLowerCase()===name.toLowerCase());
+}
+function recoveryValidate(storage){
+  const lots=recoveryArray(storage,"incomeTrackerLots");
+  const tx=recoveryArray(storage,"personalLedgerTransactionsV513");
+  if(lots.length<61||tx.length<552)throw new Error(`Expected at least 61 lots and 552 transactions; found ${lots.length} and ${tx.length}. No changes made.`);
+  for(const [name,expected] of [["Cash",7080],["CIBC Chequing",11998.72],["CIBC Credit Card",302.08]]){
+    const a=recoveryAccountBalance(storage,name);
+    if(!a||Math.abs(Number(a.balance)-expected)>.011)throw new Error(`${name} is not the confirmed $${expected.toFixed(2)}. No changes made.`);
+  }
+  return {lots:lots.length,transactions:tx.length};
+}
+function recoveryFinancialSame(a,b){
+  return [...CLOUD_FINANCIAL_KEYS,"netWorthHistoryV58"].every(k=>cloudEqual(a[k]??null,b[k]??null));
+}
+if(recoveryFileEl)recoveryFileEl.onchange=()=>{recoveryReview=null;recoveryCommitBtn.style.display="none";recoveryReport("Backup selected. Press the check button to review; nothing has been uploaded.");};
+if(recoveryPreviewBtn)recoveryPreviewBtn.onclick=async()=>{
+  recoveryReview=null;recoveryCommitBtn.style.display="none";
+  try{
+    const file=recoveryFileEl?.files?.[0];if(!file)throw new Error("Select the iPhone JSON backup first.");
+    if(file.size>6000000)throw new Error("Unexpectedly large file.");
+    const backup=JSON.parse(await file.text());
+    if(backup?.format!=="portfolio-local-backup"||!backup.storage)throw new Error("Not a valid local Portfolio backup.");
+    const verified=recoveryValidate(backup.storage);
+    const current=createLocalBackupSnapshot().storage;
+    if(!recoveryFinancialSame(current,backup.storage))throw new Error("This app's current finance records differ from the selected backup. Do not risk mixing devices; open the original iPhone home-screen app and export a NEW local backup there.");
+    if(!cloudSyncToken())throw new Error("Sync Token is missing on this device.");
+    const cloud=await cloudRequest("/api/cloud/state");
+    const remote=cloud.payload?.storage;if(!remote)throw new Error("Cloud state missing storage.");
+    const lots=recoveryRemoteUnique(current,remote,"incomeTrackerLots");
+    const tx=recoveryRemoteUnique(current,remote,"personalLedgerTransactionsV513");
+    if(lots.unique.length||tx.unique.length)throw new Error(`Cloud has ${lots.unique.length} holding lots and ${tx.unique.length} transactions absent from the phone. Stop for manual review; no data was uploaded.`);
+    recoveryReview={revision:Number(cloud.revision),fingerprint:JSON.stringify(current),cloudUpdatedAt:cloud.updatedAt,checks:verified};
+    recoveryReport(`Safe to review: phone ${verified.lots} lots / ${verified.transactions} transactions. Cloud revision ${cloud.revision}: ${lots.remote} lots / ${tx.remote} transactions. No cloud-only lots or transactions. Phone's three confirmed balances match. Press Confirm only if this is your main iPhone app.`);
+    recoveryCommitBtn.style.display="block";
+  }catch(e){recoveryReport("Stopped safely: "+String(e?.message||e));}
+};
+if(recoveryCommitBtn)recoveryCommitBtn.onclick=async()=>{
+  const check=recoveryReview;recoveryReview=null;recoveryCommitBtn.style.display="none";
+  if(!check)return;
+  if(!confirm(`Replace cloud revision ${check.revision} with this iPhone's data?\n\nThe original iPhone backup must remain saved in Files. This does not restore data to another device. Proceed?`))return;
+  try{
+    const now=createLocalBackupSnapshot().storage;
+    if(JSON.stringify(now)!==check.fingerprint)throw new Error("Local data changed after review. Run Check again.");
+    const status=await cloudRequest("/api/cloud/status");
+    if(Number(status.revision)!==check.revision)throw new Error("Cloud revision changed after review. Run Check again.");
+    const payload=cloudBuildPayload();
+    // Ensure the derived cloudModel was rebuilt from this iPhone's actual state.
+    if(!recoveryFinancialSame(payload.storage,now))throw new Error("Current account data changed while preparing recovery. Stop and recheck.");
+    const body={payload,deviceId:cloudDeviceId(),baseRevision:check.revision,force:false};
+    const saved=await cloudRequest("/api/cloud/state",{method:"PUT",body:JSON.stringify(body)});
+    localStorage.setItem(CLOUD_SYNC_REVISION_KEY,String(saved.revision));
+    localStorage.setItem(CLOUD_SYNC_LAST_AT_KEY,String(saved.updatedAt||new Date().toISOString()));
+    writeLocalJSON(CLOUD_BASELINE_KEY,{storage:payload.storage,revision:saved.revision});
+    localStorage.removeItem(CLOUD_EDIT_BASE_KEY);setCloudDirty(false);
+    // No auto-sync yet: only unpause after both devices are independently checked.
+    setCloudStatus("Recovery uploaded — sync paused","warn",`Revision ${saved.revision}. Auto sync stays disabled in this safety build.`);
+    recoveryReport(`Recovery accepted by D1 as revision ${saved.revision}. Automatic sync remains PAUSED. Keep iPhone and JSON backup; check cloud data before any further sync.`);
+  }catch(e){recoveryReport("Recovery stopped: "+String(e?.message||e)+". No forced overwrite was attempted.");}
+};
+
 if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
   if(PORTFOLIO_BACKUP_ONLY_MODE){alert("Cloud sync is paused in this backup-only version. Export Local Backup first.");return}
   try{
