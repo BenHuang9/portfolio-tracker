@@ -5904,7 +5904,7 @@ let selectedDividendRange=null;
 let selectedDividendAccount=null;
 function dividendBucketLabel(key,monthly){
   const date=new Date((monthly?key+"-01":key)+"T00:00:00");
-  return date.toLocaleDateString("en-CA",monthly?{month:"long",year:"numeric"}:{month:"long",day:"numeric",year:"numeric"});
+  return date.toLocaleDateString("en-CA",monthly?{month:"short",year:"numeric"}:{month:"short",day:"numeric",year:"numeric"});
 }
 function renderDividends(range="1M",resetSelection=false){
   const account=selectedPortfolioAccount;
