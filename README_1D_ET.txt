@@ -1,1 +1,0 @@
-V5.21.3: 1D US equity chart uses 9:30 AM–4:00 PM America/New_York regular session. Pre-/after-market data outside the regular window are not plotted. Other ranges unchanged. Replace GitHub index.html and sw.js only. No Worker/D1/Cron changes.
