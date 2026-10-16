@@ -3122,16 +3122,17 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
 .sheetHead h2{line-height:1.16;letter-spacing:-.025em}
 .field input,.field select,.field textarea{min-height:var(--app-touch);font-size:16px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
-/* Interactive monthly dividend drilldown: taps do not interfere with vertical scrolling. */
-.dividendBar{appearance:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 1px 3px;border-radius:14px;touch-action:pan-x pan-y;}
-.dividendBar .bar{background:#a8bfee;transition:background-color .12s ease;}
-.dividendBar.selected .bar{background:#547fd8;}
-.dividendBar.selected .barLabel,.dividendBar.selected .barAmt{color:#1e54ac;font-weight:800}
-.dividendBar:focus-visible{outline:2px solid #547fd8;outline-offset:2px}
-.dividendDetailHeader{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.dividendDetailHeader h2{flex:1;min-width:0}
-#divClearPeriod{border:1px solid #ddd;border-radius:18px;padding:9px 12px;white-space:nowrap;background:#fff;font-weight:700;font-size:12px}
-#divClearPeriod[hidden]{display:none}
+/* Dividend drilldown: one unambiguous selected month and clear details. */
+ .dividendBar{appearance:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 4px 7px;border-radius:13px;touch-action:pan-x pan-y;position:relative;}
+.dividendBar .bar{background:linear-gradient(180deg,#c5a8f5,#9876e3)!important;transition:background-color .12s ease;opacity:.72;box-shadow:none!important;}
+.dividendBar.selected .bar{background:linear-gradient(180deg,#a957ee,#8b46d7)!important;opacity:1;box-shadow:0 4px 13px rgba(128,65,207,.20)!important;}
+.dividendBar.selected::after{content:"";position:absolute;bottom:-3px;left:35%;width:30%;height:3px;border-radius:9px;background:#884bd8;}
+.dividendBar.selected .barLabel,.dividendBar.selected .barAmt{color:#7133bf!important;font-weight:850!important}
+.dividendBar:focus-visible{outline:2px solid #884bd8;outline-offset:2px}
+.dividendDetailHeader{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:17px}
+.dividendDetailHeader h2{font-size:25px!important;letter-spacing:-.025em;line-height:1.17;margin:7px 0 7px!important}
+.dividendSelectedEyebrow{font-size:11px;letter-spacing:.07em;font-weight:800;color:#8651c7;}
+.dividendDetailHeader+.sectionSub{font-size:13px;line-height:1.4;color:var(--muted);}
 .dividendEmpty{display:flex;align-items:center;justify-content:center;min-height:110px;color:var(--muted);padding:24px}
 </style>
 
@@ -3252,7 +3253,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
     <div class="divChartOuter"><div class="divChart" id="divChart"></div></div>
 
     <div class="payments">
-      <div class="dividendDetailHeader"><h2 id="payHeading">Past 1 Month Dividends by Holding</h2><button type="button" id="divClearPeriod" hidden>All months</button></div>
+      <div class="dividendDetailHeader"><div><div class="dividendSelectedEyebrow">SELECTED PERIOD <span aria-hidden="true">·</span> DETAILS</div><h2 id="payHeading">Dividends by Holding</h2></div></div>
       <div class="sectionSub">Each holding shows the total dividends earned during the selected period.</div>
       <div id="paymentRows"></div>
     </div>
@@ -5922,7 +5923,7 @@ function renderDividends(range="1M",resetSelection=false){
     buckets.get(key).push(p);
   });
   const keys=[...buckets.keys()].sort();
-  if(selectedDividendBucket&&!buckets.has(selectedDividendBucket))selectedDividendBucket=null;
+  if(!selectedDividendBucket||!buckets.has(selectedDividendBucket))selectedDividendBucket=keys.at(-1)||null;
   const displayed=selectedDividendBucket?(buckets.get(selectedDividendBucket)||[]):allPayments;
   const total=displayed.reduce((sum,p)=>sum+Number(p.amount||0),0);
   divTotal.textContent=fmt(total);
@@ -5930,13 +5931,13 @@ function renderDividends(range="1M",resetSelection=false){
   divSubtitle.textContent=accountName(account)+" · "+(selectedDividendBucket?"Dividends for ":"")+period;
   const headingPeriod=selectedDividendBucket?"Dividends for "+period:
     (range==="YTD"?"YTD":range==="ALL"?"All Time":rangeMap[range].label)+" Dividends by Holding";
-  payHeading.textContent=selectedDividendBucket?headingPeriod:headingPeriod;
+  payHeading.textContent=selectedDividendBucket?period:headingPeriod;
 
   // Bar data is built only from genuine dividend payment dates.
   // In monthly ranges, each bar represents one calendar month.
   const chart=keys.map(key=>({key,label:dividendBucketLabel(key,monthly),amount:buckets.get(key).reduce((sum,p)=>sum+Number(p.amount||0),0)}));
   const max=Math.max(...chart.map(x=>x.amount),1);
-  divChart.innerHTML=chart.map(x=>`<button type="button" class="barItem dividendBar${selectedDividendBucket===x.key?" selected":""}" data-div-key="${x.key}" aria-pressed="${selectedDividendBucket===x.key}" aria-label="${x.label}: ${fmt(x.amount)}; view dividend details">
+  divChart.innerHTML=chart.map(x=>`<button type="button" class="barItem dividendBar${selectedDividendBucket===x.key?" selected":""}" data-div-key="${x.key}" aria-pressed="${selectedDividendBucket===x.key}" aria-label="${x.label}: ${fmt(x.amount)}; ${selectedDividendBucket===x.key?"selected":"view dividend details"}">
     <span class="bar" style="height:${Math.max(2,x.amount/max*220)}px"></span>
     <span class="barLabel">${x.label}</span><span class="barAmt">${fmt(x.amount)}</span>
   </button>`).join("")||'<div class="dividendEmpty">No dividends for this period.</div>';
@@ -5960,8 +5961,6 @@ function renderDividends(range="1M",resetSelection=false){
       <div class="payAmt">${fmt(g.amount)}<span>CAD</span></div></div>`;
   }).join("")||'<div style="padding:24px 0;color:var(--muted)">No dividends in this period.</div>';
 
-  const prev=document.getElementById("divClearPeriod");
-  if(prev)prev.hidden=!selectedDividendBucket;
   const scroller=document.querySelector(".divChartOuter");
   if(scroller&&resetSelection){requestAnimationFrame(()=>{scroller.scrollLeft=scroller.scrollWidth})}
 }
@@ -5969,15 +5968,12 @@ document.getElementById("divChart").addEventListener("click",e=>{
   const target=e.target.closest("[data-div-key]");
   if(!target)return;
   const key=target.dataset.divKey;
-  selectedDividendBucket=selectedDividendBucket===key?null:key;
+  if(selectedDividendBucket===key)return;
+  selectedDividendBucket=key;
   const scroll=document.querySelector(".divChartOuter");
   const oldLeft=scroll?.scrollLeft||0;
   renderDividends(selectedDividendRange||"1M");
   if(scroll)scroll.scrollLeft=oldLeft;
-});
-document.getElementById("divClearPeriod").addEventListener("click",()=>{
-  selectedDividendBucket=null;
-  renderDividends(selectedDividendRange||"1M");
 });
 
 // Navigation coordinator: same route model for tab changes, details, and browser/iOS Back.
