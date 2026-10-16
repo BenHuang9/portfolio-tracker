@@ -3826,6 +3826,10 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
         <button class="secondaryBtn" id="cloudRestoreBtn" type="button">Restore from Cloud</button>
       </div>
       <div class="cloudSyncMeta" id="cloudSyncMeta">Cloud is the primary synced copy when enabled; this device keeps an offline cache.</div>
+      <div class="cloudSyncActions" style="margin-top:12px">
+        <button class="secondaryBtn" id="exportLocalBackupBtn" type="button" style="width:100%">Export Local Backup (JSON)</button>
+      </div>
+      <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. No cloud upload or restore.</div>
     </div>
 
     <div class="settingsSectionTitle">Market Data</div>
@@ -3839,7 +3843,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.21.3</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.23.0 · Backup Export</div>
   </div>
 </div>
 
@@ -4080,6 +4084,8 @@ var cloudSyncStatus=document.getElementById("cloudSyncStatus");
 var cloudSyncMeta=document.getElementById("cloudSyncMeta");
 var cloudBackupBtn=document.getElementById("cloudBackupBtn");
 var cloudRestoreBtn=document.getElementById("cloudRestoreBtn");
+var exportLocalBackupBtn=document.getElementById("exportLocalBackupBtn");
+var exportLocalBackupStatus=document.getElementById("exportLocalBackupStatus");
 var refreshData=document.getElementById("refreshData");
 var marketStatus=document.getElementById("marketStatus");
 var marketStatusText=document.getElementById("marketStatusText");
@@ -4886,6 +4892,7 @@ function hydrateCloudData(storage){
   finally{cloudRestoreInProgress=false;}
 }
 async function cloudPushState(force=false,reason="manual"){
+  if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
   if(cloudSyncInFlight)return null;
   if(!cloudSyncToken())throw new Error("Sync token is missing");
   cloudSyncInFlight=true;let uploadedSerial=null,uploadSucceeded=false;
@@ -4933,6 +4940,7 @@ async function cloudPushState(force=false,reason="manual"){
   }
 }
 
+const PORTFOLIO_BACKUP_ONLY_MODE=true;
 const CLOUD_SYNC_ENABLED_KEY="portfolioCloudSyncEnabledV519";
 const CLOUD_SYNC_TOKEN_KEY="portfolioCloudSyncTokenV519";
 const CLOUD_SYNC_REVISION_KEY="portfolioCloudRevisionV519";
@@ -5039,7 +5047,7 @@ async function cloudStatusCheck({quiet=false}={}){
   try{
     const data=await cloudRequest("/api/cloud/status");
     cloudLastRemoteCheckAt=Date.now();
-    if(!quiet){
+    if(!quiet && !PORTFOLIO_BACKUP_ONLY_MODE){
       const last=data?.updatedAt?new Date(data.updatedAt).toLocaleString():"Never";
       setCloudStatus(data.hasCloudState?"Cloud sync ready":"Cloud connected — no data yet","ok",data.hasCloudState?`Cloud revision ${data.revision} · Last sync ${last}`:"This device can create the first cloud copy.");
     }
@@ -5051,6 +5059,7 @@ async function cloudStatusCheck({quiet=false}={}){
   }
 }
 function cloudScheduleSync(){
+  if(PORTFOLIO_BACKUP_ONLY_MODE)return;
   if(cloudRestoreInProgress || !cloudSyncEnabled() || !cloudSyncToken())return;
   if(!cloudBootstrapFinished){cloudPendingBeforeBootstrap=true;return}
   cloudLocalEditSerial++;
@@ -5070,6 +5079,7 @@ function cloudApplyPayload(payload){
   }finally{cloudRestoreInProgress=false}
 }
 async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
+  if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
   if(cloudPullInFlight)return null;
   if(!confirmFirst && (chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
   cloudPullInFlight=true;
@@ -5094,6 +5104,7 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
 }
 async function cloudRestoreFromServer(){return cloudPullLatest({confirmFirst:true,reason:"manual"})}
 async function cloudReconcile(reason="resume"){
+  if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
   if(!cloudSyncEnabled() || !cloudSyncToken())return null;
   if(chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudSyncInFlight || cloudPullInFlight)return null;
   const status=await cloudStatusCheck({quiet:true});
@@ -5120,6 +5131,7 @@ async function cloudReconcile(reason="resume"){
   return status;
 }
 async function cloudBootstrap(){
+  if(PORTFOLIO_BACKUP_ONLY_MODE){cloudBootstrapFinished=true;setCloudStatus("Cloud sync paused for backup","warn","No cloud upload or restore in this safety build.");return}
   if(!cloudSyncEnabled() || !cloudSyncToken()){cloudBootstrapFinished=true;return}
   try{await cloudReconcile("startup")}catch(e){}
   cloudBootstrapFinished=true;
@@ -6309,7 +6321,8 @@ function openSettings(){
   apiBaseInput.readOnly=true;
   if(cloudSyncTokenInput)cloudSyncTokenInput.value=cloudSyncToken();
   if(cloudSyncEnabledInput)cloudSyncEnabledInput.checked=cloudSyncEnabled();
-  if(cloudSyncEnabled()&&cloudSyncToken())cloudStatusCheck();
+  if(PORTFOLIO_BACKUP_ONLY_MODE)setCloudStatus("Cloud sync paused for backup","warn","Export Local Backup before reconciling devices.");
+  else if(cloudSyncEnabled()&&cloudSyncToken())cloudStatusCheck();
   else setCloudStatus("Not configured","","Cloud sync is optional. Balances are still saved on this device.");
   fxStatus.textContent=`USD/CAD: ${fx.toFixed(4)}${liveMode?" \u00b7 market data":" \u00b7 demo"}`;
   settingsModal.classList.add("show");
@@ -6363,13 +6376,59 @@ document.addEventListener("visibilitychange",()=>{
 window.addEventListener("pagehide",()=>{
   if(settingsModal.classList.contains("show"))saveInvestmentAccountSettings();
 });
+// Safety export: read only. Never invoke cloudBuildPayload() here because its
+// cloudBuildModel() recomputes account data and could mutate localStorage.
+// Never include private sync tokens, API secrets or bearer credentials.
+function createLocalBackupSnapshot(){
+  const data={};
+  const ignored=[];
+  const secretKey=/token|secret|password|api[_-]?key|credential|authorization/i;
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(!key)continue;
+    if(secretKey.test(key)){ignored.push(key);continue;}
+    const value=localStorage.getItem(key);
+    if(value!==null)data[key]=value;
+  }
+  return {
+    format:"portfolio-local-backup",formatVersion:1,
+    exportedAt:new Date().toISOString(),
+    origin:location.origin+location.pathname,
+    note:"Read-only copy of localStorage. Cloud credentials excluded. Do not share publicly.",
+    excludedKeys:ignored,
+    storage:data
+  };
+}
+if(exportLocalBackupBtn)exportLocalBackupBtn.onclick=async()=>{
+  const original=exportLocalBackupBtn.textContent;
+  try{
+    // The export intentionally does not save form edits: finish pending input
+    // using Settings > Save before exporting if you have unsaved values.
+    const snapshot=createLocalBackupSnapshot();
+    const contents=JSON.stringify(snapshot,null,2);
+    if(!Object.keys(snapshot.storage).length)throw new Error("No local data found");
+    const now=new Date();
+    const stamp=[now.getFullYear(),String(now.getMonth()+1).padStart(2,"0"),String(now.getDate()).padStart(2,"0")].join("")+"-"+[String(now.getHours()).padStart(2,"0"),String(now.getMinutes()).padStart(2,"0")].join("");
+    const filename=`portfolio-local-backup-${stamp}.json`;
+    const blob=new Blob([contents],{type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=filename;a.style.display="none";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    if(exportLocalBackupStatus)exportLocalBackupStatus.textContent=`Backup prepared: ${filename} (${Object.keys(snapshot.storage).length} keys). Check Files > Downloads to confirm it saved.`;
+  }catch(error){
+    if(exportLocalBackupStatus)exportLocalBackupStatus.textContent="Export failed: "+String(error?.message||error);
+  }finally{exportLocalBackupBtn.textContent=original;}
+};
 if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
+  if(PORTFOLIO_BACKUP_ONLY_MODE){alert("Cloud sync is paused in this backup-only version. Export Local Backup first.");return}
   try{
     if(!saveInvestmentAccountSettings({focusInvalid:true})||!saveCloudSettingsFromForm())return;
     await cloudPushState(false,"manual");
   }catch(e){alert(`Sync is pending: ${String(e?.message||e)}. Your local data is kept.`)}
 };
 if(cloudRestoreBtn)cloudRestoreBtn.onclick=async()=>{
+  if(PORTFOLIO_BACKUP_ONLY_MODE){alert("Cloud restore is disabled in this backup-only version.");return}
   try{
     const token=String(cloudSyncTokenInput?.value||"").trim();
     if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);
