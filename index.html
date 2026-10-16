@@ -3110,6 +3110,18 @@ html,body{
 /* Native page scroll must chain to the document, not stop at BODY. */
 html,body,.app{overscroll-behavior-y:auto;}
 @supports(overflow:clip){body,.app{overflow-x:clip!important;overflow-y:visible!important;}}
+
+/* UI system consolidation: non-invasive shared tokens and app chrome. */
+:root{--app-card-radius:24px;--app-control-radius:16px;--app-border:#e1e2e0;--app-touch:44px}
+button,input,select,textarea{font-family:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122,226,.42);outline-offset:2px}
+.close,.iconbtn{min-width:var(--app-touch);min-height:var(--app-touch)}
+.sheet{border-radius:28px 28px 0 0;overscroll-behavior:contain;padding-bottom:max(26px,env(safe-area-inset-bottom))}
+.sheetHead{position:relative;min-height:48px;gap:12px}
+.sheetHead h2{line-height:1.16;letter-spacing:-.025em}
+.field input,.field select,.field textarea{min-height:var(--app-touch);font-size:16px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -5939,6 +5951,61 @@ function renderDividends(range="1M"){
   requestAnimationFrame(()=>{document.querySelector(".divChartOuter").scrollLeft=99999});
 }
 
+// Navigation coordinator: same route model for tab changes, details, and browser/iOS Back.
+let appNavigationEnabled=false;
+let appRestoringHistory=false;
+let appCurrentRoute="networth";
+let appRouteCounter=0;
+const APP_ROUTES=new Set(["home","div","networth","transactions","stats","cibc","manual","holding"]);
+function appRouteSnapshot(route){
+  return {__portfolioRoute:true,route,accountId:currentManualDetailId||null,ticker:currentDetailTicker||null,origin:cibcFundReturnView||"networth",serial:++appRouteCounter};
+}
+function appRecordRoute(route){
+  if(!APP_ROUTES.has(route))return;
+  if(appCurrentRoute===route&&appNavigationEnabled)return;
+  appCurrentRoute=route;
+  if(!appNavigationEnabled||appRestoringHistory)return;
+  try{window.history.pushState(appRouteSnapshot(route),"",window.location.href)}catch(e){}
+}
+function appActiveModal(){return [...document.querySelectorAll(".modal.show")].at(-1)||null}
+function appDismissModal(){
+  const modal=appActiveModal();if(!modal)return false;
+  const id=modal.id;
+  if(id==="settingsModal")return closeSettingsFn()!==false;
+  const handlers={addModal:closeModalFn,transactionModal:closeTransactionModalFn,
+    categoryDetailModal:closeCategoryDetailFn,manualAccountModal:closeManualAccountModal,
+    manualUpdateModal:closeManualUpdateModalFn,netWorthSnapshotModal:closeNetWorthSnapshotModalFn};
+  if(typeof handlers[id]==="function"){handlers[id]();return true}
+  return false;
+}
+function appGoBack(fallback="networth"){
+  if(appDismissModal())return;
+  if(window.history.state?.__portfolioRoute && window.history.length>1){window.history.back();return}
+  showView(fallback);
+}
+window.addEventListener("popstate",event=>{
+  // Save pending settings before going back; never restore cloud data to navigate.
+  if(appActiveModal()){appDismissModal();return}
+  const state=event.state;
+  if(!state?.__portfolioRoute)return;
+  appRestoringHistory=true;
+  try{
+    if(state.route==="cibc")openCibcFundDetail(state.origin||"networth");
+    else if(state.route==="manual" && getManualAccount(state.accountId))openManualAccountDetail(state.accountId);
+    else if(state.route==="holding" && state.ticker){
+      if(!homeView.classList.contains("active"))showView("home");
+      openHoldingDetail(state.ticker);
+    }else showView(APP_ROUTES.has(state.route)?state.route:"networth");
+  }finally{appRestoringHistory=false}
+});
+document.addEventListener("keydown",event=>{
+  if(event.key!=="Escape")return;
+  if(appActiveModal()){event.preventDefault();appDismissModal();return}
+  if(document.getElementById("detailView")?.classList.contains("active")||
+     cibcFundView?.classList.contains("active")||manualAccountDetailView?.classList.contains("active")){
+    event.preventDefault();appGoBack();
+  }
+});
 function showView(name){
   cancelValueChartGestures();
   document.body.classList.remove("manualDetailOpen");
@@ -5966,6 +6033,7 @@ function showView(name){
     renderHome();
     loadPortfolioHistory(currentPortfolioRange);
   }
+  appRecordRoute(name);
   window.scrollTo(0,0);
 }
 document.querySelectorAll("#portfolioRanges button").forEach(b=>b.onclick=()=>{
@@ -5983,8 +6051,8 @@ document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showView(b.data
 document.querySelectorAll("#portfolioAccountSwitcher [data-account]").forEach(b=>b.onclick=()=>setSelectedPortfolioAccount(b.dataset.account));
 document.querySelectorAll("#dividendAccountSwitcher [data-div-account]").forEach(b=>b.onclick=()=>setSelectedPortfolioAccount(b.dataset.divAccount));
 incomeCard.onclick=()=>showView("div");
-backBtn.onclick=()=>showView("networth");
-document.getElementById("detailBackBtn").onclick=()=>showView("home");
+backBtn.onclick=()=>appGoBack("networth");
+document.getElementById("detailBackBtn").onclick=()=>appGoBack("home");
 document.getElementById("detailHomeBtn").onclick=()=>showView("home");
 document.getElementById("detailAddLotBtn").onclick=()=>{
   if(currentDetailTicker)document.getElementById("fTicker").value=currentDetailTicker;
@@ -7450,6 +7518,7 @@ function openCibcFundDetail(returnView){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.navbtn').forEach(n=>n.classList.remove('active'));
   cibcFundView.classList.add('active');
+  appRecordRoute("cibc");
   document.body.classList.add('manualDetailOpen');
   renderCibcFundDetail();
   window.scrollTo(0,0);
@@ -7458,7 +7527,7 @@ function closeCibcFundDetail(){
   document.body.classList.remove('manualDetailOpen');
   showView(cibcFundReturnView||'networth');
 }
-if(cibcFundBackBtn)cibcFundBackBtn.onclick=closeCibcFundDetail;
+if(cibcFundBackBtn)cibcFundBackBtn.onclick=()=>appGoBack(cibcFundReturnView);
 
 function getManualAccount(id){return manualAccounts.find(a=>a.id===id)||null}
 function manualHistoryRangeRows(a,range){
@@ -7504,6 +7573,7 @@ function openManualAccountDetail(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
   manualAccountDetailView.classList.add("active");
+  appRecordRoute("manual");
   document.body.classList.add("manualDetailOpen");
   renderManualAccountDetail();
   window.scrollTo(0,0);
@@ -7577,8 +7647,8 @@ saveManualAccount.onclick=()=>{
   renderNetWorth();
   openManualAccountDetail(id);
 };
-deleteManualAccount.onclick=()=>{};
-manualDetailBackBtn.onclick=closeManualAccountDetail;
+// Deletion is handled by the confirmation action in manualDetailDeleteBtn.
+manualDetailBackBtn.onclick=()=>appGoBack("networth");
 manualDetailEditBtn.onclick=()=>openManualAccountModal("asset",currentManualDetailId);
 manualDetailUpdateBtn.onclick=openManualUpdateModal;
 manualDetailDeleteBtn.onclick=()=>{
@@ -7918,6 +7988,7 @@ function openHoldingDetail(ticker){
 
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById("detailView").classList.add("active");
+  appRecordRoute("holding");
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
   window.scrollTo(0,0);
 }
@@ -7926,12 +7997,8 @@ function isCibcFundTicker(ticker){
   return CIBC_MUTUAL_FUNDS.some(f=>f.ticker===String(ticker||"").toUpperCase());
 }
 function bindHoldingRows(){
-  document.querySelectorAll(".row[data-ticker]").forEach(row=>{
-    row.onclick = () => {
-      if(isCibcFundTicker(row.dataset.ticker))openCibcFundDetail("home");
-      else openHoldingDetail(row.dataset.ticker);
-    };
-  });
+  // Deliberately empty: one delegated click handler below covers dynamically drawn rows.
+  // Previous code attached a second row onclick and opened details twice per tap.
 }
 
 // Delegated tap handler: reliable for dynamically-rendered rows and iOS standalone PWA.
@@ -7956,6 +8023,10 @@ renderDividends("1M");
 renderNetWorth();
 renderTransactions();
 renderStats();
+// The initial screen is a real navigation entry; new views push history from here on.
+appCurrentRoute=document.querySelector(".view.active")?.id==="homeView"?"home":"networth";
+try{window.history.replaceState(appRouteSnapshot(appCurrentRoute),"",window.location.href)}catch(e){}
+appNavigationEnabled=true;
 if(marketApiBase){refreshLiveData(true);}else{setMarketStatus("","Connecting market data…");}
 setInterval(()=>{
   if(document.visibilityState!=="visible"||settingsModal?.classList.contains("show")||chartIsScrubbing())return;
