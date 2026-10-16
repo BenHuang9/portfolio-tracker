@@ -1,1 +1,1 @@
-V5.22.5 Holding Detail UI: Price Gain + Dividends = Total Return. All percentages use Book Value as denominator. Base: V5.22.4. Only index.html and sw.js need deploying to GitHub Pages. Cloudflare Worker/D1 unchanged.
+V5.22.8: Holding return breakdown has separate subtle + and = formula operators between Price Gain, Dividends, and Total Return. Amounts and percentages remain sign-free; colors indicate gain/loss. GitHub: replace index.html and sw.js. No Worker/D1 changes.
