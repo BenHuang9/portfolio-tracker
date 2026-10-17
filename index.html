@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.21.3 Scroll First: passive chart touch input, no touch cancellation -->
+<!-- 5.24.3 Yahoo-style chart: scroll normally; hold to lock and inspect -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3395,13 +3395,13 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <div class="breakdownBar" aria-label="Net worth breakdown">
         <div class="breakdownSeg cash" id="breakdownCashSeg"></div>
         <div class="breakdownSeg investments" id="breakdownInvestmentSeg"></div>
-        <div class="breakdownSeg other" id="breakdownOtherSeg"></div>
+
         <div class="breakdownSeg debt" id="breakdownDebtSeg"></div>
       </div>
       <div class="breakdownRows">
         <div class="breakdownRow"><span class="breakdownDot cash"></span><span>Cash & bank</span><strong id="breakdownCashValue">$0</strong></div>
         <div class="breakdownRow"><span class="breakdownDot investments"></span><span>Investments</span><strong id="breakdownInvestmentValue">$0</strong></div>
-        <div class="breakdownRow"><span class="breakdownDot other"></span><span>Other assets</span><strong id="breakdownOtherValue">$0</strong></div>
+
         <div class="breakdownRow"><span class="breakdownDot debt"></span><span>Debts</span><strong id="breakdownDebtValue">$0</strong></div>
       </div>
     </div>
@@ -3425,14 +3425,6 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
         <strong id="cashGroupTotal">$0</strong>
       </div>
       <div class="netWorthList wealthAccountList" id="manualAssetList"></div>
-    </div>
-
-    <div class="wealthGroupCard" id="otherAssetsGroup">
-      <div class="wealthGroupHead">
-        <div class="wealthGroupIdentity"><span class="wealthGroupIcon otherIcon"><svg class="uiIconSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 9l8 12 8-12-8-6Z"/><path d="M4 9h16"/><path d="m9 9 3 12 3-12"/></svg></span></span><div><div class="wealthGroupTitle">Other assets</div><div class="wealthGroupSub" id="otherGroupSub">0 accounts</div></div></div>
-        <strong id="otherGroupTotal">$0</strong>
-      </div>
-      <div class="netWorthList wealthAccountList" id="manualOtherAssetList"></div>
     </div>
 
     <div class="wealthGroupCard debtGroup">
@@ -3843,7 +3835,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.1 · Auto Sync</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.3 · Auto Sync</div>
   </div>
 </div>
 
@@ -3973,7 +3965,6 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <option value="savings">Savings</option>
       <option value="cash">Cash</option>
       <option value="credit_card">Credit Card</option>
-      <option value="other_asset">Other Asset</option>
       <option value="liability">Other Liability</option>
     </select><div class="accountTypeHint">Credit Card balances are entered as the amount owed and are shown as negative on Home.</div></div>
     <div class="field"><label>Currency</label><select id="manualAccountCurrency"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
@@ -4167,22 +4158,17 @@ var netWorthScrubValue=document.getElementById("netWorthScrubValue");
 var netWorthChart=document.getElementById("netWorthChart");
 var investmentAccountsList=document.getElementById("investmentAccountsList");
 var manualAssetList=document.getElementById("manualAssetList");
-var manualOtherAssetList=document.getElementById("manualOtherAssetList");
 var investmentGroupTotal=document.getElementById("investmentGroupTotal");
 var cashGroupTotal=document.getElementById("cashGroupTotal");
-var otherGroupTotal=document.getElementById("otherGroupTotal");
 var debtGroupTotal=document.getElementById("debtGroupTotal");
 var investmentGroupSub=document.getElementById("investmentGroupSub");
 var cashGroupSub=document.getElementById("cashGroupSub");
-var otherGroupSub=document.getElementById("otherGroupSub");
 var debtGroupSub=document.getElementById("debtGroupSub");
 var breakdownCashValue=document.getElementById("breakdownCashValue");
 var breakdownInvestmentValue=document.getElementById("breakdownInvestmentValue");
-var breakdownOtherValue=document.getElementById("breakdownOtherValue");
 var breakdownDebtValue=document.getElementById("breakdownDebtValue");
 var breakdownCashSeg=document.getElementById("breakdownCashSeg");
 var breakdownInvestmentSeg=document.getElementById("breakdownInvestmentSeg");
-var breakdownOtherSeg=document.getElementById("breakdownOtherSeg");
 var breakdownDebtSeg=document.getElementById("breakdownDebtSeg");
 var homeSnapshotBtn=document.getElementById("homeSnapshotBtn");
 var manualLiabilityList=document.getElementById("manualLiabilityList");
@@ -4354,7 +4340,7 @@ function drawValueChart(el,input,options={}){
   const rows=chartPrepare(input,grain);
   const money=options.money||fmt;
   el.classList.add("unifiedValueChart");el.style.height="";
-  el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);el.dataset.chartInput="passive-scroll-5.21.3";
+  el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);el.dataset.chartInput="hold-to-scrub-5.24.3";
   el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
   if(!rows.length){disposeValueChart(el);el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
   const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
@@ -4436,19 +4422,21 @@ function drawValueChart(el,input,options={}){
       if(paint)queueChartPaint();
     }
   }
-  // Touch is observed, never captured or cancelled. The browser remains free to
-  // scroll from ANY part of the chart, even after a hold or horizontal movement.
+  // Normal touch scrolls the page. Holding still for 250 ms enters Yahoo-style
+  // inspection: while the finger remains down, drag horizontally without scrolling.
+  // No global scroll lock, so the rest of the app retains native scrolling.
   function begin(kind,id,x,y){
     if(disposed)return;
     if(gesture||showing)finish({paint:false});
     clearTimeout(chartPaintTimer);chartPaintTimer=0;
     pointer=id;el.dataset.chartInteracting="true";
-    gesture={kind,axis:kind==='mouse'?'inspect':'pending',startX:x,startY:y,lastX:x,lastY:y,rect:el.getBoundingClientRect(),scrollY:window.scrollY};
+    gesture={kind,axis:kind==='mouse'?'inspect':'pending',locked:false,startX:x,startY:y,lastX:x,lastY:y,rect:el.getBoundingClientRect(),scrollY:window.scrollY};
     if(kind==='mouse')select(nearest(x,false));
     else holdTimer=setTimeout(()=>{
       holdTimer=0;
-      if(!gesture||gesture.axis!=='pending')return;
-      gesture.axis='hold';select(nearest(gesture.lastX,false));
+      if(!gesture||gesture.axis!=='pending'||disposed)return;
+      gesture.axis='inspect';gesture.locked=true;
+      select(nearest(gesture.lastX,false));
     },250);
   }
   function yieldToScroll(){
@@ -4458,43 +4446,32 @@ function drawValueChart(el,input,options={}){
   function move(x,y){
     if(!gesture)return;
     const dx=x-gesture.startX,dy=y-gesture.startY;
-    const lastDx=x-gesture.lastX,lastDy=y-gesture.lastY;
     gesture.lastX=x;gesture.lastY=y;
     if(gesture.kind==='touch'){
-      // Once native scroll has moved the viewport, stop changing the reading.
-      if(Math.abs(window.scrollY-gesture.scrollY)>1){yieldToScroll();return;}
-      // Vertical movement wins, including a direction change after inspection.
-      // This is a visual reset only: no preventDefault, scrollTo or style lock.
-      if((Math.abs(dy)>=8&&Math.abs(dy)>=Math.abs(dx)*.8) ||
-         (gesture.axis==='inspect'&&Math.abs(lastDy)>10&&Math.abs(lastDy)>Math.abs(lastDx)*1.2)){
-        yieldToScroll();return;
-      }
-      if(gesture.axis==='pending'||gesture.axis==='hold'){
-        if(Math.abs(dx)>=10&&Math.abs(dx)>Math.abs(dy)*1.5){
-          clearTimeout(holdTimer);holdTimer=0;gesture.axis='inspect';
-        }else{
-          if(Math.hypot(dx,dy)>6){clearTimeout(holdTimer);holdTimer=0;}
-          return;
-        }
+      // When scrolling starts before the long press, the browser owns the gesture.
+      if(!gesture.locked && Math.abs(window.scrollY-gesture.scrollY)>1){yieldToScroll();return;}
+      if(!gesture.locked){
+        if(Math.hypot(dx,dy)>7){yieldToScroll();return;}
+        return;
       }
     }
     if(gesture.axis!=='inspect')return;
     pendingX=x;if(!raf)raf=requestAnimationFrame(()=>{raf=0;flushSelection();});
   }
-  // All TouchEvent listeners are passive, including touchmove. A cancelable
-  // listener with a conditional preventDefault was still blocking iOS scrolling
-  // in 5.21.2; removing just the document listener was insufficient.
   listen(el,'touchstart',e=>{
     if(e.touches.length!==1){finish();return;}
     const t=e.changedTouches[0];if(t)begin('touch','touch:'+t.identifier,t.clientX,t.clientY);
   },{passive:true});
+  // Non-passive only so a confirmed long hold can freeze native vertical scroll.
+  // Before hold, never cancel scrolling or intercept the user's swipes.
   listen(el,'touchmove',e=>{
     if(gesture?.kind!=='touch')return;
     if(e.touches.length!==1){finish();return;}
     const t=Array.from(e.touches).find(t=>'touch:'+t.identifier===pointer);
     if(!t){finish();return;}
+    if(gesture.locked && e.cancelable)e.preventDefault();
     move(t.clientX,t.clientY);
-  },{passive:true});
+  },{passive:false});
   const touchEnd=e=>{
     if(gesture?.kind!=='touch')return;
     if(Array.from(e.touches||[]).some(t=>'touch:'+t.identifier===pointer))return;
@@ -7607,11 +7584,9 @@ function renderNetWorth(){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}
   if(!netWorthValue)return;
   const totals=netWorthTotals();
-  const cashAssets=manualAccounts.filter(a=>a.type==="asset"&&a.category!=="other_asset");
-  const otherAssets=manualAccounts.filter(a=>a.type==="asset"&&a.category==="other_asset");
+  const cashAssets=manualAccounts.filter(a=>a.type==="asset"); // Legacy assets stay counted instead of being deleted.
   const liabilities=manualAccounts.filter(a=>a.type==="liability");
   const cashTotal=cashAssets.reduce((s,a)=>s+manualBalanceCAD(a),0);
-  const otherTotal=otherAssets.reduce((s,a)=>s+manualBalanceCAD(a),0);
 
   netWorthValue.textContent=fmt(totals.total);
   netWorthMeta.textContent="Total net worth";
@@ -7619,19 +7594,16 @@ function renderNetWorth(){
 
   investmentGroupTotal.textContent=fmt(totals.investments);
   cashGroupTotal.textContent=fmt(cashTotal);
-  otherGroupTotal.textContent=fmt(otherTotal);
   debtGroupTotal.textContent=fmt(totals.liabilities);
   const accountCountLabel=n=>`${n} account${n===1?"":"s"}`;
   investmentGroupSub.textContent=accountCountLabel(INVESTMENT_ACCOUNTS.length);
   cashGroupSub.textContent=accountCountLabel(cashAssets.length);
-  otherGroupSub.textContent=accountCountLabel(otherAssets.length);
   debtGroupSub.textContent=accountCountLabel(liabilities.length);
   breakdownCashValue.textContent=fmt(cashTotal);
   breakdownInvestmentValue.textContent=fmt(totals.investments);
-  breakdownOtherValue.textContent=fmt(otherTotal);
   breakdownDebtValue.textContent=fmt(totals.liabilities);
 
-  const gross=Math.max(1,cashTotal+totals.investments+otherTotal+totals.liabilities);
+  const gross=Math.max(1,cashTotal+totals.investments+totals.liabilities);
   const setSeg=(el,v)=>{
     const pct=Math.max(0,Number(v)||0)/gross*100;
     el.style.flexBasis=`${pct}%`;
@@ -7639,7 +7611,6 @@ function renderNetWorth(){
   };
   setSeg(breakdownCashSeg,cashTotal);
   setSeg(breakdownInvestmentSeg,totals.investments);
-  setSeg(breakdownOtherSeg,otherTotal);
   setSeg(breakdownDebtSeg,totals.liabilities);
 
   const cibcSummary=cibcMutualFundSummary();
@@ -7673,7 +7644,6 @@ function renderNetWorth(){
   };
 
   manualAssetList.innerHTML=cashAssets.length?cashAssets.map(rowHtml).join(''):'<div class="emptyAccount">No cash or bank accounts added.</div>';
-  manualOtherAssetList.innerHTML=otherAssets.length?otherAssets.map(rowHtml).join(''):'<div class="emptyAccount">No other assets added.</div>';
   manualLiabilityList.innerHTML=liabilities.length?liabilities.map(rowHtml).join(''):'<div class="emptyAccount">No debts added.</div>';
 
   recordNetWorthSnapshot(totals.total);
@@ -7791,7 +7761,7 @@ function openManualAccountModal(type="asset",id=null){
   manualAccountName.value=existing?.name||"";
   const existingCategory=existing?.category;
   manualAccountType.value=existing
-    ? (["chequing","savings","cash","credit_card","other_asset","liability"].includes(existingCategory)?existingCategory:(existing.type==="liability"?"liability":"cash"))
+    ? (["chequing","savings","cash","credit_card","liability"].includes(existingCategory)?existingCategory:(existing.type==="liability"?"liability":"cash"))
     : (type==="liability"?"credit_card":"chequing");
   manualAccountCurrency.value=existing?.currency||"CAD";
   manualAccountBalance.value=existing?manualCurrentValue(existing).toFixed(2):"";
@@ -8256,8 +8226,7 @@ document.addEventListener("visibilitychange",()=>{
 window.addEventListener("online",()=>{if(cloudSyncEnabled()&&cloudSyncToken())cloudReconcile("online").catch(()=>{})});
 setTimeout(()=>cloudBootstrap(),800);
 
-/* 5.21.3: chart gestures use passive TouchEvents exclusively on touchscreens.
-   Never cancel touchmove anywhere in a chart, or change document scrolling/height. */
+/* 5.24.3: scroll is native until a stationary long press activates chart inspection. */
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
