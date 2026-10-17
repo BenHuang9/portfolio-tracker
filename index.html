@@ -3823,15 +3823,15 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <div class="cloudSyncStatusRow"><span class="cloudSyncDot" id="cloudSyncDot"></span><span id="cloudSyncStatus">Not configured</span></div>
       <div class="cloudSyncActions">
         <button class="secondaryBtn" id="cloudBackupBtn" type="button">Sync This Device</button>
-        <button class="secondaryBtn" id="cloudRestoreBtn" type="button">Restore from Cloud</button>
+        <button class="secondaryBtn" id="cloudRestoreBtn" type="button">Restore from Cloud (download only)</button>
       </div>
       <div class="cloudSyncMeta" id="cloudSyncMeta">Cloud is the primary synced copy when enabled; this device keeps an offline cache.</div>
       <div class="cloudSyncActions" style="margin-top:12px">
         <button class="secondaryBtn" id="exportLocalBackupBtn" type="button" style="width:100%">Export Local Backup (JSON)</button>
       </div>
-      <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. No cloud upload or restore.</div>
+      <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. Upload disabled; manual restore is download-only.</div>
       <div class="settingsSectionTitle" style="margin-top:16px">Safe cloud recovery</div>
-      <div class="accountSettingsSub">Only use on your iPhone home-screen app. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync remains paused.</div>
+      <div class="accountSettingsSub">For one-time iPhone recovery only. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync remains paused.</div>
       <label for="recoveryBackupFile" style="display:block;font-weight:600;margin:12px 0 6px">Step 1 — Select iPhone JSON backup</label>
       <input id="recoveryBackupFile" type="file" accept=".json,application/json" style="display:block;width:100%;max-width:100%;margin:8px 0 14px;font-size:16px"/>
       <div class="cloudSyncMeta" style="margin-bottom:10px">Tap Choose File / 选取文件 above. Select the original portfolio-local-backup JSON from Files.</div>
@@ -3851,7 +3851,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.23.0 · Backup Export</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.23.3 · Desktop Restore (auto sync paused)</div>
   </div>
 </div>
 
@@ -5087,7 +5087,7 @@ function cloudApplyPayload(payload){
   }finally{cloudRestoreInProgress=false}
 }
 async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
-  if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
+  if(PORTFOLIO_BACKUP_ONLY_MODE && !confirmFirst)return null;
   if(cloudPullInFlight)return null;
   if(!confirmFirst && (chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
   cloudPullInFlight=true;
@@ -5095,8 +5095,18 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
     const data=await cloudRequest("/api/cloud/state");
     if(!data?.payload)throw new Error("No cloud data exists yet");
     if(!confirmFirst && (chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudDirty() || cloudSyncInFlight))return null;
-    if(confirmFirst && !confirm(`Restore cloud revision ${data.revision} from ${new Date(data.updatedAt).toLocaleString()}?\n\nThis replaces the synced data on this device. A local emergency copy will be kept first.`))return null;
-    try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}catch(e){}
+    // Read-only preflight. The phone has already recovered its authoritative 61 lots / 552 transactions.
+    const remoteStorage=data.payload?.storage;
+    if(!remoteStorage || typeof remoteStorage!=="object")throw new Error("Cloud data has no storage; nothing changed.");
+    const remoteLots=readJSONValue(remoteStorage.incomeTrackerLots,[]);
+    const remoteTx=readJSONValue(remoteStorage.personalLedgerTransactionsV513,[]);
+    if(!Array.isArray(remoteLots) || remoteLots.length<61 || !Array.isArray(remoteTx) || remoteTx.length<552){
+      throw new Error(`Cloud data has ${Array.isArray(remoteLots)?remoteLots.length:0} lots and ${Array.isArray(remoteTx)?remoteTx.length:0} transactions. Expected at least 61 / 552. Nothing changed.`);
+    }
+    if(confirmFirst && !confirm(`Download cloud revision ${data.revision} (${remoteLots.length} lots / ${remoteTx.length} transactions) to THIS device?\n\nThis replaces the synced local financial data on this device. It DOES NOT upload anything to D1. Automatic sync remains paused.`))return null;
+    // Do not discard the existing device copy unless an emergency snapshot is saved successfully.
+    try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}
+    catch(e){throw new Error("Cannot save an emergency copy on this device. Restore canceled: "+String(e?.message||e))}
     cloudApplyPayload(data.payload);
     writeLocalJSON(CLOUD_BASELINE_KEY,{storage:data.payload.storage,revision:data.revision});
     localStorage.removeItem(CLOUD_EDIT_BASE_KEY);
@@ -5139,7 +5149,7 @@ async function cloudReconcile(reason="resume"){
   return status;
 }
 async function cloudBootstrap(){
-  if(PORTFOLIO_BACKUP_ONLY_MODE){cloudBootstrapFinished=true;setCloudStatus("Cloud sync paused for backup","warn","No cloud upload or restore in this safety build.");return}
+  if(PORTFOLIO_BACKUP_ONLY_MODE){cloudBootstrapFinished=true;setCloudStatus("Cloud sync paused for backup","warn","Cloud upload disabled; manual cloud download available.");return}
   if(!cloudSyncEnabled() || !cloudSyncToken()){cloudBootstrapFinished=true;return}
   try{await cloudReconcile("startup")}catch(e){}
   cloudBootstrapFinished=true;
@@ -6519,7 +6529,6 @@ if(cloudBackupBtn)cloudBackupBtn.onclick=async()=>{
   }catch(e){alert(`Sync is pending: ${String(e?.message||e)}. Your local data is kept.`)}
 };
 if(cloudRestoreBtn)cloudRestoreBtn.onclick=async()=>{
-  if(PORTFOLIO_BACKUP_ONLY_MODE){alert("Cloud restore is disabled in this backup-only version.");return}
   try{
     const token=String(cloudSyncTokenInput?.value||"").trim();
     if(token)localStorage.setItem(CLOUD_SYNC_TOKEN_KEY,token);
