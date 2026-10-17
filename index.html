@@ -3831,7 +3831,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       </div>
       <div class="cloudSyncMeta" id="exportLocalBackupStatus" role="status">Read-only export from this device. Upload disabled; manual restore is download-only.</div>
       <div class="settingsSectionTitle" style="margin-top:16px">Safe cloud recovery</div>
-      <div class="accountSettingsSub">For one-time iPhone recovery only. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync remains paused.</div>
+      <div class="accountSettingsSub">For one-time iPhone recovery only. First select the verified iPhone backup; the app will compare cloud transactions and holdings before permitting a one-time recovery. Automatic sync is available after this device confirms the cloud baseline.</div>
       <label for="recoveryBackupFile" style="display:block;font-weight:600;margin:12px 0 6px">Step 1 — Select iPhone JSON backup</label>
       <input id="recoveryBackupFile" type="file" accept=".json,application/json" style="display:block;width:100%;max-width:100%;margin:8px 0 14px;font-size:16px"/>
       <div class="cloudSyncMeta" style="margin-bottom:10px">Tap Choose File / 选取文件 above. Select the original portfolio-local-backup JSON from Files.</div>
@@ -3851,7 +3851,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.23.3 · Desktop Restore (auto sync paused)</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.0 · Protected Auto Sync</div>
   </div>
 </div>
 
@@ -4903,6 +4903,14 @@ async function cloudPushState(force=false,reason="manual"){
   if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
   if(cloudSyncInFlight)return null;
   if(!cloudSyncToken())throw new Error("Sync token is missing");
+  if(reason!=="manual" && reason!=="recovery"){
+    const baseline=readLocalJSON(CLOUD_BASELINE_KEY,null);
+    if(!baseline || !baseline.storage || Number(baseline.revision)!==cloudRevision()){
+      setCloudStatus("Review required","warn","No verified local sync baseline. Download the latest cloud state before automatic uploads.");
+      return null;
+    }
+    if(!cloudDirty())return null;
+  }
   cloudSyncInFlight=true;let uploadedSerial=null,uploadSucceeded=false;
   setCloudStatus("Syncing...","warn","Saving local edits without replacing unrelated cloud data.");
   try{
@@ -4948,7 +4956,7 @@ async function cloudPushState(force=false,reason="manual"){
   }
 }
 
-const PORTFOLIO_BACKUP_ONLY_MODE=true;
+const PORTFOLIO_BACKUP_ONLY_MODE=false;
 const CLOUD_SYNC_ENABLED_KEY="portfolioCloudSyncEnabledV519";
 const CLOUD_SYNC_TOKEN_KEY="portfolioCloudSyncTokenV519";
 const CLOUD_SYNC_REVISION_KEY="portfolioCloudRevisionV519";
@@ -5100,10 +5108,10 @@ async function cloudPullLatest({confirmFirst=false,reason="manual"}={}){
     if(!remoteStorage || typeof remoteStorage!=="object")throw new Error("Cloud data has no storage; nothing changed.");
     const remoteLots=readJSONValue(remoteStorage.incomeTrackerLots,[]);
     const remoteTx=readJSONValue(remoteStorage.personalLedgerTransactionsV513,[]);
-    if(!Array.isArray(remoteLots) || remoteLots.length<61 || !Array.isArray(remoteTx) || remoteTx.length<552){
-      throw new Error(`Cloud data has ${Array.isArray(remoteLots)?remoteLots.length:0} lots and ${Array.isArray(remoteTx)?remoteTx.length:0} transactions. Expected at least 61 / 552. Nothing changed.`);
+    if(!Array.isArray(remoteLots) || !Array.isArray(remoteTx)){
+      throw new Error("Cloud holdings or transactions are invalid. Nothing changed.");
     }
-    if(confirmFirst && !confirm(`Download cloud revision ${data.revision} (${remoteLots.length} lots / ${remoteTx.length} transactions) to THIS device?\n\nThis replaces the synced local financial data on this device. It DOES NOT upload anything to D1. Automatic sync remains paused.`))return null;
+    if(confirmFirst && !confirm(`Download cloud revision ${data.revision} (${remoteLots.length} lots / ${remoteTx.length} transactions) to THIS device?\n\nThis replaces the synced local financial data on this device. It DOES NOT upload anything to D1. Automatic sync is controlled by the Settings checkbox.`))return null;
     // Do not discard the existing device copy unless an emergency snapshot is saved successfully.
     try{localStorage.setItem("portfolioLocalBeforeCloudRestoreV520",JSON.stringify(cloudBuildPayload()))}
     catch(e){throw new Error("Cannot save an emergency copy on this device. Restore canceled: "+String(e?.message||e))}
@@ -5124,22 +5132,23 @@ async function cloudRestoreFromServer(){return cloudPullLatest({confirmFirst:tru
 async function cloudReconcile(reason="resume"){
   if(PORTFOLIO_BACKUP_ONLY_MODE)return null;
   if(!cloudSyncEnabled() || !cloudSyncToken())return null;
+  if(!cloudBootstrapFinished && reason!=="startup")return null;
   if(chartIsScrubbing() || settingsModal?.classList.contains("show") || cloudSyncInFlight || cloudPullInFlight)return null;
   const status=await cloudStatusCheck({quiet:true});
   if(!status)return null;
   const remoteRev=Math.max(0,Number(status.revision||0)||0);
   const localRev=cloudRevision();
   if(!status.hasCloudState){
-    return await cloudPushState(false,"first backup");
+    setCloudStatus("Cloud is empty — review required","warn","Automatic upload is blocked until you explicitly review this device."); return null;
   }
   if(remoteRev>localRev){
     if(!cloudDirty()){
       return await cloudPullLatest({confirmFirst:false,reason:"auto"});
     }
-    return await cloudPushState(false,"auto");
+    setCloudStatus("Changes need review","warn",`Cloud revision ${remoteRev}; this device has unsynced edits from revision ${localRev}. No automatic overwrite.`);return status;
   }
   if(remoteRev===localRev){
-    if(Number(status?.schemaVersion||0)<2)return await cloudPushState(false,"upgrade");
+    if(Number(status?.schemaVersion||0)<2){setCloudStatus("Review required","warn","Cloud schema upgrade requires a manual review.");return status;}
     if(cloudDirty())return await cloudPushState(false,"auto");
     const last=status?.updatedAt?new Date(status.updatedAt).toLocaleString():"Never";
     setCloudStatus("Synced","ok",`Cloud revision ${remoteRev} · ${last}`);
