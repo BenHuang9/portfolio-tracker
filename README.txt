@@ -1,15 +1,12 @@
-Portfolio 5.24.4 - Sparse historical quote fix (All Accounts / Questrade TFSA)
+Portfolio V5.24.5 - Net Worth timeline + dotted Net Asset Base
 
-Replace GitHub root index.html and sw.js, commit and push.
+Deploy only index.html and sw.js to your existing GitHub Pages portfolio-tracker repo.
+- Net Worth chart excludes legacy manual snapshots before 2026-10-12 in every range.
+- Historical snapshots are NOT deleted from D1 or user backups. No database migration or destructive SQL.
+- Dotted gray series = Net Asset Base (cash/bank assets + investment deposits/book value), using recorded historical base values; no invented history.
+- Touch-and-hold shows Net Worth and Base for the selected date.
+- Removed unused manual Add Snapshot modal and callbacks; automatic daily Net Worth history still runs.
+- All other investment charts (including Questrade Cash) and V5.24.4 quote-history fixes unchanged.
+- Automatic Cloud Sync remains on; no change to Cloudflare Worker or D1.
 
-Fix:
-- For sparse Yahoo quote histories, retry with a broader daily window.
-- If an older ticker still lacks historical prices, preserve available
-  portfolio history with a clearly labeled estimated component instead of
-  discarding every date and showing a single dot.
-- Dates before actual CIBC fund NAV availability remain unavailable: no
-  historic NAVs are invented.
-- Questrade Cash, CIBC-only NAV chart, sync data and cloud logic unchanged.
-
-Estimated account chart values are not exact historical investment values.
-No portfolio transactions, balances, or D1 data are modified.
+IMPORTANT: Cloudflare Worker snapshots and existing backups are preserved.

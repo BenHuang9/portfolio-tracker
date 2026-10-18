@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.24.4 Chart history: recover sparse ticker prices without dropping every account date -->
+<!-- 5.24.5 Net Worth: Oct 12 history + dotted asset-base comparison -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -1272,6 +1272,16 @@ body.manualDetailOpen{padding-bottom:0!important}
   .manualDetailSection{padding-left:20px!important;padding-right:20px!important}
 }
 
+
+/* v5.24.5: Net Worth plus historical net-asset-base (Questrade-style dotted baseline). */
+.netWorthChartLegend{display:flex;align-items:center;justify-content:center;gap:21px;min-height:19px;margin:0 14px 2px;color:#777e84;font-size:11px;font-weight:750}
+.netWorthChartLegend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.netWorthLegendLine{display:inline-block;width:23px;height:0;border-top:2px solid var(--teal)}
+.netWorthLegendLine.dotted{border-color:#9299a3;border-top-style:dashed}
+#netWorthChart .unifiedChartMeta{height:43px;max-width:calc(100% - 16px)}
+#netWorthChart .unifiedMetaPair{display:flex;align-items:baseline;gap:13px;white-space:nowrap}
+#netWorthChart .unifiedMetaPair [data-reference-value]{color:#777e84;font-size:11px;font-weight:750;font-variant-numeric:tabular-nums}
+@media(max-width:390px){#netWorthChart .unifiedMetaPair{gap:8px}#netWorthChart .unifiedMetaPair [data-reference-value]{font-size:10px}}
 
 /* v5.9.2 simple Net Worth snapshot */
 .snapshotActionRow{display:flex;justify-content:flex-end;padding:8px 20px 0}
@@ -2890,9 +2900,6 @@ html,body{
 
 
 /* v5.17.6 visual cleanup */
-#homeSnapshotBtn,
-#addNetWorthSnapshotBtn,
-#netWorthSnapshotModal,
 #addLiabilityAccountBtn{
   display:none !important;
 }
@@ -3376,7 +3383,11 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
     </div>
 
     <div class="netWorthChart wealthNetWorthChart" id="netWorthChart">
-      <div class="netWorthChartEmpty">Net worth history starts when you begin using this page.</div>
+      <div class="netWorthChartEmpty">Net worth history starts October 12, 2026.</div>
+    </div>
+    <div class="netWorthChartLegend" aria-label="Chart lines">
+      <span><i class="netWorthLegendLine solid" aria-hidden="true"></i>Net Worth</span>
+      <span><i class="netWorthLegendLine dotted" aria-hidden="true"></i>Net Asset Base</span>
     </div>
 
     <div class="seg netWorthRange wealthRange" id="netWorthRanges">
@@ -3835,7 +3846,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.4 · Chart History Fix</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.5 · Net Worth Timeline</div>
   </div>
 </div>
 
@@ -3999,28 +4010,6 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
   </div>
 </div>
 
-<div class="modal" id="netWorthSnapshotModal">
-  <div class="sheet">
-    <div class="sheetHead">
-      <h2>Add Snapshot</h2>
-      <button class="close" id="closeNetWorthSnapshot">×</button>
-    </div>
-    <div class="field">
-      <label>Net Worth</label>
-      <div class="updateValueCurrencyWrap">
-        <input id="netWorthSnapshotValue" type="number" step="0.01" inputmode="decimal" placeholder="0.00"/>
-        <span class="updateValueCurrencyBadge">CAD</span>
-      </div>
-    </div>
-    <div class="field">
-      <label>As of</label>
-      <input id="netWorthSnapshotDate" type="date"/>
-    </div>
-    <button class="primary" id="saveNetWorthSnapshot">Save Snapshot</button>
-    <div class="manualUpdateHint">This only adds a point to Net Worth history. It does not change any account balance or holding.</div>
-  </div>
-</div>
-
 <script>
 let fx = 1.39; // replaced by live USD/CAD when connected
 // Explicit DOM bindings for iOS Safari / in-app webviews.
@@ -4170,7 +4159,6 @@ var breakdownDebtValue=document.getElementById("breakdownDebtValue");
 var breakdownCashSeg=document.getElementById("breakdownCashSeg");
 var breakdownInvestmentSeg=document.getElementById("breakdownInvestmentSeg");
 var breakdownDebtSeg=document.getElementById("breakdownDebtSeg");
-var homeSnapshotBtn=document.getElementById("homeSnapshotBtn");
 var manualLiabilityList=document.getElementById("manualLiabilityList");
 var addAssetAccountBtn=document.getElementById("addAssetAccountBtn");
 var addLiabilityAccountBtn=document.getElementById("addLiabilityAccountBtn");
@@ -4211,12 +4199,6 @@ var manualUpdateValue=document.getElementById("manualUpdateValue");
 var manualUpdateDate=document.getElementById("manualUpdateDate");
 var manualUpdateCurrencyBadge=document.getElementById("manualUpdateCurrencyBadge");
 var saveManualUpdate=document.getElementById("saveManualUpdate");
-var addNetWorthSnapshotBtn=document.getElementById("addNetWorthSnapshotBtn");
-var netWorthSnapshotModal=document.getElementById("netWorthSnapshotModal");
-var closeNetWorthSnapshot=document.getElementById("closeNetWorthSnapshot");
-var netWorthSnapshotValue=document.getElementById("netWorthSnapshotValue");
-var netWorthSnapshotDate=document.getElementById("netWorthSnapshotDate");
-var saveNetWorthSnapshot=document.getElementById("saveNetWorthSnapshot");
 
 const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
 (function resetOldPortfolioDataOnce(){
@@ -4339,21 +4321,38 @@ function drawValueChart(el,input,options={}){
   const grain=options.grain||"daily";
   const rows=chartPrepare(input,grain);
   const money=options.money||fmt;
+  const referenceKey=options.referenceKey||null;
+  const hasReference=Boolean(referenceKey&&rows.some(p=>chartFinite(p[referenceKey])));
   el.classList.add("unifiedValueChart");el.style.height="";
   el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);el.dataset.chartInput="hold-to-scrub-5.24.3";
   el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
   if(!rows.length){disposeValueChart(el);el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
   const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
-  const signature=JSON.stringify([options.scope||options.label||"",grain,Boolean(options.step),options.color||"",w,h,rows]);
+  const signature=JSON.stringify([options.scope||options.label||"",grain,Boolean(options.step),options.color||"",referenceKey,options.referenceLabel||"",w,h,rows]);
   const previous=chartControllers.get(el);
   if(previous?.signature===signature){previous.updateOptions(options);return;}
   disposeValueChart(el);
   const left=12,right=w-12,top=45,bottom=h-28;
   const minT=rows[0].time,maxT=rows.at(-1).time;
-  let minV=Math.min(...rows.map(r=>r.value)),maxV=Math.max(...rows.map(r=>r.value));
+  const values=rows.map(r=>r.value);
+  if(hasReference)for(const row of rows)if(chartFinite(row[referenceKey]))values.push(Number(row[referenceKey]));
+  let minV=Math.min(...values),maxV=Math.max(...values);
   const valueSpan=Math.max(maxV-minV,Math.abs(maxV)*0.002,1);
   const middle=(maxV+minV)/2;minV=middle-valueSpan*.62;maxV=middle+valueSpan*.62;
-  const points=rows.map(r=>({...r,x:maxT===minT?(left+right)/2:left+(r.time-minT)/(maxT-minT)*(right-left),y:bottom-(r.value-minV)/(maxV-minV)*(bottom-top)}));
+  const scaleY=v=>bottom-(v-minV)/(maxV-minV)*(bottom-top);
+  const points=rows.map(r=>({
+    ...r,
+    x:maxT===minT?(left+right)/2:left+(r.time-minT)/(maxT-minT)*(right-left),
+    y:scaleY(r.value),
+    refValue:hasReference&&chartFinite(r[referenceKey])?Number(r[referenceKey]):null,
+    refY:hasReference&&chartFinite(r[referenceKey])?scaleY(Number(r[referenceKey])):null
+  }));
+  let referencePath="",referenceConnected=false,referencePoints=0;
+  for(const p of points){
+    if(p.refValue===null){referenceConnected=false;continue;}
+    referencePath+=`${referenceConnected?" L":" M"} ${p.x.toFixed(2)} ${p.refY.toFixed(2)}`;
+    referenceConnected=true;referencePoints++;
+  }
   const path=points.map((p,i)=>`${i?(options.step?`H ${p.x.toFixed(2)} V`:"L"):"M"} ${options.step&&i?"":p.x.toFixed(2)+" "}${p.y.toFixed(2)}`).join(" ");
   const color=options.color||(rows.at(-1).value<rows[0].value?"var(--red)":"var(--teal)");
   el.style.setProperty("--value-chart-color",color);
@@ -4361,17 +4360,20 @@ function drawValueChart(el,input,options={}){
   const area=points.length>1?`${path} L ${points.at(-1).x} ${bottom} L ${points[0].x} ${bottom} Z`:"";
   const last=points.at(-1);
   const xLabel=p=>grain==="intraday"?new Date(p.time*1000).toLocaleTimeString("en-CA",{timeZone:CHART_ZONE,hour:"numeric",minute:"2-digit"}):new Date(chartDayTime(p.date)*1000).toLocaleDateString("en-CA",{timeZone:"UTC",month:"short",day:"numeric"});
-  el.innerHTML=`<div class="unifiedChartMeta" aria-live="off"><span data-point-date></span><strong data-point-value></strong></div>
+  el.innerHTML=`<div class="unifiedChartMeta" aria-live="off"><span data-point-date></span><div class="unifiedMetaPair"><strong data-point-value></strong>${hasReference?'<span data-reference-value></span>':''}</div></div>
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
       <defs><linearGradient id="${id}-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".16"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient>
       <clipPath id="${id}-left"><rect data-clip x="0" y="0" width="${w}" height="${h}"/></clipPath></defs>
       <path class="unifiedGhost" d="${path}" fill="none" stroke-width="2"/>
       <g clip-path="url(#${id}-left)">${area?`<path d="${area}" fill="url(#${id}-area)"/>`:""}<path class="unifiedStroke" d="${path}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+      ${hasReference?`<path class="unifiedReferenceStroke" d="${referencePath}" fill="none" stroke="#9299a3" stroke-width="1.8" stroke-dasharray="3 5" stroke-linecap="round"/>`:""}
+      ${hasReference&&referencePoints===1?`<circle cx="${points.find(p=>p.refValue!==null).x}" cy="${points.find(p=>p.refValue!==null).refY}" r="2.7" fill="#9299a3"/>`:""}
       ${points.length===1?`<circle class="unifiedDot" cx="${last.x}" cy="${last.y}" r="4"/>`:""}
-      <g data-cross style="display:none"><line x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#a7aaa8" stroke-width="1"/><circle class="unifiedDot" r="4"/></g>
+      <g data-cross style="display:none"><line x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#a7aaa8" stroke-width="1"/><circle class="unifiedDot" r="4"/>${hasReference?'<circle data-reference-cross r="3" fill="#fff" stroke="#9299a3" stroke-width="1.8"/>':''}</g>
       <text x="${left}" y="${h-6}" class="unifiedAxis">${xLabel(points[0])}</text>${points.length>1?`<text x="${right}" y="${h-6}" text-anchor="end" class="unifiedAxis">${xLabel(last)}</text>`:""}
     </svg>`;
   const cross=el.querySelector('[data-cross]'),vline=cross.querySelector('line'),dot=cross.querySelector('circle'),clip=el.querySelector('[data-clip]'),meta=el.querySelector('.unifiedChartMeta');
+  const refDot=cross.querySelector('[data-reference-cross]'),referenceValueEl=meta.querySelector('[data-reference-value]');
   let opts=options,pointer=null,selected=-1,raf=0,pendingX=null,showing=false;
   let gesture=null,holdTimer=0,disposed=false;
   const listenerRemovers=[];
@@ -4386,7 +4388,10 @@ function drawValueChart(el,input,options={}){
     if(showing&&selected===index)return;
     const p=points[index];selected=index;showing=true;el.dataset.chartScrubbing="true";
     cross.style.display="";vline.setAttribute("x1",p.x);vline.setAttribute("x2",p.x);dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);clip.setAttribute("width",String(p.x+0.6));
-    dateEl.textContent=chartLabel(p,grain);valueEl.textContent=(opts.money||fmt)(p.value);meta.classList.add('show');
+    if(refDot){refDot.style.display=p.refValue===null?"none":"";if(p.refValue!==null){refDot.setAttribute("cx",p.x);refDot.setAttribute("cy",p.refY);}}
+    dateEl.textContent=chartLabel(p,grain);valueEl.textContent=(opts.money||fmt)(p.value);
+    if(referenceValueEl)referenceValueEl.textContent=`${opts.referenceLabel||"Base"} ${p.refValue===null?"—":(opts.money||fmt)(p.refValue)}`;
+    meta.classList.add('show');
     el.dataset.selectedDate=p.date;el.dataset.selectedTime=String(p.time);el.dataset.selectedValue=String(p.value);
     opts.onSelect?.(p,index);
   }
@@ -4849,7 +4854,7 @@ function renderNetWorthChart(){
   if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
   const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
   setNetWorthReturn();
-  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history since October 12, 2026, with dotted net asset base",referenceKey:"base",referenceLabel:"Base",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
 }
 function renderManualAccountChart(){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}
@@ -6162,7 +6167,7 @@ function appDismissModal(){
   if(id==="settingsModal")return closeSettingsFn()!==false;
   const handlers={addModal:closeModalFn,transactionModal:closeTransactionModalFn,
     categoryDetailModal:closeCategoryDetailFn,manualAccountModal:closeManualAccountModal,
-    manualUpdateModal:closeManualUpdateModalFn,netWorthSnapshotModal:closeNetWorthSnapshotModalFn};
+    manualUpdateModal:closeManualUpdateModalFn};
   if(typeof handlers[id]==="function"){handlers[id]();return true}
   return false;
 }
@@ -6493,6 +6498,7 @@ if(cloudRestoreBtn)cloudRestoreBtn.onclick=async()=>{
 
 const NET_WORTH_ACCOUNTS_KEY="netWorthManualAccountsV58";
 const NET_WORTH_HISTORY_KEY="netWorthHistoryV58";
+const NET_WORTH_CHART_START_DATE="2026-10-12"; // Earlier manual snapshots stay in backups but are excluded from the chart.
 let currentNetWorthRange="ALL";
 let currentManualAccountRange="1M";
 let editingManualAccountId=null;
@@ -7538,32 +7544,6 @@ function recordNetWorthSnapshot(total){
   saveNetWorthHistory(false);
 }
 
-function openNetWorthSnapshotModal(){
-  const totals=netWorthTotals();
-  netWorthSnapshotValue.value=Number(totals.total||0).toFixed(2);
-  const d=new Date();
-  d.setDate(d.getDate()-1);
-  netWorthSnapshotDate.value=localDateISO(d);
-  netWorthSnapshotDate.max=localDateISO();
-  netWorthSnapshotModal.classList.add("show");
-  setTimeout(()=>netWorthSnapshotValue.focus(),80);
-}
-function closeNetWorthSnapshotModalFn(){netWorthSnapshotModal.classList.remove("show")}
-function saveManualNetWorthSnapshot(){
-  const value=Number(netWorthSnapshotValue.value);
-  const date=netWorthSnapshotDate.value;
-  if(!Number.isFinite(value)||value<0){alert("Enter a valid Net Worth value.");return}
-  if(!date){alert("Choose a snapshot date.");return}
-  if(date>localDateISO()){alert("The snapshot date can’t be in the future.");return}
-  const ix=netWorthHistory.findIndex(x=>x.date===date);
-  if(ix>=0)netWorthHistory[ix].value=value;
-  else netWorthHistory.push({date,value});
-  netWorthHistory=netWorthHistory.filter(x=>x&&x.date&&Number.isFinite(Number(x.value))).sort((a,b)=>a.date.localeCompare(b.date)).slice(-730);
-  saveNetWorthHistory();
-  closeNetWorthSnapshotModalFn();
-  renderNetWorthChart();
-}
-
 function netWorthRangeLabel(range){
   return ({
     "1W":"past week",
@@ -7585,7 +7565,7 @@ function netWorthRowsForRange(range){
       growth:Number(x.growth),
       liabilities:Number(x.liabilities)
     }))
-    .filter(x=>x.date&&Number.isFinite(x.value))
+    .filter(x=>x.date>=NET_WORTH_CHART_START_DATE&&Number.isFinite(x.value))
     .sort((a,b)=>a.date.localeCompare(b.date));
 
   if(range==="ALL")return rows;
@@ -7918,11 +7898,6 @@ document.querySelectorAll('#netWorthRanges button').forEach(b=>b.onclick=()=>{
   currentNetWorthRange=String(b.textContent||"ALL").trim();
   renderNetWorthChart();
 });
-if(addNetWorthSnapshotBtn)addNetWorthSnapshotBtn.onclick=openNetWorthSnapshotModal;
-if(homeSnapshotBtn)homeSnapshotBtn.onclick=openNetWorthSnapshotModal;
-closeNetWorthSnapshot.onclick=closeNetWorthSnapshotModalFn;
-if(netWorthSnapshotModal)netWorthSnapshotModal.onclick=e=>{if(e.target===netWorthSnapshotModal)closeNetWorthSnapshotModalFn()};
-saveNetWorthSnapshot.onclick=saveManualNetWorthSnapshot;
 
 
 
