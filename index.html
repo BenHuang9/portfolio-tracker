@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.24.3 Yahoo-style chart: scroll normally; hold to lock and inspect -->
+<!-- 5.24.4 Chart history: recover sparse ticker prices without dropping every account date -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3835,7 +3835,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.3 · Auto Sync</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.4 · Chart History Fix</div>
   </div>
 </div>
 
@@ -4571,6 +4571,47 @@ async function chartFetchQuote(t,range,interval,ttl=60000){
   quoteHttpCache.set(key,{at:Date.now(),promise});return promise;
 }
 async function chartMapLimit(items,fn,limit=5){const output=new Array(items.length);let index=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{for(;;){const i=index++;if(i>=items.length)return;try{output[i]={status:"fulfilled",value:await fn(items[i],i)}}catch(reason){output[i]={status:"rejected",reason}}}}));return output;}
+// Some Yahoo tickers can return only their latest bar for short ranges.
+// This caused Questrade TFSA (and therefore All Accounts) to discard EVERY
+// earlier portfolio date, leaving one dot even when other tickers had history.
+// Try a broader DAILY query for such tickers before considering an estimate.
+async function repairSparsePortfolioQuotes(id,range,grain,tickers,histMap,qMap){
+  if(grain!=="daily" || (id!=="all" && id!=="questrade_tfsa"))return;
+  const allTimes=[...new Set(tickers.flatMap(t=>(histMap[t]||[]).map(p=>p.time)))].sort((a,b)=>a-b);
+  if(allTimes.length<2)return;
+  const historicalDates=chartRangeRows(allTimes.map(time=>({time,date:new Date(time*1000).toISOString().slice(0,10)})),range);
+  const firstTime=historicalDates[0]?.time;
+  if(!Number.isFinite(firstTime))return;
+  const candidates=tickers.filter(t=>{
+    // Only request extra data when we can identify a real gap while held.
+    if(!(sharesHeldOn(t,new Date(firstTime*1000).toISOString().slice(0,10),id)>0))return false;
+    const rows=histMap[t]||[];
+    return rows.length<2 || rows[0].time>firstTime+4*86400;
+  });
+  if(!candidates.length)return;
+  const fallbackRange=range==="ALL"?"5y":"1y";
+  const repaired=await chartMapLimit(candidates,t=>chartFetchQuote(t,fallbackRange,"1d",3*60*1000),3);
+  repaired.forEach((result,i)=>{
+    if(result.status!=="fulfilled")return;
+    const t=candidates[i],q=result.value;
+    const older=chartPrepare((q.history||[]).filter(p=>chartFinite(p.close)&&Number(p.close)>0).map(p=>({...p,value:p.close})),"daily");
+    if(older.length>(histMap[t]||[]).length)histMap[t]=chartPrepare([...older,...(histMap[t]||[])],"daily");
+    // Quotes from the original request remain the current-price authority.
+    if(!qMap[t] && chartFinite(q.price) && Number(q.price)>0)qMap[t]=q;
+  });
+}
+// A gap must not erase prices we genuinely know for all the OTHER holdings.
+// Before the first observed price of one held ticker, use a plainly labeled
+// estimate (the first observed price, or the saved current quote as a last
+// resort). Never present these proxy points as observed historical quotations.
+function portfolioQuoteAtOrEstimate(rows,time,currentQuote,allowEstimate){
+  let lo=0,hi=rows.length-1,prior=null;
+  while(lo<=hi){const mid=(lo+hi)>>1;if(rows[mid].time<=time){prior=rows[mid];lo=mid+1;}else hi=mid-1;}
+  if(prior)return {value:Number(prior.value),estimated:false};
+  if(!allowEstimate)return null;
+  const proxy=Number(rows[0]?.value||currentQuote?.price||0);
+  return proxy>0?{value:proxy,estimated:true}:null;
+}
 function dailyQuoteBaseline(q){
   if(!chartFinite(q?.regularMarketTime))return null;
   const session=chartDateKey(q.regularMarketTime,q.exchangeTimezoneName||CHART_ZONE);
@@ -4665,7 +4706,7 @@ function renderLineChart(data,total,options={}){
   const accountId=selectedPortfolioAccount,range=currentPortfolioRange;
   const gain=portfolioGain.textContent,gainColor=portfolioGain.style.color;
   drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
-    portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
+    portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=(p.estimated?"Est. ":"")+chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
   },onReset(){
     portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
   }});
@@ -4719,7 +4760,19 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
       const history=chartPrepare((q.history||[]).filter(p=>chartFinite(p.close)&&Number(p.close)>0).map(p=>({...p,value:p.close})),grain);
       if(t==="CAD=X"){fxHist=history;return;}qMap[t]=q;histMap[t]=history;
     });
-    if(bad.length)throw new Error("Missing prices: "+bad.join(", "));
+    // One unavailable ticker must not collapse the entire value chart to one dot.
+    // Use its saved/current quote only as a labeled historical estimate.
+    const allowPartialHistory=grain==="daily" && (id==="all" || id==="questrade_tfsa");
+    if(bad.length){
+      for(const ticker of bad){
+        const cached=market(ticker);
+        if(!allowPartialHistory || !(Number(cached.price)>0))throw new Error("Missing prices: "+bad.join(", "));
+        qMap[ticker]={price:Number(cached.price),regularMarketTime:Number(cached.regularMarketTime)||0};
+        histMap[ticker]=[];
+      }
+    }
+    if(allowPartialHistory)await repairSparsePortfolioQuotes(id,range,grain,tickers,histMap,qMap);
+    if(!isCurrent())return;
     // A chart response may be newer than the last headline quote request. Keep the
     // latest endpoint and current headline from the same observed quote.
     for(const t of tickers){
@@ -4738,21 +4791,24 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     }
     function at(rows,time){let lo=0,hi=rows.length-1,out=null;while(lo<=hi){const mid=(lo+hi)>>1;if(rows[mid].time<=time){out=rows[mid];lo=mid+1}else hi=mid-1;}return out;}
     const includesFunds=id==="all";let estimated=false;
+    const approximatedTickers=new Set();
     const series=[];
     for(const t of times){
       const date=grain==="daily"?new Date(t*1000).toISOString().slice(0,10):chartDateKey(t);
-      const cash=accountCashAt(id,grain==="daily"?chartDayEnd(date):t);let value=cash.value,missing=false,hasPosition=false;
+      const cash=accountCashAt(id,grain==="daily"?chartDayEnd(date):t);let value=cash.value,missing=false,hasPosition=false,estimatedPoint=false;
       let fxAt=needsFx?at(fxHist,t):null;
       for(const ticker of tickers){
         const shares=sharesHeldOn(ticker,date,id);if(!(shares>0))continue;
-        hasPosition=true;const px=at(histMap[ticker]||[],t);
+        hasPosition=true;
+        const px=portfolioQuoteAtOrEstimate(histMap[ticker]||[],t,qMap[ticker],allowPartialHistory);
         if(!px){missing=true;break;}
+        if(px.estimated){approximatedTickers.add(ticker);estimatedPoint=true;}
         value+=shares*px.value*(market(ticker).currency==="USD"?(fxAt?.value||fx):1);
       }
       if(includesFunds){for(const f of CIBC_MUTUAL_FUNDS){const nav=(cibcNavHistory[f.ticker]||[]).filter(p=>p.date<=date).at(-1);if(!nav){missing=true;break;}value+=Number(nav.price)*Number(f.units);}}
       if(missing||!hasPosition)continue;
       estimated=estimated||cash.estimated||Boolean(needsFx&&!fxAt);
-      series.push({time:t,date,value,source:"Market value reconstruction"});
+      series.push({time:t,date,value,estimated:estimatedPoint,source:estimatedPoint?"Estimated historical value":"Market value reconstruction"});
     }
     if(!isCurrent())return;
     // The latest quote is an observed endpoint, with the quote timestamp, not Date.now().
@@ -4774,10 +4830,12 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     else if(range==="1D"){
       const ps=positions(id).filter(p=>!p.isCibcMutualFund);
       setPortfolioPeriodGain(ps.length&&ps.every(p=>p.dailyBaselineAvailable)?ps.reduce((s,p)=>s+p.today,0):null,range);
-    }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range);
+    }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range,approximatedTickers.size?"estimated "+portfolioReturnPeriodLabel(range):null);
     else{portfolioGain.textContent="Current value";portfolioGain.style.setProperty("color","var(--muted)","important");}
     activeChartPayload={id,range,rows:clean};renderLineChart(clean,null,{grain});
-    setPortfolioChartNote(range==="1D"?"1-minute points \u00b7 checks every 60s \u00b7 feed may be delayed":estimated?"Daily values \u00b7 historical cash estimated where unrecorded":"Daily values \u00b7 recorded dates only");
+    setPortfolioChartNote(range==="1D"?"1-minute points \u00b7 checks every 60s \u00b7 feed may be delayed":approximatedTickers.size
+      ? "Estimated history: missing Yahoo prices for "+[...approximatedTickers].join(", ")+". Uses observed prices where available; no actual historic quote is implied."
+      :estimated?"Daily values \u00b7 historical cash estimated where unrecorded":"Daily values \u00b7 recorded dates only");
   }catch(e){
     if(!isCurrent())return;
     const observed=currentCashChartRows(id,range);
