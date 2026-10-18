@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.24.5 Net Worth: Oct 12 history + dotted asset-base comparison -->
+<!-- 5.24.6 Net Worth: permanent green trend + minimal hover tooltip -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -1280,8 +1280,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .netWorthLegendLine.dotted{border-color:#9299a3;border-top-style:dashed}
 #netWorthChart .unifiedChartMeta{height:43px;max-width:calc(100% - 16px)}
 #netWorthChart .unifiedMetaPair{display:flex;align-items:baseline;gap:13px;white-space:nowrap}
-#netWorthChart .unifiedMetaPair [data-reference-value]{color:#777e84;font-size:11px;font-weight:750;font-variant-numeric:tabular-nums}
-@media(max-width:390px){#netWorthChart .unifiedMetaPair{gap:8px}#netWorthChart .unifiedMetaPair [data-reference-value]{font-size:10px}}
 
 /* v5.9.2 simple Net Worth snapshot */
 .snapshotActionRow{display:flex;justify-content:flex-end;padding:8px 20px 0}
@@ -3846,7 +3844,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.5 · Net Worth Timeline</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.6 · Net Worth Chart Fix</div>
   </div>
 </div>
 
@@ -4323,12 +4321,13 @@ function drawValueChart(el,input,options={}){
   const money=options.money||fmt;
   const referenceKey=options.referenceKey||null;
   const hasReference=Boolean(referenceKey&&rows.some(p=>chartFinite(p[referenceKey])));
+  const showReferenceValue=hasReference&&options.showReferenceValue!==false;
   el.classList.add("unifiedValueChart");el.style.height="";
   el.dataset.chartGrain=grain;el.dataset.chartPoints=String(rows.length);el.dataset.chartInput="hold-to-scrub-5.24.3";
   el.setAttribute("role","group");el.setAttribute("aria-label",options.label||"Account value history");
   if(!rows.length){disposeValueChart(el);el.innerHTML='<div class="unifiedEmpty">No recorded values in this range</div>';return;}
   const w=Math.max(220,Math.round(el.clientWidth||520)),h=Math.max(200,Math.round(el.clientHeight||240));
-  const signature=JSON.stringify([options.scope||options.label||"",grain,Boolean(options.step),options.color||"",referenceKey,options.referenceLabel||"",w,h,rows]);
+  const signature=JSON.stringify([options.scope||options.label||"",grain,Boolean(options.step),options.color||"",referenceKey,options.referenceLabel||"",showReferenceValue,w,h,rows]);
   const previous=chartControllers.get(el);
   if(previous?.signature===signature){previous.updateOptions(options);return;}
   disposeValueChart(el);
@@ -4360,7 +4359,7 @@ function drawValueChart(el,input,options={}){
   const area=points.length>1?`${path} L ${points.at(-1).x} ${bottom} L ${points[0].x} ${bottom} Z`:"";
   const last=points.at(-1);
   const xLabel=p=>grain==="intraday"?new Date(p.time*1000).toLocaleTimeString("en-CA",{timeZone:CHART_ZONE,hour:"numeric",minute:"2-digit"}):new Date(chartDayTime(p.date)*1000).toLocaleDateString("en-CA",{timeZone:"UTC",month:"short",day:"numeric"});
-  el.innerHTML=`<div class="unifiedChartMeta" aria-live="off"><span data-point-date></span><div class="unifiedMetaPair"><strong data-point-value></strong>${hasReference?'<span data-reference-value></span>':''}</div></div>
+  el.innerHTML=`<div class="unifiedChartMeta" aria-live="off"><span data-point-date></span><div class="unifiedMetaPair"><strong data-point-value></strong>${showReferenceValue?'<span data-reference-value></span>':''}</div></div>
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
       <defs><linearGradient id="${id}-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".16"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient>
       <clipPath id="${id}-left"><rect data-clip x="0" y="0" width="${w}" height="${h}"/></clipPath></defs>
@@ -4854,7 +4853,7 @@ function renderNetWorthChart(){
   if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
   const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
   setNetWorthReturn();
-  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history since October 12, 2026, with dotted net asset base",referenceKey:"base",referenceLabel:"Base",onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history since October 12, 2026, with dotted net asset base",referenceKey:"base",color:"var(--teal)",showReferenceValue:false,onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
 }
 function renderManualAccountChart(){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}

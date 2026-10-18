@@ -1,12 +1,12 @@
-Portfolio V5.24.5 - Net Worth timeline + dotted Net Asset Base
+Portfolio V5.24.6 - Net Worth chart color / tooltip fix
 
-Deploy only index.html and sw.js to your existing GitHub Pages portfolio-tracker repo.
-- Net Worth chart excludes legacy manual snapshots before 2026-10-12 in every range.
-- Historical snapshots are NOT deleted from D1 or user backups. No database migration or destructive SQL.
-- Dotted gray series = Net Asset Base (cash/bank assets + investment deposits/book value), using recorded historical base values; no invented history.
-- Touch-and-hold shows Net Worth and Base for the selected date.
-- Removed unused manual Add Snapshot modal and callbacks; automatic daily Net Worth history still runs.
-- All other investment charts (including Questrade Cash) and V5.24.4 quote-history fixes unchanged.
-- Automatic Cloud Sync remains on; no change to Cloudflare Worker or D1.
+Deployment: Replace index.html and sw.js in your GitHub Pages portfolio-tracker repository, then commit and push.
 
-IMPORTANT: Cloudflare Worker snapshots and existing backups are preserved.
+Changes:
+- Net Worth series is always green (var(--teal)), regardless of the direction of the historical series. Other investment charts keep their original dynamic colors.
+- During Net Worth long-press, show selected date and Net Worth only, without a second Base amount. The main Net Asset Base summary above the chart remains and follows the selected date.
+- Dotted gray Net Asset Base series and its crosshair marker remain unchanged.
+- Historical snapshots since Oct 12, 2026, Yahoo price history, touch interactions, and Cloudflare auto sync are unchanged.
+- No cloud database or account values are modified.
+
+Only index.html and sw.js need to be deployed.
