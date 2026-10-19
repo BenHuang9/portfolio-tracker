@@ -1,14 +1,12 @@
-Portfolio V5.24.8 - Wealthsimple-style Returns
+Portfolio V5.24.9 - Home Net Worth period returns
 
-Deploy only index.html and sw.js to the existing GitHub Pages repository. Commit and Push. Do not delete your iPhone PWA or clear Safari site data.
+Copy index.html and sw.js into your existing GitHub Pages portfolio-tracker repository, then commit and push.
 
-What changed
-- Returns entry for Wealthsimple TFSA, Questrade TFSA, Questrade Cash.
-- Returns landing page now matches the Wealthsimple walkthrough structure: large hero total, inline account performance metrics, 1D/1W/1M/3M/6M/YTD/1Y/ALL tabs, tappable Realized Return and Dividends cards with holdings composition.
-- Dividends earned page: interactive monthly bar chart; tap a bar for that month's dividend breakdown by holding, tap again to return to whole period.
-- Realized returns remains Not tracked until actual Sell trades are recorded. It intentionally does not display fake $0.00.
-- For limited historical periods, account value changes are explicitly NOT represented as investment returns because dated deposits/withdrawals are not recorded.
-- Time-weighted return cannot be computed; shows Not available rather than inventing a percentage.
-- No changes to D1/Worker data, positions, cash or sync protocol.
+Home green gain now follows the selected period: past week, past month, past 3 months, past 6 months, YTD, past year, all time.
+ALL retains existing full investment growth (investment account values less net deposits).
+For shorter periods the amount is change in recorded investment growth since the first available point inside the selected period.
+NOTE: Full monthly/yearly history does not exist yet (valid tracking began 2026-10-12). The tooltip explains when the displayed period is partial. With fewer than two points it displays an em dash, not a fabricated number.
 
-Verification: JS syntax / local UI checks; production iPhone behavior must still be checked after deployment.
+No change to Net Worth chart start (Oct 12), dotted Net Asset Base, other charts, D1, Worker, or automatic sync. No user records deleted.
+
+Do NOT uninstall the Home Screen app, clear website data, or restore old backups.
