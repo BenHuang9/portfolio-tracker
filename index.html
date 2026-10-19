@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.5 Trade-day 1D chart and return correction; preserves protected sync and Sell Trade -->
+<!-- 5.25.6 UI consistency, ex-date eligibility, dead-code cleanup; preserves cloud sync and Sell Trade -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -79,14 +79,12 @@ button,input{font:inherit}
 .today .pct{display:block;font-size:11px;margin-top:2px}
 .bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(560px,100%);min-height:44px;padding:2px 8px max(2px,env(safe-area-inset-bottom));background:rgba(246,246,244,.97);backdrop-filter:blur(18px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);z-index:25}
 .navbtn{border:0;background:transparent;padding:1px 2px;color:#777;font-size:9px;font-weight:700;line-height:1;min-height:38px}
-.navbtn .ico{display:block;font-size:15px;line-height:1;margin-bottom:2px}
 .navbtn.active{color:#111}
 .addFab{display:none}
 .view{display:none}.view.active{display:block}
 .divHeader{padding:20px}
 .divTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}
 .divTop h1{font-size:22px;margin:0}
-.rangeTitle{padding:0 20px}
 .divChartOuter{overflow-x:auto;padding:16px 20px 0;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none}.divChartOuter::-webkit-scrollbar{display:none}
 .divChart{display:flex;align-items:flex-end;gap:14px;min-width:max-content;height:300px;border-bottom:1px solid #d9d9d6;padding:0 4px}
 .barItem{width:78px;display:flex;flex-direction:column;justify-content:end;align-items:center;height:100%}
@@ -152,17 +150,12 @@ input,button{touch-action:manipulation;}
 /* v2.0 holding detail */
 .row[data-ticker]{cursor:pointer;position:relative;z-index:1;-webkit-tap-highlight-color:rgba(0,0,0,.04);touch-action:manipulation}
 .row[data-ticker]:active{background:#f1f1ef}.row[data-ticker]::after{content:"›";position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#a0a0a0;font-size:20px;font-weight:500}
-.detailHero{padding:8px 20px 18px}
 .detailTicker{font-size:14px;color:var(--muted);font-weight:800;letter-spacing:.2px}
 .detailTitle{font-size:22px;font-weight:850;margin-top:4px;line-height:1.2}
 .detailPrice{font-size:44px;font-weight:900;letter-spacing:-1.2px;margin-top:22px}
 .detailToday{font-size:18px;font-weight:800;margin-top:6px}
 .detailToday.pos{color:var(--green)}
 .detailToday.neg{color:var(--red)}
-.detailGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px 10px}
-.detailCard{background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
-.detailCard .label{font-size:12px;color:var(--muted);font-weight:750}
-.detailCard .value{font-size:20px;font-weight:850;margin-top:5px}
 .detailSection{padding:12px 20px 0}
 .detailSection h2{margin:0 0 10px;font-size:22px}
 .lotList{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
@@ -323,7 +316,7 @@ input,button{touch-action:manipulation;}
   padding:0 16px;
   overflow:hidden;
 }
-#fDateDisplay{
+.compactDateField .dateText{
   font-size:17px;
   font-weight:650;
   letter-spacing:.1px;
@@ -334,7 +327,7 @@ input,button{touch-action:manipulation;}
   font-size:18px;
   line-height:1;
 }
-.compactDateField #fDate{
+.compactDateField input[type="date"]{
   position:absolute;
   inset:0;
   width:100%;
@@ -363,12 +356,6 @@ input,button{touch-action:manipulation;}
 
 
 /* v3.4 Holding detail only */
-.detailHeaderLine{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:14px;
-}
 .detailBookWeight{
   flex:0 0 auto;
   color:var(--muted);
@@ -471,11 +458,6 @@ input,button{touch-action:manipulation;}
 
 /* v3.6 return breakdown */
 .holdingReturnStack{display:block}
-.holdingReturnInnerDivider{
-  height:1px;
-  background:var(--line);
-  margin:13px 0;
-}
 
 
 /* v3.9 Home Holdings alignment */
@@ -776,7 +758,6 @@ input,button{touch-action:manipulation;}
     min-height:58px;
   }
   .metric .label{font-size:10.5px}
-  .metric .value{font-size:16px}
 }
 
 
@@ -983,11 +964,6 @@ input,button{touch-action:manipulation;}
 }
 
 /* Destructive actions stay red; neutral actions stay black/white. */
-.deleteLot,
-.danger,
-.dangerBtn{
-  color:var(--red)!important;
-}
 
 
 
@@ -1023,8 +999,6 @@ input,button{touch-action:manipulation;}
   padding:3px 7px;border-radius:999px;background:#f0f0ee;color:#707277;
   font-size:10px;font-weight:800;white-space:nowrap;
 }
-
-.netWorthHero{padding:20px 20px 8px}
 .netWorthMeta{margin-top:8px;color:var(--muted);font-size:14px;font-weight:700}
 .netWorthChart{
   height:180px;margin:12px 20px 6px;background:#fff;border:1px solid var(--line);
@@ -1035,15 +1009,6 @@ input,button{touch-action:manipulation;}
   height:100%;display:flex;align-items:center;justify-content:center;text-align:center;
   padding:22px;color:var(--muted);font-size:13px;font-weight:700;line-height:1.45;
 }
-.netWorthSummary{
-  display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 20px 4px;
-}
-.netWorthSummaryCard{
-  background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;
-  box-shadow:var(--shadow);text-align:center;
-}
-.netWorthSummaryCard .label{font-size:12px;color:var(--muted);font-weight:750}
-.netWorthSummaryCard .value{font-size:19px;font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
 .netWorthList{
   background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;
   box-shadow:var(--shadow);
@@ -1063,10 +1028,7 @@ input,button{touch-action:manipulation;}
 .netWorthAmount{text-align:right;font-size:16px;font-weight:850;font-variant-numeric:tabular-nums}
 .netWorthAmount .sub{display:block;color:var(--muted);font-size:10px;font-weight:700;margin-top:3px}
 .netWorthAmount.liability{color:var(--red)}
-.addAccountBtn{width:auto!important;padding:9px 13px!important;margin:0!important;font-size:12px!important;border-radius:999px!important;}
 .emptyAccount{padding:22px 16px;text-align:center;color:var(--muted);font-size:13px;font-weight:700}
-.accountSectionHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.accountSectionHead h2{margin:0;font-size:22px}
 
 .netWorthRange{grid-template-columns:repeat(5,minmax(0,1fr))!important;}
 .manualDeleteRow{display:flex;justify-content:center;margin-top:12px}
@@ -1080,9 +1042,7 @@ input,button{touch-action:manipulation;}
 
 @media(max-width:430px){
   .accountSwitcher{padding-left:16px;padding-right:16px}
-  .netWorthHero{padding-left:16px;padding-right:16px}
   .netWorthChart{margin-left:16px;margin-right:16px}
-  .netWorthSummary{padding-left:16px;padding-right:16px}
 }
 
 
@@ -1112,7 +1072,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .manualDetailInfoRow{display:flex;justify-content:space-between;gap:18px;padding:14px 0;border-bottom:1px solid var(--line);font-size:15px}
 .manualDetailInfoRow:last-child{border-bottom:0}
 .manualDetailInfoRow .value{text-align:right;font-weight:850}
-.manualDetailDelta{font-size:12px;font-weight:800;fill:var(--teal)}
 .manualDetailDelete{color:var(--red)!important}
 #manualAccountBalanceField.isHidden{display:none!important}
 .updateValueGrid{display:grid;gap:12px}
@@ -1189,10 +1148,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .manualAccountChartEmpty{
   padding:22px!important;
   font-size:14px;
-}
-.manualDetailDelta{
-  font-size:13px!important;
-  font-weight:850!important;
 }
 
 /* Tighter segmented range selector */
@@ -1282,12 +1237,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 #netWorthChart .unifiedMetaPair{display:flex;align-items:baseline;gap:13px;white-space:nowrap}
 
 /* v5.9.2 simple Net Worth snapshot */
-.snapshotActionRow{display:flex;justify-content:flex-end;padding:8px 20px 0}
-.snapshotBtn{border:1px solid var(--line);background:var(--card);border-radius:999px;min-height:40px;padding:0 15px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:850;color:var(--text);box-shadow:0 5px 16px rgba(0,0,0,.04)}
-.snapshotBtn:active{background:#efefec}
-.snapshotPlus{font-size:17px;line-height:1;margin-top:-1px}
-#netWorthSnapshotModal .sheet{border-radius:28px 28px 0 0!important}
-#netWorthSnapshotModal .primary{min-height:54px;border-radius:18px!important}
 
 
 /* v5.9.4 Home-style interactive Net Worth chart */
@@ -1303,11 +1252,6 @@ body.manualDetailOpen{padding-bottom:0!important}
   touch-action:pan-y;
   user-select:none;
   -webkit-user-select:none;
-}
-.netWorthChart svg{
-  width:100%;
-  height:100%;
-  display:block;
 }
 .netWorthScrubInfo{
   margin-top:0!important;
@@ -1360,21 +1304,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .netWorthScrubInfo:not(.show){
   display:none!important;
 }
-.snapshotActionRow{
-  justify-content:center!important;
-  padding:8px 20px 2px!important;
-}
-.snapshotBtn{
-  min-height:44px!important;
-  padding:0 18px!important;
-  font-size:13px!important;
-  box-shadow:none!important;
-  border-color:var(--line)!important;
-}
-.netWorthMetrics{
-  gap:12px!important;
-  margin-top:14px!important;
-}
 @media(max-width:430px){
   .netWorthRange{
     width:calc(100% - 24px)!important;
@@ -1393,10 +1322,6 @@ body.manualDetailOpen{padding-bottom:0!important}
     margin-left:12px!important;
     margin-right:12px!important;
   }
-  .snapshotActionRow{
-    padding-left:12px!important;
-    padding-right:12px!important;
-  }
 }
 
 
@@ -1404,8 +1329,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .wealthHomeView{padding-bottom:22px}
 .wealthHomeTop{display:flex;align-items:center;justify-content:space-between;padding:24px 20px 6px}
 .wealthHomeTop h1{margin:0;font-size:31px;line-height:1;font-weight:900;letter-spacing:-.035em}
-.wealthQuickBtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;padding:0;box-shadow:0 6px 18px rgba(0,0,0,.05)}
-.wealthQuickBtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
 .wealthHero{padding:26px 20px 4px}
 .wealthEyebrow{font-size:14px!important;color:var(--muted)!important;font-weight:750!important;margin:0 0 7px!important}
 .wealthNetRow{display:flex;align-items:baseline;gap:8px}
@@ -1415,9 +1338,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .wealthRange{margin:2px 20px 8px!important;background:transparent!important;padding:0!important;min-height:52px!important;border-radius:0!important;overflow:visible!important}
 .wealthRange button{background:transparent!important;min-height:48px!important;color:#818489!important;border-radius:999px!important}
 .wealthRange button.active{background:#e5e5e2!important;color:#111!important;box-shadow:none!important}
-.wealthSnapshotRow{justify-content:flex-end!important;padding:2px 20px 14px!important}
-.wealthSnapshotRow .snapshotBtn{background:transparent!important;border:0!important;min-height:34px!important;padding:0 3px!important;color:var(--muted)!important;font-size:11px!important}
-.wealthSnapshotRow .snapshotPlus{font-size:15px}
 .wealthCard,.wealthGroupCard{margin:14px 20px;background:#fff;border:1px solid #dedfdb;border-radius:24px;box-shadow:0 10px 26px rgba(0,0,0,.045)}
 .wealthCard{padding:20px}
 .wealthCardHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
@@ -1444,7 +1364,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .wealthGroupSub{font-size:10px;color:var(--muted);font-weight:700;margin-top:2px}
 .wealthGroupHead>strong,.wealthGroupRight strong{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums}
 .wealthGroupRight{display:flex;align-items:center;gap:8px}
-.miniAddBtn{width:30px;height:30px;border:1px solid var(--line);background:#f4f4f2;border-radius:50%;font-size:20px;line-height:1;padding:0}
 .wealthAccountList{border:0!important;border-radius:0!important;box-shadow:none!important;border-top:1px solid var(--line)!important}
 .wealthAccountList .netWorthRow{padding:13px 16px;grid-template-columns:36px minmax(0,1fr) auto;gap:10px}
 .wealthAccountList .netWorthIcon{width:34px;height:34px;border-radius:11px;font-size:14px}
@@ -1490,7 +1409,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .cibcHoldingGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:15px;padding-top:14px;border-top:1px solid var(--line)}
 .cibcHoldingMetric .label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800}
 .cibcHoldingMetric .value{font-size:13px;font-weight:850;margin-top:4px;font-variant-numeric:tabular-nums}
-.cibcInvestBadge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;margin-left:5px;font-size:9px;font-weight:850;background:#ececea;color:var(--muted);vertical-align:1px}
 @media(max-width:430px){
   .cibcFundHero{padding-left:20px;padding-right:20px}
   .cibcFundBalance{font-size:40px}
@@ -1514,7 +1432,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .wealthAccountList .netWorthAmount{min-width:112px;text-align:right;line-height:1.15}
 .wealthAccountList .netWorthAmount .sub{display:block;margin-top:5px;line-height:1.15;white-space:nowrap}
 .wealthGroupSub{min-height:12px}
-.cibcInvestBadge{display:none!important}
 @media(max-width:430px){
   .wealthAccountList .netWorthRow{grid-template-columns:34px minmax(0,1fr) auto!important;gap:9px!important}
   .wealthAccountList .netWorthAmount{min-width:104px}
@@ -1751,8 +1668,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .statsCard{
   background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px
 }
-.categoryRow{margin-bottom:15px}
-.categoryRow:last-child{margin-bottom:0}
 .categoryTop{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .categoryName{font-size:13px;font-weight:850}
 .categoryValue{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
@@ -1761,12 +1676,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .categoryFill.income{background:var(--green)}
 .categoryFill.expense{background:var(--red)}
 .statsEmpty{padding:18px;text-align:center;color:var(--muted);font-size:12px;font-weight:700}
-.statsYearMonths{
-  display:grid;grid-template-columns:repeat(6,1fr);gap:7px;align-items:end;min-height:150px
-}
-.statsMonthBarWrap{height:126px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px}
-.statsMonthBar{width:100%;max-width:28px;background:#d9d9d6;border-radius:7px 7px 2px 2px;min-height:2px}
-.statsMonthLabel{font-size:8px;color:var(--muted);font-weight:800}
 
 /* Account types */
 .accountTypeHint{
@@ -2615,9 +2524,6 @@ html,body{
 }
 
 /* Spending trend is expense-colored rather than black/neutral. */
-.statsYearMonths .statsMonthBar{
-  background:#e57272!important;
-}
 
 /* Category cards keep the semantic red/green bars but use softer tracks. */
 .statsView .categoryTrack{
@@ -2876,8 +2782,6 @@ html,body{
   display:none !important;
 }
 .brandMark{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
-.iconGlyph{width:100%;height:100%;display:grid;place-items:center;font-size:18px;font-weight:900;line-height:1}
-.wealthGroupIcon .iconGlyph{font-size:17px}
 .categoryNameWrap{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
 .categoryBadge{width:28px;height:28px;border-radius:10px;background:#f0f0ee;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
 .quickCategoryIcon{font-size:15px}
@@ -2899,7 +2803,6 @@ html,body{
 .quickCategoryIcon .uiIconSvg{width:18px;height:18px}
 .categoryBadge .uiIconSvg{width:17px;height:17px}
 .ledgerIcon .uiIconSvg{width:18px;height:18px}
-.brandMark{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
 
 
 /* v5.18 fast keypad */
@@ -3026,7 +2929,6 @@ html,body{
  .cibcFundSummaryCard{padding:14px 12px}
  .cibcHoldingCard{padding:15px 14px}
  .cibcHoldingGrid{gap:6px}
- .cibcHoldingMetric .value{font-size:12px}
  .cibcHoldingName{max-width:190px}
 }
 @media(prefers-reduced-motion:reduce){
@@ -3227,38 +3129,10 @@ button.returnLaunch.returnInteractive:focus-visible,.returnMetricTap:focus-visib
 .returnTopbar h1{font-size:21px;line-height:1.2;text-align:center;font-weight:850;letter-spacing:-.025em;margin:0}
 .returnBack{height:42px;width:42px;display:grid;place-items:center;background:#fff;border:0;border-radius:50%;
   color:#1485ed;box-shadow:var(--shadow);font-size:28px;font-weight:550;line-height:1;cursor:pointer}
-.returnHero{padding:35px 21px 21px}
-.returnEyebrow{color:var(--muted);font-size:14px;font-weight:750;line-height:1.4}
 .returnHeroAmount{font-size:clamp(34px,9vw,49px);font-weight:870;letter-spacing:-.058em;line-height:1.1;
   font-variant-numeric:tabular-nums;margin-top:11px;white-space:nowrap}
 .returnHeroAmount.positive,.returnListValue.positive{color:#17a78a}
 .returnHeroAmount.negative,.returnListValue.negative{color:var(--red)}
-.returnHeroMeta{font-size:15px;font-weight:750;margin-top:12px;color:var(--muted)}
-.returnCard{border-radius:23px;background:#fff;border:1px solid var(--line);margin:9px 18px 14px;padding:17px 18px;
-  box-shadow:0 7px 22px rgba(0,0,0,.025)}
-.returnCardTitle{font-size:18px;font-weight:850;letter-spacing:-.024em;margin:0 0 13px}
-.returnInfoRow{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
-  padding:11px 1px;border-bottom:1px solid var(--line);font-size:14px}
-.returnInfoRow:last-child{border-bottom:0}
-.returnInfoRow span{color:var(--muted);font-weight:650}
-.returnInfoRow strong{font-size:15px;font-weight:850;font-variant-numeric:tabular-nums;text-align:right}
-.returnSectionHeading{font-size:22px;font-weight:850;letter-spacing:-.025em;margin:25px 20px 12px}
-.returnListCard{margin:0 18px;background:#fff;border-radius:23px;border:1px solid var(--line);overflow:hidden}
-.returnListButton{appearance:none;border:0;background:#fff;width:100%;display:flex;align-items:center;justify-content:space-between;
-  text-align:left;gap:12px;min-height:78px;padding:15px 18px;border-bottom:1px solid var(--line);cursor:pointer}
-.returnListButton:last-child{border-bottom:0}
-.returnListButton:active{background:#f4f7f5}
-.returnListLabel{font-size:16px;font-weight:790;display:block;line-height:1.3}
-.returnListSub{display:block;color:var(--muted);font-size:12px;margin-top:5px;line-height:1.4;font-weight:600}
-.returnListRight{display:flex;gap:9px;align-items:center;flex:0 0 auto}
-.returnListValue{font-size:17px;font-weight:840;font-variant-numeric:tabular-nums;white-space:nowrap}
-.returnListChevron{font-size:22px;color:#a8a9aa;font-weight:400}
-.returnExplainer{font-size:12px;line-height:1.65;font-weight:570;color:var(--muted);padding:5px 23px 18px}
-.returnRangeTabs{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin:8px 18px 14px;border-radius:20px;padding:5px;background:#eaeae8}
-.returnRangeTabs::-webkit-scrollbar{display:none}
-.returnRangeTabs button{border:0;background:transparent;border-radius:16px;min-width:0;flex:1;padding:11px 3px;
-  color:var(--muted);font-size:12px;font-weight:800;white-space:nowrap}
-.returnRangeTabs button.active{color:#111;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.06)}
 .returnDetailBars{min-height:170px;display:flex;align-items:stretch;overflow-x:auto;gap:13px;padding:12px 4px 10px;scrollbar-width:none}
 .returnDetailBars::-webkit-scrollbar{display:none}
 .returnBarItem{flex:1 0 44px;min-width:44px;max-width:80px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
@@ -3278,19 +3152,16 @@ button.returnLaunch.returnInteractive:focus-visible,.returnMetricTap:focus-visib
 @media(max-width:380px){
   button.returnLaunch.subgain{font-size:15px}
   .returnHeroAmount{font-size:clamp(30px,8.4vw,40px)}
-  .returnListValue{font-size:15px}
-  .returnListLabel{font-size:14px}
-  .returnListButton{padding:13px 12px}
 }
 
 
 /* V5.24.8: account return details styled and structured like the reference mobile flow. */
-body.wsReturnOpen{background:#f6f6f6}
+body.wsReturnOpen{background:var(--bg)}
 body.wsReturnOpen nav.bottom{display:none!important}
-.wsReturnPage{background:#f6f6f6;min-height:100svh;padding-bottom:calc(128px + env(safe-area-inset-bottom));color:#101111}
-.wsReturnPage .returnTopbar{padding:16px 20px 10px;background:rgba(246,246,246,.95)}
+.wsReturnPage{background:var(--bg);min-height:100svh;padding-bottom:calc(58px + env(safe-area-inset-bottom));color:var(--text)}
+.wsReturnPage .returnTopbar{padding:16px 20px 10px;background:var(--bg)}
 .wsReturnPage .returnTopbar h1{font-size:17px;letter-spacing:-.012em;font-weight:800}
-.wsReturnPage .returnBack{font-size:23px;font-weight:500;background:#fff;box-shadow:0 3px 15px rgba(0,0,0,.025)}
+.wsReturnPage .returnBack{font-size:23px;font-weight:500;background:#fff;color:var(--text);box-shadow:0 3px 15px rgba(0,0,0,.025)}
 .wsHeroArea{padding:29px 20px 10px}
 .wsFigure,.wsBreakdownAmount{display:flex;align-items:baseline;gap:6px;flex-wrap:nowrap;min-width:0}
 .wsFigure .returnHeroAmount,.wsBreakdownAmount .returnHeroAmount{display:block;font-size:clamp(31px,8.8vw,48px);line-height:1.1;letter-spacing:-.065em;overflow-wrap:anywhere;white-space:normal;margin:0}
@@ -3303,7 +3174,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsStatRow span{color:#5f6065;font-weight:520;flex:1}
 .wsStatRow strong{font-size:14px;color:#141516;font-weight:700;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
 .wsStatTap{width:100%;cursor:pointer;appearance:none;-webkit-appearance:none;font:inherit;border:0;padding:9px 0}
-.wsStatTap strong{color:#168d5d}
+.wsStatTap strong{color:var(--green)}
 .wsInlineChevron{font-size:16px;color:#a8abad!important;font-weight:600;margin-left:4px}
 .wsTinyInfo{font-size:12px;color:#717272;margin-left:4px}
 .wsReturnRangeTabs{display:flex;align-items:center;justify-content:space-between;gap:0;margin:15px 12px 22px;padding:3px 0;overflow-x:auto;scrollbar-width:none}
@@ -3312,7 +3183,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsReturnRangeTabs button.active{color:#171717;background:#fff;box-shadow:0 3px 12px rgba(0,0,0,.04)}
 .wsReturnRangeTabs button:focus-visible{outline:2px solid #23866e;outline-offset:2px}
 .wsReturnsCards{padding:0 19px 6px;display:grid;gap:16px}
-.wsReturnsTile{width:100%;display:flex;flex-direction:column;align-items:stretch;text-align:left;appearance:none;-webkit-appearance:none;background:#fff;border:1px solid #e6e6e6;border-radius:22px;padding:21px 20px 20px;box-shadow:0 4px 14px rgba(0,0,0,.018);cursor:pointer;color:#171717}
+.wsReturnsTile{width:100%;display:flex;flex-direction:column;align-items:stretch;text-align:left;appearance:none;-webkit-appearance:none;background:#fff;border:1px solid var(--line);border-radius:22px;padding:21px 20px 20px;box-shadow:0 4px 14px rgba(0,0,0,.018);cursor:pointer;color:#171717}
 .wsReturnsTile:active{background:#fafafa}
 .wsReturnsTile:focus-visible{outline:2px solid #24866e;outline-offset:3px}
 .wsTileCaption{font-size:14px;font-weight:580;color:#77777b;line-height:1.4}
@@ -3328,7 +3199,6 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsCompositionLegend .wsLegendTicker{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
 .wsCompositionLegend strong{color:#292929;font-size:11px;white-space:nowrap;font-weight:750}
 .wsFinancialNote{padding:12px 24px 18px;font-size:11px;font-weight:520;line-height:1.55;color:#85878a}
-.wsReturnCTA{position:fixed;z-index:50;left:20px;right:20px;bottom:calc(16px + env(safe-area-inset-bottom));height:55px;border-radius:28px;border:0;background:#101010;color:#fff;font-weight:780;font-size:14px;box-shadow:0 4px 8px rgba(0,0,0,.16);cursor:pointer;max-width:610px;margin:0 auto}
 .wsBreakdownHero{padding:32px 21px 12px}
 .wsBreakdownGraph{position:relative;margin:15px 16px 6px;height:228px;padding:8px 2px 6px}
 .wsGraphGrid{position:absolute;inset:18px 0 54px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
@@ -3372,11 +3242,8 @@ body.wsReturnOpen nav.bottom{display:none!important}
 #sellModal .field{min-width:0;max-width:100%}
 #sellModal .field input,#sellModal .field select{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 #sellModal .compactDateField{width:100%;max-width:100%;min-width:0;height:56px;min-height:56px}
-#sellDateDisplay{font-size:17px;font-weight:650;letter-spacing:.1px;color:var(--text)}
-#sellModal .compactDateField #sellDate{
-  position:absolute;inset:0;width:100%;max-width:100%;height:100%;min-height:0!important;
-  margin:0;padding:0!important;border:0;opacity:.001;cursor:pointer;
-  appearance:none;-webkit-appearance:none
+#sellModal .compactDateField input[type="date"]{
+  max-width:100%;min-height:0!important;padding:0!important
 }
 #sellPreviewNativeRow[hidden]{display:none!important}
 .sellAvailability{color:#767b7e;font-size:12px;line-height:1.5;margin-top:6px;font-weight:650}
@@ -3386,7 +3253,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .sellPreviewRow span{color:#686e70;font-weight:650}
 .sellPreviewRow strong{font-size:15px;font-variant-numeric:tabular-nums}
 .sellPreviewRow strong.negative{color:#c73d4a}
-.sellPreviewRow strong.positive{color:#159e78}
+.sellPreviewRow strong.positive{color:var(--green)}
 .sellPreviewStatus{color:#a64b4b;font-size:12px;font-weight:650;margin-top:6px;line-height:1.45}
 .sellTradeRow{border-bottom:1px solid var(--line);padding:12px 3px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .sellTradeRow:last-child{border-bottom:0}
@@ -3394,7 +3261,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .sellTradeRow .sellTradeMeta{font-size:12px;line-height:1.55;color:var(--muted);margin-top:4px}
 .sellTradeRow .sellTradeAmount{font-size:14px;font-weight:850;white-space:nowrap}
 .sellTradeRow .sellTradeAmount.negative{color:#c73d4a}
-.sellTradeRow .sellTradeAmount.positive{color:#159e78}
+.sellTradeRow .sellTradeAmount.positive{color:var(--green)}
 .sellTradeRow .sellTradeRight{display:flex;align-items:center;gap:9px}
 .sellTradeRow .deleteLotBtn{height:35px;min-width:35px;padding:0 8px}
 .returnSellDelete{appearance:none;border:0;background:#fff0f0;color:#c63a46;border-radius:8px;padding:5px 9px;margin-top:5px;font-size:11px;font-weight:800}
@@ -3501,7 +3368,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 
     <div class="metrics">
       <div class="metric"><div class="label">Book Value</div><div class="value" id="mvMetric">$0</div></div>
-      <div class="metric returnMetricTap" id="returnMetricCard"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$0</div></div>
+      <div class="metric returnMetricTap" id="returnMetricCard" role="button" tabindex="0" aria-label="Return details"><div class="label">Total Return</div><div class="value" id="retMetric" style="color:var(--green)">+$0</div></div>
       <div class="metric"><div class="label">Yield</div><div class="value" id="yieldMetric">0.00%</div></div>
     </div>
 
@@ -3614,7 +3481,6 @@ body.wsReturnOpen nav.bottom{display:none!important}
       </button>
     </div>
     <p class="wsFinancialNote">Realized returns use your recorded Sell Trades and average purchase cost, less trading fees. Dividends are separate and may already be in Cash Holding. Selling does not automatically change Cash Holding: reconcile it in Settings to avoid counting proceeds twice.</p>
-    <button class="wsReturnCTA" type="button" id="returnExitBtn">Back to Investment</button>
   </section>
 
   <section id="returnBreakdownView" class="view returnPage wsReturnPage" aria-label="Return category details">
@@ -3638,7 +3504,6 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <div id="returnBreakdownRows"></div>
     </div>
     <p class="wsFinancialNote" id="returnBreakdownFootnote"></p>
-    <button class="wsReturnCTA" type="button" id="returnBreakdownExitBtn">Back to Account Returns</button>
   </section>
 
   <section id="netWorthView" class="view active wealthHomeView">
@@ -4028,8 +3893,8 @@ body.wsReturnOpen nav.bottom{display:none!important}
     <div class="field">
       <label>Date</label>
       <div class="compactDateField">
-        <span id="fDateDisplay">2026-10-11</span>
-        <span class="dateIcon">▣</span>
+        <span id="fDateDisplay" class="dateText">Choose date</span>
+        <span class="dateIcon" aria-hidden="true">▣</span>
         <input id="fDate" type="date" aria-label="Purchase date"/>
       </div>
     </div>
@@ -4054,7 +3919,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
     <div class="field">
       <label for="sellDate">Trade Date</label>
       <div class="compactDateField">
-        <span id="sellDateDisplay">YYYY-MM-DD</span>
+        <span id="sellDateDisplay" class="dateText">Choose date</span>
         <span class="dateIcon" aria-hidden="true">&#9635;</span>
         <input id="sellDate" type="date" aria-label="Sale date"/>
       </div>
@@ -4165,7 +4030,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.5 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.6 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -5569,7 +5434,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.5",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.6",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -5693,11 +5558,9 @@ async function cloudBootstrap(){
 }
 
 function loadLotsSafe(){try{var v=localStorage.getItem("incomeTrackerLots");return v?JSON.parse(v):null}catch(e){return null}}
-function saveLotsSafe(){try{rememberCloudEditBase("incomeTrackerLots");localStorage.setItem("incomeTrackerLots",JSON.stringify(lots));cloudScheduleSync()}catch(e){}}
+function saveLotsSafe(){try{rememberCloudEditBase("incomeTrackerLots");localStorage.setItem("incomeTrackerLots",JSON.stringify(lots));cloudScheduleSync();return true}catch(e){console.warn("Purchase lot save failed",e);return false}}
 
 const catalog = {};
-const defaultLots = [];
-const demoDivPayments = [];
 let divPayments = [];
 
 const INVESTMENT_ACCOUNTS=[
@@ -5766,7 +5629,8 @@ function loadCibcFundNavCache(){
       const f=CIBC_MUTUAL_FUNDS.find(x=>x.ticker===row.ticker);
       const px=Number(row.displayPrice);
       if(!f||!(px>0))continue;
-      if(row.date&&f.priceDate&&row.date<f.priceDate)continue;
+      const cacheDate=String(row.priceDate||row.date||"");
+      if(cacheDate&&f.priceDate&&cacheDate<f.priceDate)continue;
       f.displayPrice=px;
       f.marketValue=Number((px*Number(f.units)).toFixed(2));
       f.priceDate=row.priceDate||f.priceDate;
@@ -5953,9 +5817,7 @@ function loadNumberSetting(key, fallback){
     return Number.isFinite(n)?n:fallback;
   }catch(e){return fallback}
 }
-function saveNumberSetting(key,value){
-  try{rememberCloudEditBase(key);localStorage.setItem(key,String(value));cloudScheduleSync()}catch(e){}
-}
+
 
 // Current account values from Wealthsimple; editable in Settings.
 // They are intentionally separate from holdings so cash does not distort Book Value or Yield.
@@ -5966,9 +5828,10 @@ let questradeNetDeposits = loadNumberSetting("questradeNetDepositsCAD",0);
 let questradeCashAccountCash = loadNumberSetting("questradeCashAccountCashCAD",2976.76);
 let questradeCashAccountNetDeposits = loadNumberSetting("questradeCashAccountNetDepositsCAD",3000);
 function syncDateDisplay(){
-  if(fDateDisplay) fDateDisplay.textContent = fDate.value || "YYYY-MM-DD";
+  if(fDateDisplay)fDateDisplay.textContent=formatQuickDateLabel(fDate.value);
 }
-fDate.value = new Date().toISOString().slice(0,10);
+fDate.value = localDateISO();
+fDate.max=localDateISO();
 syncDateDisplay();
 fDate.addEventListener("change",syncDateDisplay);
 fDate.addEventListener("input",syncDateDisplay);
@@ -6056,12 +5919,7 @@ function accountTrackingStart(id){
   starts.sort();
   return starts[starts.length-1];
 }
-function chartPeriodLabelForAccount(accountId,requestedRange){
-  const tracking=accountTrackingStart(accountId);
-  if(!tracking)return portfolioReturnPeriodLabel(requestedRange);
-  const d=new Date(tracking+"T00:00:00");
-  return "since "+d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
-}
+
 function resetPortfolioChartUI(accountId,requestedRange){
   clearPortfolioChartInteraction();
   const summary=portfolioSummary(accountId);
@@ -6074,24 +5932,7 @@ function resetPortfolioChartUI(accountId,requestedRange){
     portfolioGain.style.setProperty("color","var(--muted)","important");
   }
 }
-function renderTrackingPlaceholder(accountId,requestedRange,message){
-  clearPortfolioChartInteraction();
-  const summary=portfolioSummary(accountId);
-  const tracking=accountTrackingStart(accountId);
-  const trackingText=tracking
-    ? new Date(tracking+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
-    : null;
-  lineChart.innerHTML=`<div class="emptyChart">${message || (trackingText
-    ? `${accountName(accountId)} tracking starts ${trackingText}. The chart will build automatically from this point forward.`
-    : `Investment history is not available for ${accountName(accountId)}.`)}</div>`;
-  if(requestedRange==="ALL"){
-    portfolioGain.textContent=signedMoney(summary.total)+" all time";
-    portfolioGain.style.setProperty("color",summary.total>=0?"var(--green)":"var(--red)","important");
-  }else{
-    portfolioGain.textContent="— history unavailable";
-    portfolioGain.style.setProperty("color","var(--muted)","important");
-  }
-}
+
 function setSelectedPortfolioAccount(id,{refreshChart=true}={}){
   clearPortfolioChartInteraction();
   if(!["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)].includes(id))id="all";
@@ -6247,7 +6088,7 @@ function mergeDividendEvents(estimatedEvents, exactEvents){
   ].sort((a,b)=>(a.exDate||a.date).localeCompare(b.exDate||b.date));
 }
 function sharesHeldOn(ticker,dateStr,accountId="all",dividendEntitlement=false){
-  const bought=lotsForAccount(accountId).filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
+  const bought=lotsForAccount(accountId).filter(l=>l.ticker===ticker && (dividendEntitlement?l.date<dateStr:l.date<=dateStr)).reduce((s,l)=>s+Number(l.shares),0);
   const sold=sellTrades.filter(t=>t.ticker===ticker && (accountId==="all"||t.accountId===accountId) &&
     (dividendEntitlement?t.date<dateStr:t.date<=dateStr)).reduce((s,t)=>s+Number(t.shares),0);
   return Math.max(0,bought-sold);
@@ -6269,7 +6110,7 @@ function fxAtDate(dateStr){
 }
 function rebuildDividendPayments(){
   const out=[];
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDateISO();
   for(const [ticker,events] of Object.entries(dividendEventsByTicker)){
     const q=market(ticker);
     for(const ev of (events||[])){
@@ -6294,7 +6135,7 @@ function rebuildDividendPayments(){
 }
 function trailingAnnualDividendPerShare(events){
   const now=new Date();
-  const today=now.toISOString().slice(0,10);
+  const today=localDateISO(now);
   const cutoff=new Date(now); cutoff.setDate(cutoff.getDate()-365);
   return (events||[]).filter(e=>{
     const d=e.exDate||e.date;
@@ -6422,15 +6263,7 @@ function signedMoney(value){
   return (n>=0?"+":"-")+fmt(Math.abs(n));
 }
 
-function lotCostAtDateCAD(lot, fxHist){
-  const amount=Number(lot.shares||0)*Number(lot.cost||0);
-  if(!(amount>0))return 0;
-  const q=market(lot.ticker);
-  if(q.currency!=="USD")return amount;
-  const t=new Date(lot.date+"T23:59:59").getTime()/1000;
-  const rate=valueAtOrBefore(fxHist,t)||fxAtDate(lot.date)||fx;
-  return amount*rate;
-}
+
 
 function allRangeConfig(accountId=selectedPortfolioAccount){
   const scopeLots=lotsForAccount(accountId);
@@ -6450,7 +6283,7 @@ function valueAtOrBefore(hist,t){
   while(lo<=hi){const mid=(lo+hi)>>1;if(hist[mid].time<=t){best=hist[mid];lo=mid+1}else hi=mid-1}
   return best&&Number(best.close)>0?Number(best.close):null;
 }
-function sampleArray(arr,max=220){if(arr.length<=max)return arr;const step=(arr.length-1)/(max-1);return Array.from({length:max},(_,i)=>arr[Math.round(i*step)])}
+
 function market(t){
   if(!catalog[t]){
     catalog[t]={title:t,currency:(t.endsWith(".TO")||t.endsWith(".NE"))?"CAD":"USD",price:0,prev:0,annualDiv:0,color:colorForTicker(t)};
@@ -6658,12 +6491,12 @@ function renderReturnDetails(){
   document.getElementById("returnCurrentValue").textContent=fmt(summary.accountValue);
   document.getElementById("returnNetDeposits").textContent=dep>0?fmt(dep):"Not entered";
   returnSetGain(document.getElementById("returnAllTimeTotal"),summary.total);
-  document.getElementById("returnAllTimeTotal").style.color=summary.total>=0?"#168d5d":"var(--red)";
+  document.getElementById("returnAllTimeTotal").style.color=summary.total>=0?"var(--green)":"var(--red)";
   const rate=dep>0?summary.total/dep*100:null;
   document.getElementById("returnDetailPercent").textContent=rate!==null?`${rate>=0?"+":""}${rate.toFixed(2)}%`:"Not available";
   document.getElementById("returnTimeWeighted").textContent="Not available";
   returnSetGain(document.getElementById("returnUnrealizedTotal"),summary.capital);
-  document.getElementById("returnUnrealizedTotal").style.color=summary.capital>=0?"#168d5d":"var(--red)";
+  document.getElementById("returnUnrealizedTotal").style.color=summary.capital>=0?"var(--green)":"var(--red)";
   const figure=wsReturnPeriodValue(id,range),hero=document.getElementById("returnDetailTotal");
   const caption=document.getElementById("returnPeriodCaption"),warning=document.getElementById("returnPeriodWarning");
   if(figure.value===null){hero.textContent="—";hero.className="returnHeroAmount";}
@@ -6684,7 +6517,7 @@ function renderReturnDetails(){
   const realizedValue=realizedInRange.reduce((sum,t)=>sum+Number(t.realizedCAD||0),0);
   const realizedEl=document.getElementById("returnRealizedTotal");
   realizedEl.textContent=realizedRows.length?returnSignedAmount(realizedValue):"Not tracked";
-  realizedEl.style.color=realizedRows.length?(realizedValue>=0?"#168d5d":"var(--red)"):"";
+  realizedEl.style.color=realizedRows.length?(realizedValue>=0?"var(--green)":"var(--red)"):"";
   const payments=returnFilteredPayments(id,range);
   const divs=payments.reduce((s,p)=>s+(Number(p.amount)||0),0);
   document.getElementById("returnDividendCaption").textContent="Dividends earned for "+wsReturnPeriodText(range);
@@ -6695,14 +6528,13 @@ function returnFilteredPayments(id,range){return dividendPaymentsForAccount(id).
 function renderReturnBreakdown(){
   if(!canViewReturnDetails(returnDetailAccount))return;
   const id=returnDetailAccount,kind=returnBreakdownKind,range=returnBreakdownRange;
-  const titles={realized:"Realized returns",unrealized:"Unrealized return",dividends:"Dividends earned"};
+  const titles={realized:"Realized returns",unrealized:"Unrealized return"};
   document.getElementById("returnBreakdownTitle").textContent=titles[kind];
   document.querySelectorAll("#returnBreakdownRanges [data-return-range]").forEach(b=>b.classList.toggle("active",b.dataset.returnRange===range));
   const chartCard=document.getElementById("returnBreakdownChartCard"),totalEl=document.getElementById("returnBreakdownTotal"),subtitle=document.getElementById("returnBreakdownSubtitle");
   const note=document.getElementById("returnBreakdownFootnote"),body=document.getElementById("returnBreakdownRows"),listTitle=document.getElementById("returnBreakdownListTitle"),bars=document.getElementById("returnBreakdownBars");
-  const isDiv=kind==="dividends";
-  chartCard.style.display=(isDiv||kind==="realized")?"block":"none";
-  document.getElementById("returnBreakdownRanges").style.display=(isDiv||kind==="realized")?"flex":"none";
+  chartCard.style.display=kind==="realized"?"block":"none";
+  document.getElementById("returnBreakdownRanges").style.display=kind==="realized"?"flex":"none";
   document.getElementById("returnBreakdownCurrency").style.display="inline";
   if(kind==="realized"){
     const scope=id+"|"+range;
@@ -6729,7 +6561,7 @@ function renderReturnBreakdown(){
     }).join(""):'<div class="returnEmpty" style="min-width:100%;margin:auto">No Sell Trades recorded for this period.</div>';
     body.innerHTML=shown.length?shown.map(t=>{
       const gain=Number(t.realizedCAD)||0;
-      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(t.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(t.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(t.date)} · ${Number(t.shares).toLocaleString()} shares × ${fmtNativePrice(t.price,t.currency)}<br>Fee ${fmtNativePrice(t.fee||0,t.currency)} · Avg cost ${fmtNativePrice(t.avgCostNative,t.currency)}</div><button class="returnSellDelete" type="button" data-delete-sell="${returnHtmlSafe(t.id)}">Delete trade</button></div><strong class="returnDetailAmount" style="color:${gain>=0?"#168d5d":"var(--red)"}">${returnHtmlSafe(returnSignedAmount(gain))}</strong></div>`;
+      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(t.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(t.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(t.date)} · ${Number(t.shares).toLocaleString()} shares × ${fmtNativePrice(t.price,t.currency)}<br>Fee ${fmtNativePrice(t.fee||0,t.currency)} · Avg cost ${fmtNativePrice(t.avgCostNative,t.currency)}</div><button class="returnSellDelete" type="button" data-delete-sell="${returnHtmlSafe(t.id)}">Delete trade</button></div><strong class="returnDetailAmount" style="color:${gain>=0?"var(--green)":"var(--red)"}">${returnHtmlSafe(returnSignedAmount(gain))}</strong></div>`;
     }).join(""):'<div class="returnEmpty">No Sell Trades recorded. Use Sell Trade on the Investment page to record a sale.</div>';
     note.textContent="Realized gain = net sale proceeds minus weighted average cost of shares sold, including trading fees. USD profit is converted at the recorded sale FX. Cash Holding is updated separately in Settings; realized gain is not added to Total Return a second time.";
     return;
@@ -6741,7 +6573,7 @@ function renderReturnBreakdown(){
     const ps=positions(id).filter(p=>Number(p.shares)>0).sort((a,b)=>Math.abs(b.mv-b.bv)-Math.abs(a.mv-a.bv));
     body.innerHTML=ps.length?ps.map(p=>{
       const gain=p.mv-p.bv,pc=p.bv>0?gain/p.bv*100:0;
-      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(p.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(p.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(p.title)} · ${pc>=0?"+":""}${pc.toFixed(2)}%</div></div><strong class="returnDetailAmount" style="color:${gain>=0?"#168d5d":"var(--red)"}">${returnSignedAmount(gain)}</strong></div>`;
+      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(p.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(p.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(p.title)} · ${pc>=0?"+":""}${pc.toFixed(2)}%</div></div><strong class="returnDetailAmount" style="color:${gain>=0?"var(--green)":"var(--red)"}">${returnSignedAmount(gain)}</strong></div>`;
     }).join(""):'<div class="returnEmpty">No current holdings in this account.</div>';
     note.textContent="Current market value minus remaining holding cost; does not include cash, dividends or sold positions.";
     return;
@@ -6758,8 +6590,6 @@ if(returnMetricCard){
 }
 document.getElementById("returnBackBtn").onclick=()=>appGoBack("home");
 document.getElementById("returnBreakdownBackBtn").onclick=()=>appGoBack("returns");
-document.getElementById("returnExitBtn").onclick=()=>showView("home");
-document.getElementById("returnBreakdownExitBtn").onclick=()=>showReturnPage("returns");
 document.querySelectorAll("[data-return-kind]").forEach(b=>b.onclick=()=>openReturnBreakdown(b.dataset.returnKind));
 document.querySelectorAll("#returnDetailRanges [data-return-period]").forEach(b=>b.onclick=()=>{
   const next=b.dataset.returnPeriod;if(!WS_RETURN_PERIODS.includes(next))return;
@@ -6826,12 +6656,12 @@ function renderHome(){
   }
 
   holdingsRows.innerHTML=ps.length?ps.map(p=>`
-    <div class="row" data-ticker="${p.ticker}">
+    <div class="row" data-ticker="${returnHtmlSafe(p.ticker)}">
       <div class="stock">
-        <div class="logo" style="background:${p.color}">${p.ticker[0]}</div>
+        <div class="logo" style="background:${colorForTicker(p.ticker)}">${returnHtmlSafe(p.ticker[0])}</div>
         <div style="min-width:0">
-          <div class="ticker">${p.ticker}</div>
-          <div class="title">${p.title}</div>
+          <div class="ticker">${returnHtmlSafe(p.ticker)}</div>
+          <div class="title">${returnHtmlSafe(p.title)}</div>
         </div>
       </div>
       <div class="num">${p.shares.toLocaleString()}</div>
@@ -6844,7 +6674,7 @@ function renderHome(){
   const hasIncome=monthVals.some(x=>x.amount>0);
   homeMonthStrip.innerHTML=hasIncome?monthVals.map(x=>`
     <div class="monthMini"><div class="barBox"><div class="bar" style="height:${Math.max(4,x.amount/max*50)}px"></div></div><div class="m">${x.label}</div><div class="a">${fmt0(x.amount)}</div></div>`).join(""):`<div class="emptyIncome">No dividend income yet.</div>`;
-  bindHoldingRows();
+
   if(netWorthView?.classList.contains("active"))renderNetWorth();
   if(returnDetailView?.classList.contains("active"))renderReturnDetails();
   if(returnBreakdownView?.classList.contains("active"))renderReturnBreakdown();
@@ -6882,30 +6712,7 @@ function inRange(dateStr,range){
   const days=rangeMap[range].days;
   return d>=new Date(now.getTime()-days*86400000);
 }
-function aggregateForChart(range){
-  const filtered=dividendPaymentsForAccount(selectedPortfolioAccount).filter(p=>inRange(p.date,range)).sort((a,b)=>a.date.localeCompare(b.date));
-  if(["1D","1W","1M"].includes(range)){
-    const map={};
-    filtered.forEach(p=>map[p.date]=(map[p.date]||0)+p.amount);
-    let keys=Object.keys(map).sort();
-    if(range==="1M"){
-      const start=new Date(); start.setDate(start.getDate()-27); start.setHours(0,0,0,0); const out=[];
-      for(let i=0;i<28;i++){
-        const d=new Date(start.getTime()+i*86400000);
-        const key=d.toISOString().slice(0,10);
-        out.push({label:d.toLocaleDateString("en-CA",{month:"short",day:"numeric"}),amount:map[key]||0});
-      }
-      return out;
-    }
-    return keys.map(k=>({label:new Date(k+"T00:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"}),amount:map[k]}));
-  }
-  const map={};
-  filtered.forEach(p=>{
-    const k=p.date.slice(0,7);
-    map[k]=(map[k]||0)+p.amount;
-  });
-  return Object.keys(map).sort().map(k=>({label:new Date(k+"-01T00:00:00").toLocaleDateString("en-CA",{month:"short",year:range==="ALL"?"2-digit":undefined}),amount:map[k]}));
-}
+
 
 let selectedDividendBucket=null;
 let selectedDividendRange=null;
@@ -6964,8 +6771,8 @@ function renderDividends(range="1M",resetSelection=false){
   paymentRows.innerHTML=grouped.map(g=>{
     const q=market(g.ticker);
     const note=selectedDividendBucket?period:(range==="ALL"?"All-time":range==="YTD"?"YTD":rangeMap[range].label);
-    return `<div class="payRow"><div class="payLogo" style="background:${q.color}">${g.ticker[0]}</div>
-      <div style="min-width:0"><div class="payTicker">${g.ticker}</div><div class="payTitle">${q.title}</div>
+    return `<div class="payRow"><div class="payLogo" style="background:${colorForTicker(g.ticker)}">${returnHtmlSafe(g.ticker[0])}</div>
+      <div style="min-width:0"><div class="payTicker">${returnHtmlSafe(g.ticker)}</div><div class="payTitle">${returnHtmlSafe(q.title)}</div>
       <div class="payDate">${note} · ${g.payments} payment${g.payments===1?"":"s"}</div></div>
       <div class="payAmt">${fmt(g.amount)}<span>CAD</span></div></div>`;
   }).join("")||'<div style="padding:24px 0;color:var(--muted)">No dividends in this period.</div>';
@@ -7377,15 +7184,7 @@ function accountCategoryLabel(a){
   if(a?.type==="liability")return "Liability";
   return "Cash / Bank";
 }
-function accountCategoryIcon(a){
-  const c=String(a?.category||"");
-  if(c==="chequing")return "Bank";
-  if(c==="savings")return "Save";
-  if(c==="cash")return "Cash";
-  if(c==="credit_card")return "Card";
-  if(c==="other_asset")return "Asset";
-  return a?.type==="liability"?"Card":"Cash";
-}
+
 function isTransactionAccount(a){
   if(!a)return false;
   if(a.type==="asset" && ["chequing","savings","cash"].includes(a.category))return true;
@@ -7686,18 +7485,9 @@ function signedAccountDisplay(a){
   const v=recomputeManualAccountFromLedger(a);
   return a.type==="liability"?-v:v;
 }
-function accountSelectLabel(a){
-  const signed=signedAccountDisplay(a);
-  const amount=new Intl.NumberFormat("en-CA",{style:"currency",currency:a.currency,maximumFractionDigits:2}).format(Math.abs(signed));
-  return `${a.name} · ${signed<0?"−":""}${amount}`;
-}
-function txAccountName(id){
-  return ledgerAccountById(id)?.name||"Unknown account";
-}
-function txCategoryInitial(name){
-  const s=String(name||"");
-  return (s.match(/[A-Za-z0-9]/)?.[0]||"$").toUpperCase();
-}
+
+
+
 function monthLabel(ym){
   const [y,m]=String(ym).split("-").map(Number);
   return new Date(y,m-1,1,12).toLocaleDateString("en-CA",{month:"long",year:"numeric"});
@@ -8555,10 +8345,7 @@ function openCibcFundDetail(returnView){
   renderCibcFundDetail();
   window.scrollTo(0,0);
 }
-function closeCibcFundDetail(){
-  document.body.classList.remove('manualDetailOpen');
-  showView(cibcFundReturnView||'networth');
-}
+
 if(cibcFundBackBtn)cibcFundBackBtn.onclick=()=>appGoBack(cibcFundReturnView);
 
 function getManualAccount(id){return manualAccounts.find(a=>a.id===id)||null}
@@ -8610,11 +8397,7 @@ function openManualAccountDetail(id){
   renderManualAccountDetail();
   window.scrollTo(0,0);
 }
-function closeManualAccountDetail(){
-  currentManualDetailId=null;
-  document.body.classList.remove("manualDetailOpen");
-  showView("networth");
-}
+
 function openManualAccountModal(type="asset",id=null){
   editingManualAccountId=id||null;
   const existing=id?getManualAccount(id):null;
@@ -8801,9 +8584,7 @@ function showTickerMessage(text){
   tickerResults.innerHTML=`<div class="tickerSearchState">${text}</div>`;
   tickerResults.classList.add("show");
 }
-function normalizeSearchSymbol(s){
-  return String(s||"").trim().toUpperCase();
-}
+
 async function searchSecurities(query){
   const q=String(query||"").trim();
   if(q.length<1)return [];
@@ -8823,10 +8604,10 @@ function renderTickerResults(results){
   tickerResults.innerHTML=results.slice(0,8).map((r,i)=>`
     <button class="tickerResult" type="button" data-i="${i}" role="option">
       <div class="tickerResultMain">
-        <div class="tickerResultSymbol">${r.symbol||""}</div>
-        <div class="tickerResultName">${r.name||r.symbol||""}</div>
+        <div class="tickerResultSymbol">${returnHtmlSafe(r.symbol||"")}</div>
+        <div class="tickerResultName">${returnHtmlSafe(r.name||r.symbol||"")}</div>
       </div>
-      <div class="tickerResultMeta">${[r.exchange,r.currency].filter(Boolean).join(" · ")}</div>
+      <div class="tickerResultMeta">${returnHtmlSafe([r.exchange,r.currency].filter(Boolean).join(" · "))}</div>
     </button>
   `).join("");
   tickerResults.classList.add("show");
@@ -8870,6 +8651,9 @@ document.addEventListener("click",(e)=>{
 });
 
 function openModal(){
+  fDate.value=localDateISO();
+  fDate.max=fDate.value;
+  syncDateDisplay();
   if(fAccount)fAccount.value=selectedPortfolioAccount!=="all"?selectedPortfolioAccount:DEFAULT_INVESTMENT_ACCOUNT;
   addModal.classList.add("show");
 }
@@ -8881,7 +8665,7 @@ if(closeModal) closeModal.onclick=closeModalFn;
 addModal.onclick=e=>{if(e.target===addModal)closeModalFn()};
 saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
-  if(!ticker||!date||!(shares>0)||!(cost>=0)){alert("Enter ticker, date, shares and cost/share.");return}
+  if(!ticker||!date||date>localDateISO()||!Number.isFinite(shares)||!(shares>0)||!Number.isFinite(cost)||!(cost>=0)||fCost.value.trim()===""){alert("Enter a valid ticker, non-future date, shares and cost/share.");return}
   const accountId=fAccount?.value||DEFAULT_INVESTMENT_ACCOUNT;
   lots.push({ticker,date,shares,cost,accountId});
   if(selectedTickerResult){
@@ -8896,7 +8680,7 @@ saveLot.onclick=()=>{
       exchange:selectedTickerResult.exchange||""
     };
   }
-  saveLotsSafe();
+  if(!saveLotsSafe()){lots.pop();alert("This purchase lot was NOT saved. Check browser storage and try again.");return;}
   closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome(); if(marketApiBase)refreshLiveData(true);
 };
 
@@ -8920,7 +8704,7 @@ function sellRefreshTickers(preferredTicker=null){
   sellUpdatePreview();
 }
 function sellSyncDateDisplay(){
-  sellDateDisplay.textContent=sellDate.value||"YYYY-MM-DD";
+  sellDateDisplay.textContent=formatQuickDateLabel(sellDate.value);
 }
 function sellUpdatePreview(){
   const ticker=sellTicker.value,account=sellAccount.value,date=sellDate.value;
@@ -9128,8 +8912,8 @@ function openHoldingDetail(ticker){
         alert("This purchase lot cannot be deleted because recorded Sell Trades depend on its shares. Delete or correct those Sell Trades first.");return;
       }
 
-      lots.splice(idx,1);
-      saveLotsSafe();
+      const removedLot=lots.splice(idx,1)[0];
+      if(!saveLotsSafe()){lots.splice(idx,0,removedLot);alert("Unable to save the deletion. Your purchase lot was restored.");return;}
       rebuildDividendPayments();
       chartCache.clear();
       renderHome();
@@ -9159,10 +8943,7 @@ function openHoldingDetail(ticker){
 function isCibcFundTicker(ticker){
   return CIBC_MUTUAL_FUNDS.some(f=>f.ticker===String(ticker||"").toUpperCase());
 }
-function bindHoldingRows(){
-  // Deliberately empty: one delegated click handler below covers dynamically drawn rows.
-  // Previous code attached a second row onclick and opened details twice per tap.
-}
+
 
 // Delegated tap handler: reliable for dynamically-rendered rows and iOS standalone PWA.
 document.addEventListener("click", function(e){
@@ -9181,7 +8962,7 @@ if(marketApiBase && loadMarketCache()){
 }
 recordCashAnchor();
 setSelectedPortfolioAccount(selectedPortfolioAccount,{refreshChart:false});
-bindHoldingRows();
+
 renderDividends("1M");
 renderNetWorth();
 renderTransactions();
