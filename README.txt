@@ -1,12 +1,10 @@
-Portfolio V5.24.6 - Net Worth chart color / tooltip fix
+Portfolio V5.24.7 - Return Details (read-only)
 
-Deployment: Replace index.html and sw.js in your GitHub Pages portfolio-tracker repository, then commit and push.
+Deploy: Replace index.html and sw.js in the GitHub Pages portfolio-tracker repository. Commit and push.
 
-Changes:
-- Net Worth series is always green (var(--teal)), regardless of the direction of the historical series. Other investment charts keep their original dynamic colors.
-- During Net Worth long-press, show selected date and Net Worth only, without a second Base amount. The main Net Asset Base summary above the chart remains and follows the selected date.
-- Dotted gray Net Asset Base series and its crosshair marker remain unchanged.
-- Historical snapshots since Oct 12, 2026, Yahoo price history, touch interactions, and Cloudflare auto sync are unchanged.
-- No cloud database or account values are modified.
+New: For Wealthsimple TFSA, Questrade TFSA and Questrade Cash, tap the green return figure or Total Return metric to open a Returns page. Tap Unrealized return, Realized returns or Dividends earned for details. Dividends page has 1M/3M/6M/YTD/1Y/ALL filters and by-holding totals.
 
-Only index.html and sw.js need to be deployed.
+CIBC Mutual Fund / All Accounts remain unchanged.
+
+Financial integrity: Total Return remains current account value minus net deposits, as before. Unrealized gain is current holdings market value minus book value. Dividend earned is estimated from historical holdings/distributions; it is NOT automatically added to Cash Holding. Sell trades and realized P&L have not been implemented, so Realized returns shows Not tracked. Do not sum those cards to obtain Total Return. No data model, localStorage, or Cloudflare Worker changes.
+
