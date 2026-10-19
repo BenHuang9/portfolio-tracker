@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.6 UI consistency, ex-date eligibility, dead-code cleanup; preserves cloud sync and Sell Trade -->
+<!-- 5.25.7: + Add Lot / minus Sell Trade UI consistent across Investment and Holding -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3226,6 +3226,8 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsReturnsCards{padding-inline:11px}.wsReturnsTile{padding:18px 16px}
 }
 /* V5.25.0: non-destructive Sell Trades; cash stays manually reconciled. */
+/* Show Sell Trade in the same red treatment on Investment and Holding. */
+.detailActions #detailSellTradeBtn{border-color:#e4c9c9!important;background:#fffafa!important;color:#b83243!important}
 .holdingTradeActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
 .holdingTradeActions .holdingsAddLotBtn{margin:0;min-width:0}
 .holdingTradeActions .sellActionBtn{border-color:#e4c9c9;background:#fffafa;color:#b83243}
@@ -3396,7 +3398,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
           <span class="holdingsAddLotPlus">＋</span><span>Add Lot</span>
         </button>
         <button class="holdingsAddLotBtn sellActionBtn" id="holdingsSellTradeBtn" type="button">
-          <span aria-hidden="true">↗</span><span>Sell Trade</span>
+          <span class="holdingsAddLotPlus" aria-hidden="true">−</span><span>Sell Trade</span>
         </button>
       </div>
       <div class="holdings">
@@ -3839,7 +3841,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
 
     <div class="detailActions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
       <button class="secondaryBtn" id="detailAddLotBtn">+ Add Lot</button>
-      <button class="secondaryBtn" id="detailSellTradeBtn">Sell Trade</button>
+      <button class="secondaryBtn" id="detailSellTradeBtn">− Sell Trade</button>
       <button class="secondaryBtn" id="detailHomeBtn" style="grid-column:1/-1">Back to Investment</button>
     </div>
   </section>
@@ -4030,7 +4032,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.6 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.7 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -5434,7 +5436,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.6",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.7",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
