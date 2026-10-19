@@ -1,4 +1,4 @@
-Portfolio V5.25.1 - Sell Trades + Unified Dividends
+Portfolio V5.25.2 - Sell Trades + Unified Dividends
 
 Investment > Sell Trade or Holding > Sell Trade:
 - Record account, ticker, date, shares, sale price, trading fee, and USD/CAD FX when applicable.
@@ -14,3 +14,5 @@ Replace index.html and sw.js (or deploy the repository). Update both phone and d
 
 V5.25.1 UI: Investment return label no longer adds "estimated"; historical data caveats remain under chart.
 Return/YTD and Quotes now share one fixed row across investment accounts. No financial calculation changes.
+
+V5.25.2 Home: removed the period gain/loss line below Total net worth. Net asset base remains; 1W/1M/3M/6M/YTD/1Y/ALL still filter the chart. No changes to financial calculations, holdings, Sell Trades, dividends or cloud sync.

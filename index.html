@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.1 Investment header UI; Sell Trades; preserves unified purple dividends and protected cloud sync -->
+<!-- 5.25.2 Home net worth label cleanup; preserves Sell Trades, dividends and cloud sync -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -1290,23 +1290,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 #netWorthSnapshotModal .primary{min-height:54px;border-radius:18px!important}
 
 
-/* v5.9.3 Net Worth return */
-.netWorthReturn{
-  margin-top:9px;
-  font-size:17px;
-  line-height:1.15;
-  font-weight:760;
-  letter-spacing:-.015em;
-  color:var(--muted);
-  font-variant-numeric:tabular-nums;
-}
-.netWorthReturn.pos{color:var(--teal)}
-.netWorthReturn.neg{color:var(--red)}
-@media(max-width:430px){
-  .netWorthReturn{font-size:16px}
-}
-
-
 /* v5.9.4 Home-style interactive Net Worth chart */
 .netWorthChart{
   height:220px!important;
@@ -1332,9 +1315,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 }
 .netWorthRange{
   margin-bottom:2px!important;
-}
-.netWorthReturn{
-  transition:none;
 }
 @media(max-width:430px){
   .netWorthChart{margin-left:12px!important;margin-right:12px!important}
@@ -1367,11 +1347,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 }
 .netWorthRange button.active{
   box-shadow:0 2px 10px rgba(0,0,0,.06)!important;
-}
-.netWorthReturn{
-  margin-top:10px!important;
-  font-size:16px!important;
-  font-weight:760!important;
 }
 .netWorthChart{
   height:205px!important;
@@ -1436,7 +1411,6 @@ body.manualDetailOpen{padding-bottom:0!important}
 .wealthNetRow{display:flex;align-items:baseline;gap:8px}
 .wealthNetRow .big{font-size:clamp(48px,13vw,66px);line-height:.98;letter-spacing:-.052em}
 .wealthNetRow .currency{font-size:18px;font-weight:850}
-.wealthHomeView .netWorthReturn{margin-top:12px!important;font-size:17px!important;font-weight:800!important}
 .wealthNetWorthChart{height:238px!important;margin:8px 8px 0!important}
 .wealthRange{margin:2px 20px 8px!important;background:transparent!important;padding:0!important;min-height:52px!important;border-radius:0!important;overflow:visible!important}
 .wealthRange button{background:transparent!important;min-height:48px!important;color:#818489!important;border-radius:999px!important}
@@ -3665,7 +3639,6 @@ body.wsReturnOpen nav.bottom{display:none!important}
     <div class="wealthHero">
       <div class="wealthEyebrow" id="netWorthMeta">Total net worth</div>
       <div class="wealthNetRow"><span class="big" id="netWorthValue">$0.00</span><span class="currency">CAD</span></div>
-      <div class="netWorthReturn" id="netWorthReturn">— all time</div>
       <div class="netWorthPrincipalLine"><span>Net asset base</span><strong id="netWorthPrincipal">$0.00</strong></div>
     </div>
 
@@ -4175,7 +4148,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.1 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.2 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4491,7 +4464,6 @@ var saveTransaction=document.getElementById("saveTransaction");
 var deleteTransaction=document.getElementById("deleteTransaction");
 var netWorthValue=document.getElementById("netWorthValue");
 var netWorthMeta=document.getElementById("netWorthMeta");
-var netWorthReturn=document.getElementById("netWorthReturn");
 var netWorthPrincipalEl=document.getElementById("netWorthPrincipal");
 var netWorthScrubInfo=document.getElementById("netWorthScrubInfo");
 var netWorthScrubDate=document.getElementById("netWorthScrubDate");
@@ -5209,8 +5181,8 @@ function renderNetWorthChart(){
   if(!netWorthChart)return;
   if(netWorthScrubInfo)netWorthScrubInfo.classList.remove("show");
   const rows=netWorthRowsForRange(currentNetWorthRange).map(p=>({...p,time:chartDayTime(p.date)}));
-  setNetWorthReturn();
-  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history since October 12, 2026, with dotted net asset base",referenceKey:"base",color:"var(--teal)",showReferenceValue:false,onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeGrowthSummary(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setNetWorthReturn();}});
+  setHomeAssetBase();
+  drawValueChart(netWorthChart,rows,{grain:"daily",scope:currentNetWorthRange,label:"Net worth history since October 12, 2026, with dotted net asset base",referenceKey:"base",color:"var(--teal)",showReferenceValue:false,onSelect(p){netWorthValue.textContent=fmt(p.value);netWorthMeta.textContent=chartLabel(p,"daily");setHomeAssetBase(p);},onReset(){netWorthValue.textContent=fmt(netWorthTotals().total);netWorthMeta.textContent="Total net worth";setHomeAssetBase();}});
 }
 function renderManualAccountChart(){
   if(chartIsScrubbing()){chartPendingPaint=true;return;}
@@ -5442,7 +5414,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.2",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -8249,17 +8221,6 @@ function recordNetWorthSnapshot(total){
   saveNetWorthHistory(false);
 }
 
-function netWorthRangeLabel(range){
-  return ({
-    "1W":"past week",
-    "1M":"past month",
-    "3M":"past 3 months",
-    "6M":"past 6 months",
-    "YTD":"YTD",
-    "1Y":"past year",
-    "ALL":"all time"
-  })[range]||String(range||"").toLowerCase();
-}
 function netWorthRowsForRange(range){
   const rows=netWorthHistory
     .slice()
@@ -8288,60 +8249,13 @@ function netWorthRowsForRange(range){
   const cutoffISO=localDateISO(cutoff);
   return rows.filter(x=>x.date>=cutoffISO);
 }
-// Home's green return label follows the selected chart period, like Investment returns.
-// ALL keeps the existing all-time investment gain (investment value minus net deposits).
-// Shorter periods use the CHANGE in saved investment gain, not the absolute all-time gain.
-// Incomplete history is never silently treated as a full month/year of performance.
-function netWorthPeriodReturn(range, throughDate, latestGrowth){
-  if(range==="ALL")return {amount:latestGrowth,from:null,partial:false};
-  const rows=netWorthRowsForRange(range)
-    .filter(row=>row.date<=throughDate && chartFinite(row.growth));
-  if(rows.length<2)return {amount:null,from:rows[0]?.date||null,partial:true};
-  const first=rows[0];
-  const now=parseLocalDate(localDateISO());
-  let cutoff=new Date(now);
-  if(range==="1W")cutoff.setDate(cutoff.getDate()-7);
-  else if(range==="1M")cutoff.setMonth(cutoff.getMonth()-1);
-  else if(range==="3M")cutoff.setMonth(cutoff.getMonth()-3);
-  else if(range==="6M")cutoff.setMonth(cutoff.getMonth()-6);
-  else if(range==="1Y")cutoff.setFullYear(cutoff.getFullYear()-1);
-  else if(range==="YTD")cutoff=new Date(now.getFullYear(),0,1,12);
-  return {
-    amount:latestGrowth-Number(first.growth),
-    from:first.date,
-    partial:first.date>localDateISO(cutoff)
-  };
+// Keep the Home net asset base in sync with current data or the selected chart date.
+// Period buttons affect the chart only; Home does not display a period gain/loss label.
+function setHomeAssetBase(snapshot=null){
+  if(!netWorthPrincipalEl)return;
+  const base=snapshot ? snapshot.base : netAssetBaseSummary().total;
+  netWorthPrincipalEl.textContent=chartFinite(base)?fmt(Number(base)):"—";
 }
-function setHomeGrowthSummary(snapshot=null){
-  if(!netWorthReturn)return;
-  const label=netWorthRangeLabel(currentNetWorthRange);
-  let base, growth;
-  if(snapshot && chartFinite(snapshot.base) && chartFinite(snapshot.growth)){
-    base=Number(snapshot.base);
-    growth=Number(snapshot.growth);
-  }else if(snapshot){
-    if(netWorthPrincipalEl)netWorthPrincipalEl.textContent="—";
-    netWorthReturn.textContent=`— ${label}`;
-    netWorthReturn.classList.remove("pos","neg");
-    netWorthReturn.title="This historical point has no saved investment growth data.";
-    return;
-  }else{
-    base=netAssetBaseSummary().total;
-    growth=currentInvestmentGrowth();
-  }
-  if(netWorthPrincipalEl)netWorthPrincipalEl.textContent=fmt(base);
-  const throughDate=snapshot?.date||localDateISO();
-  const period=netWorthPeriodReturn(currentNetWorthRange,throughDate,growth);
-  netWorthReturn.textContent=`${period.amount===null?"—":signedMoney(period.amount)} ${label}`;
-  netWorthReturn.classList.toggle("pos",period.amount!==null&&period.amount>=0);
-  netWorthReturn.classList.toggle("neg",period.amount!==null&&period.amount<0);
-  netWorthReturn.title=currentNetWorthRange==="ALL"
-    ? `All-time investment growth. Net asset base ${fmt(base)}; debts excluded from the base.`
-    : period.amount===null
-      ? `Not enough net worth history to calculate ${label}. Tracking starts October 12, 2026.`
-      : `Investment-growth change from ${period.from} to ${throughDate}.${period.partial?" Partial period: earlier net worth history is unavailable.":""} Net asset base ${fmt(base)}.`;
-}
-function setNetWorthReturn(){setHomeGrowthSummary();}
 function relativeUpdatedText(dateStr){
   if(!dateStr)return "—";
   const today=parseLocalDate(localDateISO());
@@ -8362,7 +8276,7 @@ function renderNetWorth(){
 
   netWorthValue.textContent=fmt(totals.total);
   netWorthMeta.textContent="Total net worth";
-  setNetWorthReturn();
+  setHomeAssetBase();
 
   investmentGroupTotal.textContent=fmt(totals.investments);
   cashGroupTotal.textContent=fmt(cashTotal);
