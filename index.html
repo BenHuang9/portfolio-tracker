@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.2 Home net worth label cleanup; preserves Sell Trades, dividends and cloud sync -->
+<!-- 5.25.3 Investment return and quote on separate lines; preserves Sell Trades, dividends and cloud sync -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3393,44 +3393,44 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsBreakdownGraph button.returnBarItem.active .returnBarFill.sellLossBar{background:#bd3347}
 @media(max-width:430px){#sellModal .sheet{height:calc(100dvh - 62px);max-height:calc(100dvh - 62px);padding-left:16px;padding-right:16px}}
 
-/* V5.25.1: consistent Investment return + quote layout across accounts.
-   Historical-data caveats remain in the chart footnote, not the YTD label. */
+/* V5.25.3: Investment has two independent lines: Return, then Quotes.
+   Never truncate the return label to make room for the quote timestamp. */
 #homeView .heroRow > div{min-width:0;width:100%}
 #homeView .portfolioMetaRow{
   display:flex;
-  flex-flow:row nowrap;
-  align-items:center;
-  gap:8px;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
   width:100%;
   min-width:0;
   margin-top:8px;
 }
 #homeView .portfolioMetaRow #portfolioGain{
-  display:inline-block;
-  flex:0 1 auto;
+  display:block;
+  flex:0 0 auto;
+  align-self:flex-start;
+  width:auto;
+  max-width:100%;
   min-width:0;
   margin:0;
   height:26px;
   min-height:26px;
-  max-height:26px;
+  max-height:none;
   line-height:26px;
-  font-size:clamp(13px,4.45vw,18px);
+  font-size:clamp(14px,4.5vw,18px);
   white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  overflow:visible;
+  text-overflow:clip;
 }
 #homeView .portfolioMetaRow #marketStatus{
   flex:0 0 auto;
+  align-self:flex-start;
   margin:0;
-  padding:5px 8px;
-  font-size:clamp(9px,2.8vw,11px);
+  padding:5px 9px;
+  font-size:11px;
   white-space:nowrap;
 }
 #homeView .portfolioMetaRow #marketStatusText{white-space:nowrap}
-@media(max-width:375px){
-  #homeView .portfolioMetaRow{gap:5px}
-  #homeView .portfolioMetaRow #marketStatus{padding:5px 6px}
-}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -4148,7 +4148,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.2 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.3 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -5414,7 +5414,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.2",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.3",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();

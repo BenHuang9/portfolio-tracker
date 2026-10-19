@@ -16,3 +16,5 @@ V5.25.1 UI: Investment return label no longer adds "estimated"; historical data 
 Return/YTD and Quotes now share one fixed row across investment accounts. No financial calculation changes.
 
 V5.25.2 Home: removed the period gain/loss line below Total net worth. Net asset base remains; 1W/1M/3M/6M/YTD/1Y/ALL still filter the chart. No changes to financial calculations, holdings, Sell Trades, dividends or cloud sync.
+
+V5.25.3 Investment: return text and Quotes timestamp are on two separate rows for every account. No label truncation caused by the quote timestamp. No changes to portfolio calculations, Sell Trades, dividends or cloud sync.
