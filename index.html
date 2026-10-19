@@ -3381,6 +3381,43 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsReturnRangeTabs{margin-inline:5px}.wsReturnRangeTabs button{min-width:32px;padding-inline:5px;font-size:11px}
 .wsReturnsCards{padding-inline:11px}.wsReturnsTile{padding:18px 16px}
 }
+/* V5.25.0: non-destructive Sell Trades; cash stays manually reconciled. */
+.holdingTradeActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
+.holdingTradeActions .holdingsAddLotBtn{margin:0;min-width:0}
+.holdingTradeActions .sellActionBtn{border-color:#e4c9c9;background:#fffafa;color:#b83243}
+#sellModal{align-items:flex-end;background:rgba(0,0,0,.30)}
+#sellModal .sheet{width:min(560px,100%);height:calc(100dvh - 72px);max-height:calc(100dvh - 72px);min-height:0;
+ border-radius:30px 30px 0 0;padding:16px 20px calc(18px + env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch}
+#sellModal .field{margin:12px 0}
+#sellModal .field label{font-size:13px;margin-bottom:6px}
+#sellModal .field input,#sellModal .field select{min-height:56px;padding:12px 14px;font-size:17px}
+#sellModal .primary{min-height:54px;margin-top:16px}
+#sellModal .note{font-size:12px;line-height:1.55;margin:12px 2px 4px}
+#sellFxField[hidden]{display:none!important}
+.sellAvailability{color:#767b7e;font-size:12px;line-height:1.5;margin-top:6px;font-weight:650}
+.sellAvailability.error{color:#c73744}
+.sellPreview{border:1px solid var(--line);border-radius:17px;background:#f8f9f8;padding:14px 16px;margin-top:14px}
+.sellPreviewRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:13px}
+.sellPreviewRow span{color:#686e70;font-weight:650}
+.sellPreviewRow strong{font-size:15px;font-variant-numeric:tabular-nums}
+.sellPreviewRow strong.negative{color:#c73d4a}
+.sellPreviewRow strong.positive{color:#159e78}
+.sellPreviewStatus{color:#a64b4b;font-size:12px;font-weight:650;margin-top:6px;line-height:1.45}
+.sellTradeRow{border-bottom:1px solid var(--line);padding:12px 3px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sellTradeRow:last-child{border-bottom:0}
+.sellTradeRow strong{font-size:14px;font-weight:820}
+.sellTradeRow .sellTradeMeta{font-size:12px;line-height:1.55;color:var(--muted);margin-top:4px}
+.sellTradeRow .sellTradeAmount{font-size:14px;font-weight:850;white-space:nowrap}
+.sellTradeRow .sellTradeAmount.negative{color:#c73d4a}
+.sellTradeRow .sellTradeAmount.positive{color:#159e78}
+.sellTradeRow .sellTradeRight{display:flex;align-items:center;gap:9px}
+.sellTradeRow .deleteLotBtn{height:35px;min-width:35px;padding:0 8px}
+.returnSellDelete{appearance:none;border:0;background:#fff0f0;color:#c63a46;border-radius:8px;padding:5px 9px;margin-top:5px;font-size:11px;font-weight:800}
+.wsBreakdownGraph .returnBarFill.sellProfitBar{background:#22b48f}
+.wsBreakdownGraph .returnBarFill.sellLossBar{background:#dc6974}
+.wsBreakdownGraph button.returnBarItem.active .returnBarFill.sellProfitBar{background:#078b68}
+.wsBreakdownGraph button.returnBarItem.active .returnBarFill.sellLossBar{background:#bd3347}
+@media(max-width:430px){#sellModal .sheet{height:calc(100dvh - 62px);max-height:calc(100dvh - 62px);padding-left:16px;padding-right:16px}}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3461,10 +3498,14 @@ body.wsReturnOpen nav.bottom{display:none!important}
 
     <div class="section">
       <div class="sectionHead"><h2>Holdings</h2><div class="small" id="holdingCount">0 holdings</div></div>
-      <button class="holdingsAddLotBtn" id="holdingsAddLotBtn" type="button">
-        <span class="holdingsAddLotPlus">＋</span>
-        <span>Add Lot</span>
-      </button>
+      <div class="holdingTradeActions">
+        <button class="holdingsAddLotBtn" id="holdingsAddLotBtn" type="button">
+          <span class="holdingsAddLotPlus">＋</span><span>Add Lot</span>
+        </button>
+        <button class="holdingsAddLotBtn sellActionBtn" id="holdingsSellTradeBtn" type="button">
+          <span aria-hidden="true">↗</span><span>Sell Trade</span>
+        </button>
+      </div>
       <div class="holdings">
         <div class="hdr"><div>Stock</div><div>Shares</div><div>Price</div><div>Today</div></div>
         
@@ -3546,7 +3587,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
         <span class="wsTileHint">View dividends by month and holding <span aria-hidden="true">›</span></span>
       </button>
     </div>
-    <p class="wsFinancialNote">Dividend totals are estimated from historical distributions and shares held. Already received dividends may be in Cash Holding; they are not added to account value twice. Return calculations cannot infer missing sell trades.</p>
+    <p class="wsFinancialNote">Realized returns use your recorded Sell Trades and average purchase cost, less trading fees. Dividends are separate and may already be in Cash Holding. Selling does not automatically change Cash Holding: reconcile it in Settings to avoid counting proceeds twice.</p>
     <button class="wsReturnCTA" type="button" id="returnExitBtn">Back to Investment</button>
   </section>
 
@@ -3898,13 +3939,18 @@ body.wsReturnOpen nav.bottom{display:none!important}
     </div>
 
     <div class="detailSection">
-      <h2>Lots</h2>
+      <h2>Purchase Lots</h2>
       <div class="lotList" id="detailLots"></div>
     </div>
+    <div class="detailSection" id="detailSellSection" hidden>
+      <h2>Sell Trades</h2>
+      <div class="lotList" id="detailSellTrades"></div>
+    </div>
 
-    <div class="detailActions">
+    <div class="detailActions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
       <button class="secondaryBtn" id="detailAddLotBtn">+ Add Lot</button>
-      <button class="secondaryBtn" id="detailHomeBtn">Back to Investment</button>
+      <button class="secondaryBtn" id="detailSellTradeBtn">Sell Trade</button>
+      <button class="secondaryBtn" id="detailHomeBtn" style="grid-column:1/-1">Back to Investment</button>
     </div>
   </section>
 
@@ -3969,6 +4015,35 @@ body.wsReturnOpen nav.bottom{display:none!important}
   </div>
 </div>
 
+<div class="modal" id="sellModal" aria-label="Record a sell trade">
+  <div class="sheet">
+    <div class="sheetHead addSheetHead">
+      <button class="close" id="closeSellModal" type="button" aria-label="Close">×</button>
+      <h2>Sell Trade</h2><div class="sheetHeadSpacer" aria-hidden="true"></div>
+    </div>
+    <div class="field"><label for="sellAccount">Investment Account</label>
+      <select id="sellAccount"><option value="wealthsimple_tfsa">Wealthsimple TFSA</option>
+        <option value="questrade_tfsa">Questrade TFSA</option><option value="questrade_cash">Questrade Cash</option></select>
+    </div>
+    <div class="field"><label for="sellTicker">Holding</label><select id="sellTicker"></select></div>
+    <div class="field"><label for="sellDate">Trade Date</label><input id="sellDate" type="date" aria-label="Sale date"/></div>
+    <div class="field"><label for="sellShares">Shares Sold</label><input id="sellShares" type="number" min="0" step="any" inputmode="decimal" placeholder="10"/>
+      <div class="sellAvailability" id="sellAvailable" role="status">Select an account and holding.</div></div>
+    <div class="field"><label for="sellPrice">Sale Price / Share</label><input id="sellPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="25.00"/></div>
+    <div class="field"><label for="sellFee">Trading Fee (same currency)</label><input id="sellFee" type="number" min="0" step="any" inputmode="decimal" value="0"/></div>
+    <div class="field" id="sellFxField" hidden><label for="sellFx">USD/CAD Exchange Rate for Realized Gain</label>
+      <input id="sellFx" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="1.4000"/></div>
+    <div class="sellPreview" aria-live="polite">
+      <div class="sellPreviewRow"><span>Net sale proceeds</span><strong id="sellPreviewProceeds">—</strong></div>
+      <div class="sellPreviewRow"><span>Average cost basis</span><strong id="sellPreviewBasis">—</strong></div>
+      <div class="sellPreviewRow"><span>Realized profit / loss (CAD)</span><strong id="sellPreviewGain">—</strong></div>
+      <div class="sellPreviewStatus" id="sellPreviewStatus"></div>
+    </div>
+    <button class="primary" id="saveSellTrade" type="button">Save Sell Trade</button>
+    <p class="note"><strong>Cash Holding is manual.</strong> Saving a sale reduces your shares and records realized profit, but does not credit the proceeds to Cash Holding. After the trade settles, update the cash balance in Settings once. This prevents double counting.</p>
+    <p class="note">Profit uses weighted average purchase cost. USD profit is converted using the rate above; this is an investment estimate, not a Canadian tax ACB report.</p>
+  </div>
+</div>
 
 <div class="modal" id="settingsModal">
   <div class="sheet">
@@ -4059,7 +4134,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.10 · Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.0 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4245,6 +4320,23 @@ var incomeProgress=document.getElementById("incomeProgress");
 var holdingCount=document.getElementById("holdingCount");
 var holdingsRows=document.getElementById("holdingsRows");
 var holdingsAddLotBtn=document.getElementById("holdingsAddLotBtn");
+var holdingsSellTradeBtn=document.getElementById("holdingsSellTradeBtn");
+var sellModal=document.getElementById("sellModal");
+var closeSellModal=document.getElementById("closeSellModal");
+var sellAccount=document.getElementById("sellAccount");
+var sellTicker=document.getElementById("sellTicker");
+var sellDate=document.getElementById("sellDate");
+var sellShares=document.getElementById("sellShares");
+var sellPrice=document.getElementById("sellPrice");
+var sellFee=document.getElementById("sellFee");
+var sellFx=document.getElementById("sellFx");
+var sellFxField=document.getElementById("sellFxField");
+var sellAvailable=document.getElementById("sellAvailable");
+var sellPreviewProceeds=document.getElementById("sellPreviewProceeds");
+var sellPreviewBasis=document.getElementById("sellPreviewBasis");
+var sellPreviewGain=document.getElementById("sellPreviewGain");
+var sellPreviewStatus=document.getElementById("sellPreviewStatus");
+var saveSellTrade=document.getElementById("saveSellTrade");
 var homeMonthStrip=document.getElementById("homeMonthStrip");
 var lineChart=document.getElementById("lineChart");
 var divTotal=document.getElementById("divTotal");
@@ -5016,6 +5108,7 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     }
     function at(rows,time){let lo=0,hi=rows.length-1,out=null;while(lo<=hi){const mid=(lo+hi)>>1;if(rows[mid].time<=time){out=rows[mid];lo=mid+1}else hi=mid-1;}return out;}
     const includesFunds=id==="all";let estimated=false;
+    const firstPurchaseDate=scope.reduce((earliest,l)=>!earliest||l.date<earliest?l.date:earliest,null);
     const approximatedTickers=new Set();
     const series=[];
     for(const t of times){
@@ -5031,7 +5124,9 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
         value+=shares*px.value*(market(ticker).currency==="USD"?(fxAt?.value||fx):1);
       }
       if(includesFunds){for(const f of CIBC_MUTUAL_FUNDS){const nav=(cibcNavHistory[f.ticker]||[]).filter(p=>p.date<=date).at(-1);if(!nav){missing=true;break;}value+=Number(nav.price)*Number(f.units);}}
-      if(missing||!hasPosition)continue;
+      // After a full sale, keep charting the account's recorded cash balance.
+      // Before its first purchase, no holdings history has been established.
+      if(missing||(!hasPosition&&!includesFunds&&firstPurchaseDate&&date<firstPurchaseDate))continue;
       estimated=estimated||cash.estimated||Boolean(needsFx&&!fxAt);
       series.push({time:t,date,value,estimated:estimatedPoint,source:estimatedPoint?"Estimated historical value":"Market value reconstruction"});
     }
@@ -5090,7 +5185,8 @@ const CLOUD_BASELINE_KEY="portfolioCloudBaselineV521";
 const CLOUD_EDIT_BASE_KEY="portfolioCloudEditBaseV521";
 const CLOUD_OPTIONAL_KEYS=new Set(["cibcMutualFundNavHistoryV1",INVESTMENT_CASH_HISTORY_KEY,INVESTMENT_OBSERVATIONS_KEY]);
 const CLOUD_SCALARS=["portfolioAccountCashCAD","portfolioNetDepositsCAD","questradeAccountCashCAD","questradeNetDepositsCAD","questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD"];
-const CLOUD_FINANCIAL_KEYS=["incomeTrackerLots","netWorthManualAccountsV58","personalLedgerTransactionsV513",...CLOUD_SCALARS];
+const SELL_TRADES_STORAGE_KEY="portfolioSellTradesV525";
+const CLOUD_FINANCIAL_KEYS=["incomeTrackerLots",SELL_TRADES_STORAGE_KEY,"netWorthManualAccountsV58","personalLedgerTransactionsV513",...CLOUD_SCALARS];
 function rememberCloudEditBase(key){
   const bases=readLocalJSON(CLOUD_EDIT_BASE_KEY,{});
   if(!Object.prototype.hasOwnProperty.call(bases,key)){bases[key]=localStorage.getItem(key);writeLocalJSON(CLOUD_EDIT_BASE_KEY,bases);}
@@ -5146,6 +5242,7 @@ function hydrateCloudData(storage){
     questradeCash=loadNumberSetting("questradeAccountCashCAD",questradeCash);questradeNetDeposits=loadNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
     questradeCashAccountCash=loadNumberSetting("questradeCashAccountCashCAD",questradeCashAccountCash);questradeCashAccountNetDeposits=loadNumberSetting("questradeCashAccountNetDepositsCAD",questradeCashAccountNetDeposits);
     lots=readJSONValue(storage.incomeTrackerLots,lots);
+    sellTrades=loadSellTradesSafe();
     manualAccounts=loadManualAccounts();ledgerTransactions=loadLedgerTransactions();netWorthHistory=loadNetWorthHistory();
     cibcNavHistory=readJSONValue(storage[CIBC_NAV_HISTORY_KEY],cibcNavHistory);loadCibcFundNavCache();
   }catch(e){for(const key of CLOUD_SYNC_KEYS){try{if(prior[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,prior[key]);}catch(_){}}throw e;}
@@ -5216,7 +5313,7 @@ const CLOUD_SYNC_DEVICE_KEY="portfolioCloudDeviceIdV519";
 const CLOUD_SYNC_LAST_AT_KEY="portfolioCloudLastSyncAtV519";
 const CLOUD_SYNC_DIRTY_KEY="portfolioCloudDirtyV520";
 const CLOUD_SYNC_KEYS=[
-  "incomeTrackerLots",
+  "incomeTrackerLots",SELL_TRADES_STORAGE_KEY,
   "portfolioAccountCashCAD","portfolioNetDepositsCAD",
   "questradeAccountCashCAD","questradeNetDepositsCAD",
   "questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD",
@@ -5274,6 +5371,15 @@ function cloudBuildModel(){
     ticker:String(l.ticker||"").toUpperCase(),date:String(l.date||""),shares:Number(l.shares)||0,cost:Number(l.cost)||0,
     accountId:String(l.accountId||DEFAULT_INVESTMENT_ACCOUNT),openingPosition:Boolean(l.openingPosition),source:String(l.source||"")
   })).filter(l=>l.ticker&&l.date&&l.shares!==0);
+  // Server daily net worth sums cloudModel.lots shares. Represent sells as negative
+  // signed trade rows there, while keeping canonical sell details in a separate
+  // synced JSON key. This works with the existing Cloudflare Worker unchanged.
+  for(const sale of (Array.isArray(sellTrades)?sellTrades:[])){
+    if(!sale?.ticker||!sale?.date||!(Number(sale.shares)>0))continue;
+    lotRows.push({ticker:String(sale.ticker).toUpperCase(),date:String(sale.date),shares:-Number(sale.shares),
+      cost:Number(sale.price)||0,accountId:String(sale.accountId||DEFAULT_INVESTMENT_ACCOUNT),
+      openingPosition:false,source:"Sell trade"});
+  }
   const cibc=(Array.isArray(CIBC_MUTUAL_FUNDS)?CIBC_MUTUAL_FUNDS:[]).map(f=>({
     ticker:String(f.ticker||"").toUpperCase(),name:String(f.name||""),units:Number(f.units)||0,
     bookValue:Number(f.bookValue)||0,lastPrice:Number(f.displayPrice)||0
@@ -5287,14 +5393,15 @@ function cloudBuildModel(){
       investmentGrowth:Number(currentInvestmentGrowth())||0,debts:Number(totals.liabilities)||0
     };
   }catch(e){}
-  return {timezone:tz,manualAccounts:manual,investmentAccounts:inv,lots:lotRows,cibcFunds:cibc,currentSnapshot};
+  return {timezone:tz,manualAccounts:manual,investmentAccounts:inv,lots:lotRows,
+    sellTrades:(Array.isArray(sellTrades)?sellTrades:[]).map(t=>({...t})),cibcFunds:cibc,currentSnapshot};
 }
 function cloudBuildPayload(){
   const storage={};
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.21.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.0",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -5513,6 +5620,73 @@ function cibcMutualFundSummary(){
 const DEFAULT_INVESTMENT_ACCOUNT="wealthsimple_tfsa";
 
 let lots = (loadLotsSafe() || []).map(l=>({...l,accountId:l.accountId||DEFAULT_INVESTMENT_ACCOUNT}));
+function loadSellTradesSafe(){
+  try{const rows=JSON.parse(localStorage.getItem(SELL_TRADES_STORAGE_KEY)||"[]");return Array.isArray(rows)?rows:[]}
+  catch(e){console.warn("Unable to read sell trades",e);return []}
+}
+function saveSellTradesSafe(){
+  rememberCloudEditBase(SELL_TRADES_STORAGE_KEY);
+  localStorage.setItem(SELL_TRADES_STORAGE_KEY,JSON.stringify(sellTrades));
+  cloudScheduleSync();
+}
+let sellTrades=loadSellTradesSafe();
+
+// Weighted average cost in the security's trading currency, per account/ticker.
+// Buy lots are NEVER deleted or rewritten by a sale. The chronology is replayed
+// for partial sales and to guard against selling more than was held on that date.
+function holdingTradeState(accountId,ticker,throughDate=null,buyRows=lots,saleRows=sellTrades){
+  const account=String(accountId||DEFAULT_INVESTMENT_ACCOUNT),symbol=String(ticker||"").toUpperCase();
+  const events=[];
+  for(let i=0;i<buyRows.length;i++){
+    const b=buyRows[i];if(String(b.accountId||DEFAULT_INVESTMENT_ACCOUNT)!==account||String(b.ticker||"").toUpperCase()!==symbol)continue;
+    if(throughDate && b.date>throughDate)continue;
+    events.push({kind:"buy",date:b.date,seq:i,row:b});
+  }
+  for(let i=0;i<saleRows.length;i++){
+    const t=saleRows[i];if(String(t.accountId||DEFAULT_INVESTMENT_ACCOUNT)!==account||String(t.ticker||"").toUpperCase()!==symbol)continue;
+    if(throughDate && t.date>throughDate)continue;
+    events.push({kind:"sell",date:t.date,seq:Number(t.createdAt)||i,row:t});
+  }
+  // A date-only trade journal assumes purchases are available before sales on
+  // the same day; sales themselves retain stable entry order.
+  events.sort((a,b)=>String(a.date).localeCompare(String(b.date)) || (a.kind===b.kind?a.seq-b.seq:(a.kind==="buy"?-1:1)));
+  let shares=0,basisNative=0;const realized=[];
+  for(const event of events){
+    const t=event.row,qty=Number(t.shares);
+    if(!Number.isFinite(qty)||qty<=0)continue;
+    if(event.kind==="buy"){
+      shares+=qty;basisNative+=qty*(Number(t.cost)||0);continue;
+    }
+    if(qty>shares+1e-7){return {shares,basisNative,realized,error:`${symbol}: sale of ${qty} shares on ${t.date} exceeds ${Number(shares.toFixed(6))} available.`};}
+    const avg=shares>1e-9?basisNative/shares:0;
+    const basis=avg*qty,price=Number(t.price)||0,fee=Number(t.fee)||0;
+    const currency=t.currency||((symbol.endsWith(".TO")||symbol.endsWith(".NE"))?"CAD":"USD");
+    const rate=currency==="USD"?(Number(t.fxRate)>0?Number(t.fxRate):fxAtDate(t.date)):1;
+    const proceeds=qty*price-fee,gain=proceeds-basis;
+    realized.push({...t,currency,fxRate:rate,avgCostNative:avg,costBasisNative:basis,
+      proceedsNative:proceeds,realizedNative:gain,proceedsCAD:proceeds*rate,
+      costBasisCAD:basis*rate,realizedCAD:gain*rate});
+    shares=Math.max(0,shares-qty);basisNative=shares<=1e-8?0:Math.max(0,basisNative-basis);
+  }
+  return {shares,basisNative,avg:shares>1e-8?basisNative/shares:0,realized,error:null};
+}
+function realizedTradesForAccount(accountId="all",ticker=null){
+  const ids=accountId==="all"?["wealthsimple_tfsa","questrade_tfsa","questrade_cash"]:[accountId];
+  const rows=[];
+  for(const id of ids){
+    const tickers=new Set(sellTrades.filter(t=>t.accountId===id && (!ticker||t.ticker===ticker)).map(t=>t.ticker));
+    for(const symbol of tickers){const state=holdingTradeState(id,symbol);if(!state.error)rows.push(...state.realized);}
+  }
+  return rows.sort((a,b)=>b.date.localeCompare(a.date)||(Number(b.createdAt)||0)-(Number(a.createdAt)||0));
+}
+function realizedTotalForAccount(accountId="all",ticker=null,range="ALL"){
+  return realizedTradesForAccount(accountId,ticker).filter(t=>range==="ALL"||inRange(t.date,range)).reduce((sum,t)=>sum+Number(t.realizedCAD||0),0);
+}
+function canRemovePurchaseLot(index){
+  const lot=lots[index];if(!lot)return false;
+  const remaining=lots.filter((_,i)=>i!==index);
+  return !holdingTradeState(lot.accountId||DEFAULT_INVESTMENT_ACCOUNT,lot.ticker,null,remaining,sellTrades).error;
+}
 try{
   // One-way, non-destructive migration: legacy V5.7 lots become Wealthsimple TFSA lots.
   if(lots.length && !localStorage.getItem("multiAccountMigrationV58")){
@@ -5904,8 +6078,11 @@ function mergeDividendEvents(estimatedEvents, exactEvents){
     ...exact
   ].sort((a,b)=>(a.exDate||a.date).localeCompare(b.exDate||b.date));
 }
-function sharesHeldOn(ticker,dateStr,accountId="all"){
-  return lotsForAccount(accountId).filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
+function sharesHeldOn(ticker,dateStr,accountId="all",dividendEntitlement=false){
+  const bought=lotsForAccount(accountId).filter(l=>l.ticker===ticker && l.date<=dateStr).reduce((s,l)=>s+Number(l.shares),0);
+  const sold=sellTrades.filter(t=>t.ticker===ticker && (accountId==="all"||t.accountId===accountId) &&
+    (dividendEntitlement?t.date<dateStr:t.date<=dateStr)).reduce((s,t)=>s+Number(t.shares),0);
+  return Math.max(0,bought-sold);
 }
 function fxAtDate(dateStr){
   if(!fxHistory.length)return fx;
@@ -5923,7 +6100,7 @@ function rebuildDividendPayments(){
       const paymentDate=ev.paymentDate||exDate;
       if(!exDate || !paymentDate || paymentDate>today)continue;
       for(const acct of INVESTMENT_ACCOUNTS){
-        const sh=sharesHeldOn(ticker,exDate,acct.id);
+        const sh=sharesHeldOn(ticker,exDate,acct.id,true);
         if(!(sh>0) || !(Number(ev.amount)>0))continue;
         const rate=q.currency==="USD"?fxAtDate(paymentDate):1;
         out.push({
@@ -6135,14 +6312,19 @@ function cibcPortfolioPositions(){
 }
 function positions(accountId="all"){
   if(accountId==="cibc_mutual_fund")return cibcPortfolioPositions();
-
-  const m={};
-  lotsForAccount(accountId).forEach(l=>{
-    if(!m[l.ticker])m[l.ticker]={ticker:l.ticker,shares:0,costTotal:0};
-    m[l.ticker].shares+=Number(l.shares);
-    m[l.ticker].costTotal+=Number(l.shares)*Number(l.cost);
-  });
-  const brokerPositions=Object.values(m).map(p=>{
+  const ids=accountId==="all"?["wealthsimple_tfsa","questrade_tfsa","questrade_cash"]:[accountId];
+  const m=new Map();
+  for(const id of ids){
+    const tickers=new Set(lotsForAccount(id).map(l=>l.ticker));
+    for(const ticker of tickers){
+      const state=holdingTradeState(id,ticker);
+      if(state.error){console.warn("Invalid trade journal",state.error);continue;}
+      if(!(state.shares>1e-8))continue;
+      const prior=m.get(ticker)||{ticker,shares:0,costTotal:0};
+      prior.shares+=state.shares;prior.costTotal+=state.basisNative;m.set(ticker,prior);
+    }
+  }
+  const brokerPositions=[...m.values()].map(p=>{
     const q=market(p.ticker);
     const avg=p.costTotal/p.shares;
     const mv=toCAD(p.shares*q.price,q.currency);
@@ -6172,7 +6354,9 @@ function portfolioSummary(accountId="all"){
     total=capital;
   }else{
     const dep=depositsForAccount(accountId);
-    total=dep>0?accountValue-dep:capital+divAll;
+    // With net deposits, sale proceeds are already included once cash is reconciled.
+    // Without net deposits, realized gains must be included in the fallback return.
+    total=dep>0?accountValue-dep:capital+divAll+realizedTotalForAccount(accountId);
   }
   const dep=depositsForAccount(accountId);
   const totalPct=dep>0?total/dep*100:(bv?total/bv*100:0);
@@ -6184,6 +6368,8 @@ const RETURN_DETAIL_ACCOUNTS=new Set(["wealthsimple_tfsa","questrade_tfsa","ques
 const WS_RETURN_PERIODS=["1D","1W","1M","3M","6M","YTD","1Y","ALL"];
 const WS_RETURN_COLORS=["#4a78cf","#9871d4","#d15cae","#e0bc31","#42945e","#aeb2bb"];
 let returnDetailRange="ALL";
+let realizedSelectedBucket=null;
+let realizedSelectedScope="";
 function canViewReturnDetails(id){return RETURN_DETAIL_ACCOUNTS.has(id)}
 function returnSignedAmount(n){return signedMoney(Number(n)||0)}
 function returnSetGain(el,n){
@@ -6277,6 +6463,7 @@ function openReturnBreakdown(kind){
   }
   returnBreakdownKind=kind;
   returnBreakdownRange=returnDetailRange;
+  realizedSelectedBucket=null;realizedSelectedScope="";
   showReturnPage("return-breakdown");
 }
 function renderReturnDetails(){
@@ -6303,7 +6490,12 @@ function renderReturnDetails(){
     "This is a change in account value, not a cash-flow-adjusted investment return."+(figure.estimated?" Some historical prices are estimated.":"");
   document.querySelectorAll("#returnDetailRanges [data-return-period]").forEach(b=>b.classList.toggle("active",b.dataset.returnPeriod===range));
   document.getElementById("returnRealizedCaption").textContent="Realized returns for "+wsReturnPeriodText(range);
-  document.getElementById("returnRealizedTotal").textContent="Not tracked";
+  const realizedRows=realizedTradesForAccount(id);
+  const realizedInRange=realizedRows.filter(t=>inRange(t.date,range));
+  const realizedValue=realizedInRange.reduce((sum,t)=>sum+Number(t.realizedCAD||0),0);
+  const realizedEl=document.getElementById("returnRealizedTotal");
+  realizedEl.textContent=realizedRows.length?returnSignedAmount(realizedValue):"Not tracked";
+  realizedEl.style.color=realizedRows.length?(realizedValue>=0?"#168d5d":"var(--red)"):"";
   const payments=returnFilteredPayments(id,range);
   const divs=payments.reduce((s,p)=>s+(Number(p.amount)||0),0);
   document.getElementById("returnDividendCaption").textContent="Dividends earned for "+wsReturnPeriodText(range);
@@ -6322,14 +6514,35 @@ function renderReturnBreakdown(){
   const isDiv=kind==="dividends";
   chartCard.style.display=(isDiv||kind==="realized")?"block":"none";
   document.getElementById("returnBreakdownRanges").style.display=(isDiv||kind==="realized")?"flex":"none";
-  document.getElementById("returnBreakdownCurrency").style.display=isDiv||kind==="unrealized"?"inline":"none";
+  document.getElementById("returnBreakdownCurrency").style.display="inline";
   if(kind==="realized"){
-    totalEl.textContent="—";totalEl.className="returnHeroAmount";
-    subtitle.textContent="Realized returns for "+wsReturnPeriodText(range)+" · not tracked";
-    listTitle.textContent="Breakdown for "+wsReturnPeriodText(range);
-    bars.innerHTML='<div class="returnEmpty" style="min-width:100%;margin:auto">No sell transaction history is available</div>';
-    body.innerHTML='<div class="returnEmpty">This app does not yet record Sell transactions, so realized profits cannot be calculated. Do not delete purchase lots to record sales.</div>';
-    note.textContent="Future Sell trades will appear here when Sell support is added; no amounts have been invented.";
+    const scope=id+"|"+range;
+    if(realizedSelectedScope!==scope){realizedSelectedScope=scope;realizedSelectedBucket=null;}
+    const all=realizedTradesForAccount(id).filter(t=>inRange(t.date,range));
+    const monthly=!["1D","1W","1M"].includes(range);
+    const buckets=new Map();
+    for(const t of all){const key=monthly?t.date.slice(0,7):t.date;
+      if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(t);}
+    if(realizedSelectedBucket&&!buckets.has(realizedSelectedBucket))realizedSelectedBucket=null;
+    const shown=realizedSelectedBucket?(buckets.get(realizedSelectedBucket)||[]):all;
+    const gain=shown.reduce((sum,t)=>sum+Number(t.realizedCAD||0),0);
+    if(all.length)returnSetGain(totalEl,gain);
+    else{totalEl.textContent="—";totalEl.className="returnHeroAmount";}
+    const bucketLabel=realizedSelectedBucket?dividendBucketLabel(realizedSelectedBucket,monthly):null;
+    subtitle.textContent="Realized returns for "+(bucketLabel||wsReturnPeriodText(range));
+    listTitle.textContent=bucketLabel?"Trades · "+bucketLabel:"Sell Trades · "+wsReturnPeriodText(range);
+    const series=[...buckets.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([key,rows])=>({key,amount:rows.reduce((sum,t)=>sum+Number(t.realizedCAD||0),0)}));
+    const max=Math.max(1,...series.map(t=>Math.abs(t.amount)));
+    bars.innerHTML=series.length?series.map(t=>{
+      const active=realizedSelectedBucket===t.key,positive=t.amount>=0;
+      const label=dividendBucketLabel(t.key,monthly);
+      return `<button type="button" class="returnBarItem${active?" active":""}" data-realized-bucket="${t.key}" aria-pressed="${active}" aria-label="View realized trades for ${returnHtmlSafe(label)}"><span class="returnBarArea"><span class="returnBarFill ${positive?"sellProfitBar":"sellLossBar"}" style="height:${Math.max(3,Math.round(115*Math.abs(t.amount)/max))}px"></span></span><span class="returnBarLabel">${returnHtmlSafe(label)}</span><span class="returnBarValue">${returnHtmlSafe(returnSignedAmount(t.amount))}</span></button>`;
+    }).join(""):'<div class="returnEmpty" style="min-width:100%;margin:auto">No Sell Trades recorded for this period.</div>';
+    body.innerHTML=shown.length?shown.map(t=>{
+      const gain=Number(t.realizedCAD)||0;
+      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(t.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(t.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(t.date)} · ${Number(t.shares).toLocaleString()} shares × ${fmtNativePrice(t.price,t.currency)}<br>Fee ${fmtNativePrice(t.fee||0,t.currency)} · Avg cost ${fmtNativePrice(t.avgCostNative,t.currency)}</div><button class="returnSellDelete" type="button" data-delete-sell="${returnHtmlSafe(t.id)}">Delete trade</button></div><strong class="returnDetailAmount" style="color:${gain>=0?"#168d5d":"var(--red)"}">${returnHtmlSafe(returnSignedAmount(gain))}</strong></div>`;
+    }).join(""):'<div class="returnEmpty">No Sell Trades recorded. Use Sell Trade on the Investment page to record a sale.</div>';
+    note.textContent="Realized gain = net sale proceeds minus weighted average cost of shares sold, including trading fees. USD profit is converted at the recorded sale FX. Cash Holding is updated separately in Settings; realized gain is not added to Total Return a second time.";
     return;
   }
   if(kind==="unrealized"){
@@ -6373,7 +6586,17 @@ document.querySelectorAll("#returnDetailRanges [data-return-period]").forEach(b=
 });
 document.querySelectorAll("#returnBreakdownRanges [data-return-range]").forEach(b=>b.onclick=()=>{
   const next=b.dataset.returnRange;if(!WS_RETURN_PERIODS.includes(next))return;
-  returnBreakdownRange=next;renderReturnBreakdown();
+  returnBreakdownRange=next;realizedSelectedBucket=null;renderReturnBreakdown();
+});
+document.getElementById("returnBreakdownBars").addEventListener("click",event=>{
+  const btn=event.target.closest?.("[data-realized-bucket]");
+  if(!btn||returnBreakdownKind!=="realized")return;
+  realizedSelectedBucket=realizedSelectedBucket===btn.dataset.realizedBucket?null:btn.dataset.realizedBucket;
+  renderReturnBreakdown();
+});
+document.getElementById("returnBreakdownRows").addEventListener("click",event=>{
+  const btn=event.target.closest?.("[data-delete-sell]");
+  if(btn)deleteSellTradeById(btn.dataset.deleteSell);
 });
 
 
@@ -6406,6 +6629,12 @@ function renderHome(){
   holdingCount.textContent=selectedPortfolioAccount==="cibc_mutual_fund"
     ? ps.length+" fund"+(ps.length===1?"":"s")
     : ps.length+" holding"+(ps.length===1?"":"s");
+  if(holdingsSellTradeBtn){
+    const eligible=selectedPortfolioAccount!=="cibc_mutual_fund" &&
+      (selectedPortfolioAccount==="all"?["wealthsimple_tfsa","questrade_tfsa","questrade_cash"].some(id=>positions(id).length>0):ps.length>0);
+    holdingsSellTradeBtn.disabled=!eligible;
+    holdingsSellTradeBtn.title=eligible?"Record a stock sale":"No tradable holdings in this account";
+  }
 
   holdingsRows.innerHTML=ps.length?ps.map(p=>`
     <div class="row" data-ticker="${p.ticker}">
@@ -6587,7 +6816,7 @@ function appDismissModal(){
   const modal=appActiveModal();if(!modal)return false;
   const id=modal.id;
   if(id==="settingsModal")return closeSettingsFn()!==false;
-  const handlers={addModal:closeModalFn,transactionModal:closeTransactionModalFn,
+  const handlers={addModal:closeModalFn,sellModal:closeSellModalFn,transactionModal:closeTransactionModalFn,
     categoryDetailModal:closeCategoryDetailFn,manualAccountModal:closeManualAccountModal,
     manualUpdateModal:closeManualUpdateModalFn};
   if(typeof handlers[id]==="function"){handlers[id]();return true}
@@ -6686,6 +6915,7 @@ document.getElementById("detailAddLotBtn").onclick=()=>{
   openModal();
   if(fAccount && selectedPortfolioAccount!=="all")fAccount.value=selectedPortfolioAccount;
 };
+document.getElementById("detailSellTradeBtn").onclick=()=>openSellModal(currentDetailTicker);
 
 // One save path for all six investment-account amounts. It does not add ledger entries.
 const investmentSettingsFields=[
@@ -8539,6 +8769,111 @@ saveLot.onclick=()=>{
   closeModalFn(); fTicker.value="";fShares.value="";fCost.value=""; renderHome(); if(marketApiBase)refreshLiveData(true);
 };
 
+// Sell Trade entry is intentionally separate from purchase lots and household ledger.
+function sellEligibleAccounts(ticker=null,date=localDateISO()){
+  return ["wealthsimple_tfsa","questrade_tfsa","questrade_cash"].filter(id=>
+    [...new Set(lotsForAccount(id).map(l=>l.ticker))].some(t=>
+      (!ticker||ticker===t) && holdingTradeState(id,t,date).shares>1e-8));
+}
+function sellRefreshTickers(preferredTicker=null){
+  const account=sellAccount.value,date=sellDate.value||localDateISO();
+  const availableTickers=[...new Set(lotsForAccount(account).map(l=>l.ticker))].sort();
+  const old=preferredTicker||sellTicker.value;
+  sellTicker.innerHTML=availableTickers.length?availableTickers.map(t=>
+    `<option value="${returnHtmlSafe(t)}">${returnHtmlSafe(t)}</option>`).join(""):'<option value="">No purchase lots in this account</option>';
+  if(availableTickers.includes(old))sellTicker.value=old;
+  else{
+    const eligible=availableTickers.find(t=>holdingTradeState(account,t,date).shares>1e-8);
+    if(eligible)sellTicker.value=eligible;
+  }
+  sellUpdateFx();sellUpdatePreview();
+}
+function sellUpdateFx(){
+  const ticker=sellTicker.value;
+  const isUSD=ticker && market(ticker).currency==="USD";
+  sellFxField.hidden=!isUSD;
+  sellFx.value=isUSD?Number(fxAtDate(sellDate.value||localDateISO())).toFixed(4):"1";
+}
+function sellUpdatePreview(){
+  const ticker=sellTicker.value,account=sellAccount.value,date=sellDate.value;
+  const state=ticker&&date?holdingTradeState(account,ticker,date):null;
+  const available=Math.max(0,Number(state?.shares)||0);
+  sellAvailable.textContent=ticker?`Available on ${date||"selected date"}: ${Number(available.toFixed(6)).toLocaleString()} shares`:"No eligible holding selected.";
+  sellAvailable.classList.toggle("error",Boolean(state?.error));
+  const shares=Number(sellShares.value),price=Number(sellPrice.value),fee=Number(sellFee.value);
+  const currency=ticker?market(ticker).currency:"CAD",rate=currency==="USD"?Number(sellFx.value):1;
+  const valid=ticker&&date&&shares>0&&Number.isFinite(shares)&&shares<=available+1e-7&&
+    sellPrice.value.trim()!==""&&Number.isFinite(price)&&price>=0&&Number.isFinite(fee)&&fee>=0&&rate>0;
+  if(valid){
+    const proceeds=shares*price-fee,basis=shares*state.avg,gain=(proceeds-basis)*rate;
+    sellPreviewProceeds.textContent=fmtNativePrice(proceeds,currency);
+    sellPreviewBasis.textContent=fmtNativePrice(basis,currency);
+    sellPreviewGain.textContent=returnSignedAmount(gain);
+    sellPreviewGain.className=gain>=0?"positive":"negative";
+    sellPreviewStatus.textContent="";
+  }else{
+    sellPreviewProceeds.textContent="—";sellPreviewBasis.textContent="—";sellPreviewGain.textContent="—";
+    sellPreviewGain.className="";
+    sellPreviewStatus.textContent=state?.error||(!ticker?"Choose a holding with purchase lots.":shares>available+1e-7?"Cannot sell more shares than held on this trade date.":"");
+  }
+  saveSellTrade.disabled=!valid||Boolean(state?.error)||date>localDateISO();
+}
+function openSellModal(ticker=null){
+  const date=localDateISO();sellDate.value=date;sellDate.max=date;
+  const eligible=sellEligibleAccounts(ticker,date);
+  if(!eligible.length){alert(ticker?"No shares available to sell in this holding.":"Add a purchase lot before recording a Sell Trade.");return;}
+  sellAccount.value=eligible.includes(selectedPortfolioAccount)?selectedPortfolioAccount:eligible[0];
+  sellShares.value="";sellPrice.value="";sellFee.value="0";
+  sellRefreshTickers(ticker);sellModal.classList.add("show");
+}
+function closeSellModalFn(){sellModal.classList.remove("show");}
+if(holdingsSellTradeBtn)holdingsSellTradeBtn.onclick=()=>openSellModal();
+if(closeSellModal)closeSellModal.onclick=closeSellModalFn;
+sellModal.onclick=e=>{if(e.target===sellModal)closeSellModalFn()};
+sellAccount.addEventListener("change",()=>sellRefreshTickers());
+sellTicker.addEventListener("change",()=>{sellUpdateFx();sellUpdatePreview()});
+sellDate.addEventListener("change",()=>{sellUpdateFx();sellUpdatePreview()});
+for(const input of [sellShares,sellPrice,sellFee,sellFx])input.addEventListener("input",sellUpdatePreview);
+function refreshAfterSellTrade(){
+  rebuildDividendPayments();chartCache.clear();portfolioChartRequestSeq++;
+  recordAccountObservation();renderHome();renderNetWorth();
+  if(returnDetailView?.classList.contains("active"))renderReturnDetails();
+  if(returnBreakdownView?.classList.contains("active"))renderReturnBreakdown();
+  if(homeView?.classList.contains("active"))loadPortfolioHistory(currentPortfolioRange);
+}
+function deleteSellTradeById(id){
+  const trade=sellTrades.find(t=>t.id===id);if(!trade)return;
+  if(!confirm(`Delete this Sell Trade?\n\n${trade.ticker} · ${trade.date}\n${trade.shares} shares × ${trade.price}\n\nCash Holding will NOT be changed.`))return;
+  const prior=sellTrades;sellTrades=sellTrades.filter(t=>t.id!==id);
+  try{saveSellTradesSafe()}catch(e){sellTrades=prior;alert("Unable to save deletion: "+String(e?.message||e));return;}
+  refreshAfterSellTrade();
+  if(document.getElementById("detailView").classList.contains("active") && currentDetailTicker===trade.ticker)openHoldingDetail(trade.ticker);
+}
+saveSellTrade.onclick=()=>{
+  const ticker=sellTicker.value,accountId=sellAccount.value,date=sellDate.value;
+  const shares=Number(sellShares.value),price=Number(sellPrice.value),fee=Number(sellFee.value);
+  const currency=market(ticker).currency,fxRate=currency==="USD"?Number(sellFx.value):1;
+  if(!ticker||!date||date>localDateISO()||!(shares>0)||!Number.isFinite(shares)||
+     sellPrice.value.trim()===""||!(price>=0)||!Number.isFinite(price)||!(fee>=0)||!Number.isFinite(fee)||!(fxRate>0)){
+    alert("Check the date, shares, price, fee and exchange rate.");return;
+  }
+  const id=globalThis.crypto?.randomUUID?.()||`sell_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const trade={id,ticker,accountId,date,shares,price,fee,currency,fxRate,createdAt:Date.now()};
+  const proposed=[...sellTrades,trade];
+  const state=holdingTradeState(accountId,ticker,null,lots,proposed);
+  if(state.error){alert(state.error);return;}
+  const recorded=state.realized.find(t=>t.id===id);
+  if(!recorded){alert("Unable to calculate this sale. Nothing was saved.");return;}
+  const message=`Record this Sell Trade?\n\n${accountName(accountId)} · ${ticker}\n${shares} shares × ${fmtNativePrice(price,currency)}\nNet proceeds: ${fmtNativePrice(recorded.proceedsNative,currency)}\nRealized gain: ${returnSignedAmount(recorded.realizedCAD)} CAD\n\nCash Holding will NOT be changed. Update it in Settings after settlement.`;
+  if(!confirm(message))return;
+  sellTrades=proposed;
+  try{saveSellTradesSafe()}catch(e){sellTrades=sellTrades.filter(t=>t.id!==id);alert("Sell Trade was NOT saved: "+String(e?.message||e));return;}
+  closeSellModalFn();refreshAfterSellTrade();
+  if(document.getElementById("detailView").classList.contains("active")){
+    if(positions(selectedPortfolioAccount).some(p=>p.ticker===ticker))openHoldingDetail(ticker);
+    else showView("home");
+  }
+};
 
 let currentDetailTicker = null;
 
@@ -8554,7 +8889,11 @@ function openHoldingDetail(ticker){
   currentDetailTicker = ticker;
   const received = tickerDivReceived(ticker,selectedPortfolioAccount);
   const capital = p.mv - p.bv;
-  const total = capital + received;
+  const sales=realizedTradesForAccount(selectedPortfolioAccount,ticker);
+  const realized=sales.reduce((sum,t)=>sum+Number(t.realizedCAD||0),0);
+  const priceGain=capital+realized;
+  const total = priceGain + received;
+  const returnBasis=p.bv+sales.reduce((sum,t)=>sum+Number(t.costBasisCAD||0),0);
   const totalBookValue = positions(selectedPortfolioAccount).reduce((s,x)=>s+x.bv,0);
   const bookWeight = totalBookValue ? p.bv / totalBookValue * 100 : 0;
   const pricePrefix = "$";
@@ -8574,23 +8913,24 @@ function openHoldingDetail(ticker){
   document.getElementById("detailBV").textContent = `${fmt(p.bv)} CAD`;
 
   const stockReturnEl = document.getElementById("detailStockReturn");
-  const stockReturnPct = p.bv ? capital / p.bv * 100 : 0;
+  const stockReturnPct = returnBasis ? priceGain / returnBasis * 100 : 0;
   const stockReturnPctEl = document.getElementById("detailStockReturnPct");
-  stockReturnEl.textContent = fmt(Math.abs(capital));
-  stockReturnEl.className = "holdingReturnValue " + (capital>=0 ? "pos" : "neg");
+  stockReturnEl.textContent = fmt(Math.abs(priceGain));
+  stockReturnEl.className = "holdingReturnValue " + (priceGain>=0 ? "pos" : "neg");
+  document.querySelector("#detailStockReturn").closest(".holdingReturnRow").querySelector(".label").textContent=sales.length?"Price Gain (incl. sales)":"Price Gain";
   stockReturnPctEl.textContent = Math.abs(stockReturnPct).toFixed(2) + "%";
-  stockReturnPctEl.className = "holdingReturnPct " + (capital>=0 ? "pos" : "neg");
+  stockReturnPctEl.className = "holdingReturnPct " + (priceGain>=0 ? "pos" : "neg");
 
   const dividendsReturnEl = document.getElementById("detailDividendsReturn");
   const dividendsReturnPctEl = document.getElementById("detailDividendsReturnPct");
-  const dividendsReturnPct = p.bv ? received / p.bv * 100 : 0;
+  const dividendsReturnPct = returnBasis ? received / returnBasis * 100 : 0;
   dividendsReturnEl.textContent = fmt(Math.abs(received));
   dividendsReturnEl.className = "holdingReturnValue " + (received>=0 ? "pos" : "neg");
   dividendsReturnPctEl.textContent = Math.abs(dividendsReturnPct).toFixed(2) + "%";
   dividendsReturnPctEl.className = "holdingReturnPct " + (received>=0 ? "pos" : "neg");
 
   const totalEl = document.getElementById("detailTotal");
-  const totalPct = p.bv ? total / p.bv * 100 : 0;
+  const totalPct = returnBasis ? total / returnBasis * 100 : 0;
   const totalPctEl = document.getElementById("detailTotalPct");
   totalEl.textContent = fmt(Math.abs(total));
   totalEl.className = "holdingReturnValue " + (total>=0 ? "pos" : "neg");
@@ -8624,6 +8964,12 @@ function openHoldingDetail(ticker){
     </div>
   `).join("") || `<div style="padding:18px;color:var(--muted)">No lots found.</div>`;
 
+  const sellSection=document.getElementById("detailSellSection");
+  const sellList=document.getElementById("detailSellTrades");
+  sellSection.hidden=!sales.length;
+  sellList.innerHTML=sales.map(t=>`<div class="sellTradeRow"><div><strong>${returnHtmlSafe(t.date)} · ${Number(t.shares).toLocaleString()} shares</strong><div class="sellTradeMeta">Sold at ${fmtNativePrice(t.price,t.currency)} · Fee ${fmtNativePrice(t.fee||0,t.currency)}<br>Avg cost ${fmtNativePrice(t.avgCostNative,t.currency)} · ${returnHtmlSafe(accountName(t.accountId))}</div></div><div class="sellTradeRight"><span class="sellTradeAmount ${t.realizedCAD>=0?"positive":"negative"}">${returnSignedAmount(t.realizedCAD)}</span><button type="button" class="deleteLotBtn" data-delete-sell="${returnHtmlSafe(t.id)}" aria-label="Delete sell trade">Delete</button></div></div>`).join("");
+  sellList.querySelectorAll("[data-delete-sell]").forEach(btn=>btn.onclick=()=>deleteSellTradeById(btn.dataset.deleteSell));
+
   detailLotsEl.querySelectorAll(".deleteLotBtn").forEach(btn=>{
     btn.addEventListener("click",(e)=>{
       e.preventDefault();
@@ -8638,6 +8984,9 @@ function openHoldingDetail(ticker){
         `Delete this ${lotLabel.toLowerCase()}?\n\n${lot.ticker}\n${lot.openingPosition?"Tracking start: ":""}${lot.date}\n${Number(lot.shares).toLocaleString()} shares × ${Number(lot.cost).toFixed(4)}`
       );
       if(!ok)return;
+      if(!canRemovePurchaseLot(idx)){
+        alert("This purchase lot cannot be deleted because recorded Sell Trades depend on its shares. Delete or correct those Sell Trades first.");return;
+      }
 
       lots.splice(idx,1);
       saveLotsSafe();
@@ -8646,7 +8995,7 @@ function openHoldingDetail(ticker){
       renderHome();
       renderDividends(document.querySelector("#divRanges .active")?.textContent||"1M");
 
-      if(lotsForAccount(selectedPortfolioAccount).some(x=>x.ticker===ticker)){
+      if(positions(selectedPortfolioAccount).some(x=>x.ticker===ticker)){
         openHoldingDetail(ticker);
       }else{
         currentDetailTicker=null;
