@@ -1,4 +1,4 @@
-Portfolio V5.25.0 - Sell Trades + Unified Dividends
+Portfolio V5.25.1 - Sell Trades + Unified Dividends
 
 Investment > Sell Trade or Holding > Sell Trade:
 - Record account, ticker, date, shares, sale price, trading fee, and USD/CAD FX when applicable.
@@ -11,3 +11,6 @@ Investment > Sell Trade or Holding > Sell Trade:
 IMPORTANT: Cash Holding is manually reconciled. Recording a Sell Trade does not add sale proceeds to account cash; update Cash Balance in Settings after settlement. Do not enter the proceeds twice.
 
 Replace index.html and sw.js (or deploy the repository). Update both phone and desktop to this version before recording sales.
+
+V5.25.1 UI: Investment return label no longer adds "estimated"; historical data caveats remain under chart.
+Return/YTD and Quotes now share one fixed row across investment accounts. No financial calculation changes.

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.24.10 Net Worth period returns; preserves V5.24.8 account returns and protected sync -->
+<!-- 5.25.1 Investment header UI; Sell Trades; preserves unified purple dividends and protected cloud sync -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3418,6 +3418,45 @@ body.wsReturnOpen nav.bottom{display:none!important}
 .wsBreakdownGraph button.returnBarItem.active .returnBarFill.sellProfitBar{background:#078b68}
 .wsBreakdownGraph button.returnBarItem.active .returnBarFill.sellLossBar{background:#bd3347}
 @media(max-width:430px){#sellModal .sheet{height:calc(100dvh - 62px);max-height:calc(100dvh - 62px);padding-left:16px;padding-right:16px}}
+
+/* V5.25.1: consistent Investment return + quote layout across accounts.
+   Historical-data caveats remain in the chart footnote, not the YTD label. */
+#homeView .heroRow > div{min-width:0;width:100%}
+#homeView .portfolioMetaRow{
+  display:flex;
+  flex-flow:row nowrap;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  min-width:0;
+  margin-top:8px;
+}
+#homeView .portfolioMetaRow #portfolioGain{
+  display:inline-block;
+  flex:0 1 auto;
+  min-width:0;
+  margin:0;
+  height:26px;
+  min-height:26px;
+  max-height:26px;
+  line-height:26px;
+  font-size:clamp(13px,4.45vw,18px);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#homeView .portfolioMetaRow #marketStatus{
+  flex:0 0 auto;
+  margin:0;
+  padding:5px 8px;
+  font-size:clamp(9px,2.8vw,11px);
+  white-space:nowrap;
+}
+#homeView .portfolioMetaRow #marketStatusText{white-space:nowrap}
+@media(max-width:375px){
+  #homeView .portfolioMetaRow{gap:5px}
+  #homeView .portfolioMetaRow #marketStatus{padding:5px 6px}
+}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3442,8 +3481,10 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <div class="heroRow">
         <div>
           <div><span class="big" id="portfolioValue">$0.00</span><span class="currency">CAD</span></div>
-          <button type="button" class="subgain returnLaunch" id="portfolioGain" aria-label="Return details" disabled>+$0.00 all time (+0.00%)</button>
-          <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Connecting market data…</span></div>
+          <div class="portfolioMetaRow">
+            <button type="button" class="subgain returnLaunch" id="portfolioGain" aria-label="Return details" disabled>+$0.00 all time (+0.00%)</button>
+            <div class="marketStatus" id="marketStatus"><span class="statusDot"></span><span id="marketStatusText">Connecting market data…</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -4134,7 +4175,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.0 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.1 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -5150,7 +5191,7 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     else if(range==="1D"){
       const ps=positions(id).filter(p=>!p.isCibcMutualFund);
       setPortfolioPeriodGain(ps.length&&ps.every(p=>p.dailyBaselineAvailable)?ps.reduce((s,p)=>s+p.today,0):null,range);
-    }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range,approximatedTickers.size?"estimated "+portfolioReturnPeriodLabel(range):null);
+    }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range);
     else{portfolioGain.textContent="Current value";portfolioGain.style.setProperty("color","var(--muted)","important");}
     activeChartPayload={id,range,rows:clean};renderLineChart(clean,null,{grain});
     setPortfolioChartNote(range==="1D"?"1-minute points \u00b7 checks every 60s \u00b7 feed may be delayed":approximatedTickers.size
@@ -5401,7 +5442,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.0",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.1",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
