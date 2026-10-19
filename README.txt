@@ -1,10 +1,14 @@
-Portfolio V5.24.7 - Return Details (read-only)
+Portfolio V5.24.8 - Wealthsimple-style Returns
 
-Deploy: Replace index.html and sw.js in the GitHub Pages portfolio-tracker repository. Commit and push.
+Deploy only index.html and sw.js to the existing GitHub Pages repository. Commit and Push. Do not delete your iPhone PWA or clear Safari site data.
 
-New: For Wealthsimple TFSA, Questrade TFSA and Questrade Cash, tap the green return figure or Total Return metric to open a Returns page. Tap Unrealized return, Realized returns or Dividends earned for details. Dividends page has 1M/3M/6M/YTD/1Y/ALL filters and by-holding totals.
+What changed
+- Returns entry for Wealthsimple TFSA, Questrade TFSA, Questrade Cash.
+- Returns landing page now matches the Wealthsimple walkthrough structure: large hero total, inline account performance metrics, 1D/1W/1M/3M/6M/YTD/1Y/ALL tabs, tappable Realized Return and Dividends cards with holdings composition.
+- Dividends earned page: interactive monthly bar chart; tap a bar for that month's dividend breakdown by holding, tap again to return to whole period.
+- Realized returns remains Not tracked until actual Sell trades are recorded. It intentionally does not display fake $0.00.
+- For limited historical periods, account value changes are explicitly NOT represented as investment returns because dated deposits/withdrawals are not recorded.
+- Time-weighted return cannot be computed; shows Not available rather than inventing a percentage.
+- No changes to D1/Worker data, positions, cash or sync protocol.
 
-CIBC Mutual Fund / All Accounts remain unchanged.
-
-Financial integrity: Total Return remains current account value minus net deposits, as before. Unrealized gain is current holdings market value minus book value. Dividend earned is estimated from historical holdings/distributions; it is NOT automatically added to Cash Holding. Sell trades and realized P&L have not been implemented, so Realized returns shows Not tracked. Do not sum those cards to obtain Total Return. No data model, localStorage, or Cloudflare Worker changes.
-
+Verification: JS syntax / local UI checks; production iPhone behavior must still be checked after deployment.

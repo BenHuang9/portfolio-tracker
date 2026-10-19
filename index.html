@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.24.7 Investment Return Details: three broker accounts, read-only financial breakdown -->
+<!-- 5.24.8 Investment Return Details: three broker accounts, read-only financial breakdown -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3233,7 +3233,7 @@ button:focus-visible,[role="button"]:focus-visible{outline:3px solid rgba(28,122
 }
 
 
-/* V5.24.7 Investment Return Details. Read-only UI; no cash, lots or cloud schema changes. */
+/* V5.24.8 Investment Return Details. Read-only UI; no cash, lots or cloud schema changes. */
 button.returnLaunch.subgain{
   appearance:none;-webkit-appearance:none;border:0;background:none;padding:0;margin-top:8px;
   font:inherit;font-size:18px;font-weight:750;line-height:1.35;text-align:left;color:var(--green);
@@ -3309,6 +3309,78 @@ button.returnLaunch.returnInteractive:focus-visible,.returnMetricTap:focus-visib
   .returnListButton{padding:13px 12px}
 }
 
+
+/* V5.24.8: account return details styled and structured like the reference mobile flow. */
+body.wsReturnOpen{background:#f6f6f6}
+body.wsReturnOpen nav.bottom{display:none!important}
+.wsReturnPage{background:#f6f6f6;min-height:100svh;padding-bottom:calc(128px + env(safe-area-inset-bottom));color:#101111}
+.wsReturnPage .returnTopbar{padding:16px 20px 10px;background:rgba(246,246,246,.95)}
+.wsReturnPage .returnTopbar h1{font-size:17px;letter-spacing:-.012em;font-weight:800}
+.wsReturnPage .returnBack{font-size:23px;font-weight:500;background:#fff;box-shadow:0 3px 15px rgba(0,0,0,.025)}
+.wsHeroArea{padding:29px 20px 10px}
+.wsFigure,.wsBreakdownAmount{display:flex;align-items:baseline;gap:6px;flex-wrap:nowrap;min-width:0}
+.wsFigure .returnHeroAmount,.wsBreakdownAmount .returnHeroAmount{display:block;font-size:clamp(31px,8.8vw,48px);line-height:1.1;letter-spacing:-.065em;overflow-wrap:anywhere;white-space:normal;margin:0}
+.wsCurrency{font-size:14px;font-weight:780;white-space:nowrap}
+.wsFigureCaption{font-size:14px;font-weight:550;color:#616267;margin-top:8px;line-height:1.5}
+.wsPeriodNotice{font-size:11px;color:#6c737a;margin:8px 0 0;line-height:1.45}
+.wsPeriodNotice[hidden]{display:none}
+.wsStats{margin-top:43px;margin-bottom:32px;display:grid;gap:0}
+.wsStatRow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 0;font-size:14px;line-height:1.2;border:0;background:transparent;text-align:left;min-height:0}
+.wsStatRow span{color:#5f6065;font-weight:520;flex:1}
+.wsStatRow strong{font-size:14px;color:#141516;font-weight:700;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.wsStatTap{width:100%;cursor:pointer;appearance:none;-webkit-appearance:none;font:inherit;border:0;padding:9px 0}
+.wsStatTap strong{color:#168d5d}
+.wsInlineChevron{font-size:16px;color:#a8abad!important;font-weight:600;margin-left:4px}
+.wsTinyInfo{font-size:12px;color:#717272;margin-left:4px}
+.wsReturnRangeTabs{display:flex;align-items:center;justify-content:space-between;gap:0;margin:15px 12px 22px;padding:3px 0;overflow-x:auto;scrollbar-width:none}
+.wsReturnRangeTabs::-webkit-scrollbar{display:none}
+.wsReturnRangeTabs button{flex:1 0 auto;min-width:38px;background:transparent;border:0;border-radius:24px;font-size:12px;font-weight:710;color:#696a6d;min-height:40px;padding:9px 7px;white-space:nowrap;cursor:pointer}
+.wsReturnRangeTabs button.active{color:#171717;background:#fff;box-shadow:0 3px 12px rgba(0,0,0,.04)}
+.wsReturnRangeTabs button:focus-visible{outline:2px solid #23866e;outline-offset:2px}
+.wsReturnsCards{padding:0 19px 6px;display:grid;gap:16px}
+.wsReturnsTile{width:100%;display:flex;flex-direction:column;align-items:stretch;text-align:left;appearance:none;-webkit-appearance:none;background:#fff;border:1px solid #e6e6e6;border-radius:22px;padding:21px 20px 20px;box-shadow:0 4px 14px rgba(0,0,0,.018);cursor:pointer;color:#171717}
+.wsReturnsTile:active{background:#fafafa}
+.wsReturnsTile:focus-visible{outline:2px solid #24866e;outline-offset:3px}
+.wsTileCaption{font-size:14px;font-weight:580;color:#77777b;line-height:1.4}
+.wsTileValue{font-size:clamp(24px,7vw,34px);font-weight:790;line-height:1.2;letter-spacing:-.044em;display:block;margin-top:10px;font-variant-numeric:tabular-nums}
+.wsTileValue small{font-size:12px;font-weight:700;letter-spacing:0}
+.wsTileHint{font-size:12px;font-weight:620;color:#85878a;margin-top:14px}
+.wsTileHint span{float:right;font-size:19px;line-height:10px}
+.wsDividendStack{height:42px;width:100%;display:flex;gap:2px;overflow:hidden;margin-top:18px;border-radius:9px;background:#ececed}
+.wsDividendStack span{height:100%;min-width:2px;display:block}
+.wsCompositionLegend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:13px;row-gap:10px;margin-top:15px;font-size:11px;font-weight:670}
+.wsCompositionLegend .wsLegendCell{display:flex;align-items:center;gap:7px;min-width:0;color:#777}
+.wsCompositionLegend .wsLegendDot{height:11px;width:11px;flex-shrink:0;border-radius:3px}
+.wsCompositionLegend .wsLegendTicker{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.wsCompositionLegend strong{color:#292929;font-size:11px;white-space:nowrap;font-weight:750}
+.wsFinancialNote{padding:12px 24px 18px;font-size:11px;font-weight:520;line-height:1.55;color:#85878a}
+.wsReturnCTA{position:fixed;z-index:50;left:20px;right:20px;bottom:calc(16px + env(safe-area-inset-bottom));height:55px;border-radius:28px;border:0;background:#101010;color:#fff;font-weight:780;font-size:14px;box-shadow:0 4px 8px rgba(0,0,0,.16);cursor:pointer;max-width:610px;margin:0 auto}
+.wsBreakdownHero{padding:32px 21px 12px}
+.wsBreakdownGraph{position:relative;margin:15px 16px 6px;height:228px;padding:8px 2px 6px}
+.wsGraphGrid{position:absolute;inset:18px 0 54px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.wsGraphGrid span{display:block;border-top:1px solid #e5e5e5}
+.wsBreakdownGraph .returnDetailBars{height:214px;min-height:0;gap:10px;align-items:flex-end;position:relative;z-index:1;overflow-x:auto;overflow-y:hidden;padding:0 5px 6px;scrollbar-width:none}
+.wsBreakdownGraph .returnBarItem{flex:1 0 57px;max-width:92px;min-width:57px;justify-content:flex-end;padding:0 0 0}
+.wsBreakdownGraph .returnBarArea{height:145px;width:100%;align-items:flex-end}
+.wsBreakdownGraph .returnBarFill{width:94%;max-width:80px;min-height:3px;border-radius:9px 9px 0 0;background:#83a2dc;box-shadow:none}
+.wsBreakdownGraph button.returnBarItem{background:none;border:0;color:#6c6c70;cursor:pointer}
+.wsBreakdownGraph button.returnBarItem.active .returnBarFill{background:#4c7bd3}
+.wsBreakdownGraph button.returnBarItem.active .returnBarLabel,.wsBreakdownGraph button.returnBarItem.active .returnBarValue{color:#171717;font-weight:850}
+.wsBreakdownGraph .returnBarLabel{font-size:11px;margin-top:7px}
+.wsBreakdownGraph .returnBarValue{font-size:11px;margin-top:6px;color:#5d5e60}
+.wsReturnBreakdownList{padding:35px 20px 18px}
+.wsReturnBreakdownList h2{font-size:18px;font-weight:760;line-height:1.3;letter-spacing:-.022em;margin:0 0 17px}
+.wsReturnBreakdownList .returnDetailRow{grid-template-columns:38px minmax(0,1fr) auto;padding:12px 0;gap:12px;border-color:#ededed}
+.wsReturnBreakdownList .returnDetailIcon{height:35px;width:35px;border-radius:9px;background:#dce6f1}
+.wsReturnBreakdownList .returnDetailName{font-size:14px}
+.wsReturnBreakdownList .returnDetailAmount{font-size:13px}
+.wsReturnBreakdownList .returnEmpty{padding:38px 8px;color:#787a7d;text-align:center}
+.wsReturnPage .returnDetailAmount{font-variant-numeric:tabular-nums}
+@media(max-width:365px){
+.wsHeroArea{padding-inline:16px}.wsFigure .returnHeroAmount{font-size:30px}.wsStatRow{font-size:12px}.wsStatRow strong{font-size:12px}
+.wsReturnRangeTabs{margin-inline:5px}.wsReturnRangeTabs button{min-width:32px;padding-inline:5px;font-size:11px}
+.wsReturnsCards{padding-inline:11px}.wsReturnsTile{padding:18px 16px}
+}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3438,69 +3510,68 @@ button.returnLaunch.returnInteractive:focus-visible,.returnMetricTap:focus-visib
 
 
 
-  <section id="returnDetailView" class="view returnPage" aria-label="Investment returns details">
+  <!-- V5.24.8: Wealthsimple-inspired account return drilldown. No data mutations. -->
+  <section id="returnDetailView" class="view returnPage wsReturnPage" aria-label="Investment account returns">
     <div class="returnTopbar">
-      <button class="returnBack" id="returnBackBtn" type="button" aria-label="Back to investment">‹</button>
-      <h1>Returns</h1><div></div>
+      <button class="returnBack" id="returnBackBtn" type="button" aria-label="Back to Investment">&#8592;</button>
+      <h1 id="returnPageTitle">Wealthsimple TFSA</h1><div aria-hidden="true"></div>
     </div>
-    <div class="returnHero">
-      <div class="returnEyebrow" id="returnDetailAccountName">Wealthsimple TFSA</div>
-      <div class="returnEyebrow" style="margin-top:13px">Total return · All time</div>
-      <div class="returnHeroAmount positive" id="returnDetailTotal">+$0.00</div>
-      <div class="returnHeroMeta" id="returnDetailPercent">Simple return: +0.00%</div>
+    <div class="wsHeroArea">
+      <div class="wsFigure"><span id="returnDetailTotal" class="returnHeroAmount positive">+$0.00</span><span class="wsCurrency">CAD</span></div>
+      <div class="wsFigureCaption" id="returnPeriodCaption">Total return for all time</div>
+      <p class="wsPeriodNotice" id="returnPeriodWarning" hidden></p>
+      <div class="wsStats" aria-label="Investment account performance">
+        <div class="wsStatRow"><span>Current value</span><strong id="returnCurrentValue">$0.00</strong></div>
+        <div class="wsStatRow"><span>Net deposits</span><strong id="returnNetDeposits">$0.00</strong></div>
+        <div class="wsStatRow"><span>All time return</span><strong id="returnAllTimeTotal">+$0.00</strong></div>
+        <div class="wsStatRow"><span>Simple return rate</span><strong id="returnDetailPercent">—</strong></div>
+        <div class="wsStatRow"><span>Time-weighted return rate</span><strong id="returnTimeWeighted">Not available</strong></div>
+        <button class="wsStatRow wsStatTap" type="button" data-return-kind="unrealized" aria-label="Open unrealized returns"><span>Unrealized return <span class="wsTinyInfo" aria-hidden="true">ⓘ</span></span><strong id="returnUnrealizedTotal">$0.00 <span class="wsInlineChevron">›</span></strong></button>
+      </div>
     </div>
-    <div class="returnCard" aria-label="Account performance summary">
-      <div class="returnCardTitle">Account summary</div>
-      <div class="returnInfoRow"><span>Current value</span><strong id="returnCurrentValue">$0.00</strong></div>
-      <div class="returnInfoRow"><span>Net deposits</span><strong id="returnNetDeposits">$0.00</strong></div>
-      <div class="returnInfoRow"><span>Holdings value</span><strong id="returnHoldingsValue">$0.00</strong></div>
-      <div class="returnInfoRow"><span>Cash holding</span><strong id="returnCashValue">$0.00</strong></div>
+    <div class="wsReturnRangeTabs" id="returnDetailRanges" aria-label="Account performance period">
+      <button type="button" data-return-period="1D">1D</button><button type="button" data-return-period="1W">1W</button><button type="button" data-return-period="1M">1M</button><button type="button" data-return-period="3M">3M</button><button type="button" data-return-period="6M">6M</button><button type="button" data-return-period="YTD">YTD</button><button type="button" data-return-period="1Y">1Y</button><button type="button" data-return-period="ALL" class="active">ALL</button>
     </div>
-    <h2 class="returnSectionHeading">Return breakdown</h2>
-    <div class="returnListCard">
-      <button class="returnListButton" type="button" data-return-kind="unrealized">
-        <span><span class="returnListLabel">Unrealized return</span><span class="returnListSub">Gain or loss on current holdings</span></span>
-        <span class="returnListRight"><strong class="returnListValue" id="returnUnrealizedTotal">$0.00</strong><span class="returnListChevron">›</span></span>
+    <div class="wsReturnsCards">
+      <button class="wsReturnsTile" type="button" data-return-kind="realized">
+        <span class="wsTileCaption" id="returnRealizedCaption">Realized returns for all time</span>
+        <span class="wsTileValue" id="returnRealizedTotal">Not tracked</span>
+        <span class="wsTileHint">View realized return details <span aria-hidden="true">›</span></span>
       </button>
-      <button class="returnListButton" type="button" data-return-kind="realized">
-        <span><span class="returnListLabel">Realized returns</span><span class="returnListSub">Sold positions · trade history</span></span>
-        <span class="returnListRight"><strong class="returnListValue" id="returnRealizedTotal">Not tracked</strong><span class="returnListChevron">›</span></span>
-      </button>
-      <button class="returnListButton" type="button" data-return-kind="dividends">
-        <span><span class="returnListLabel">Dividends earned</span><span class="returnListSub">Estimated from historical distributions</span></span>
-        <span class="returnListRight"><strong class="returnListValue" id="returnDividendsTotal">$0.00</strong><span class="returnListChevron">›</span></span>
+      <button class="wsReturnsTile" type="button" data-return-kind="dividends">
+        <span class="wsTileCaption" id="returnDividendCaption">Dividends earned for all time</span>
+        <span class="wsTileValue"><span id="returnDividendsTotal">$0.00</span> <small>CAD</small></span>
+        <span class="wsDividendStack" id="returnDividendComposition" aria-hidden="true"></span>
+        <span class="wsCompositionLegend" id="returnDividendLegend"></span>
+        <span class="wsTileHint">View dividends by month and holding <span aria-hidden="true">›</span></span>
       </button>
     </div>
-    <div class="returnExplainer">Total return uses current account value minus net deposits. The categories are informational, not amounts to add together: dividends may already be included in Cash Holding. Sold-trade profits are not tracked until a Sell feature is added.</div>
+    <p class="wsFinancialNote">Dividend totals are estimated from historical distributions and shares held. Already received dividends may be in Cash Holding; they are not added to account value twice. Return calculations cannot infer missing sell trades.</p>
+    <button class="wsReturnCTA" type="button" id="returnExitBtn">Back to Investment</button>
   </section>
 
-  <section id="returnBreakdownView" class="view returnPage" aria-label="Return category details">
+  <section id="returnBreakdownView" class="view returnPage wsReturnPage" aria-label="Return category details">
     <div class="returnTopbar">
-      <button class="returnBack" id="returnBreakdownBackBtn" type="button" aria-label="Back to returns">‹</button>
-      <h1 id="returnBreakdownTitle">Dividends earned</h1><div></div>
+      <button class="returnBack" id="returnBreakdownBackBtn" type="button" aria-label="Back to account returns">&#8592;</button>
+      <h1 id="returnBreakdownTitle">Dividends earned</h1><div aria-hidden="true"></div>
     </div>
-    <div class="returnHero">
-      <div class="returnEyebrow" id="returnBreakdownAccountName">Wealthsimple TFSA</div>
-      <div class="returnHeroAmount positive" id="returnBreakdownTotal">$0.00</div>
-      <div class="returnHeroMeta" id="returnBreakdownSubtitle">All time</div>
+    <div class="wsBreakdownHero">
+      <div class="wsBreakdownAmount"><span id="returnBreakdownTotal" class="returnHeroAmount positive">$0.00</span><span class="wsCurrency" id="returnBreakdownCurrency">CAD</span></div>
+      <div class="wsFigureCaption" id="returnBreakdownSubtitle">Dividends earned for all time</div>
     </div>
-    <div class="returnRangeTabs" id="returnBreakdownRanges" aria-label="Dividend history range">
-      <button type="button" data-return-range="1M">1M</button>
-      <button type="button" data-return-range="3M">3M</button>
-      <button type="button" data-return-range="6M">6M</button>
-      <button type="button" data-return-range="YTD">YTD</button>
-      <button type="button" data-return-range="1Y">1Y</button>
-      <button type="button" data-return-range="ALL" class="active">ALL</button>
-    </div>
-    <div class="returnCard" id="returnBreakdownChartCard">
-      <div class="returnCardTitle" id="returnBreakdownChartTitle">Monthly dividends</div>
+    <div class="wsBreakdownGraph" id="returnBreakdownChartCard">
+      <div class="wsGraphGrid" aria-hidden="true"><span></span><span></span><span></span></div>
       <div class="returnDetailBars" id="returnBreakdownBars"></div>
     </div>
-    <div class="returnCard">
-      <div class="returnCardTitle" id="returnBreakdownListTitle">Breakdown by holding</div>
+    <div class="wsReturnRangeTabs" id="returnBreakdownRanges" aria-label="Returns history period">
+      <button type="button" data-return-range="1D">1D</button><button type="button" data-return-range="1W">1W</button><button type="button" data-return-range="1M">1M</button><button type="button" data-return-range="3M">3M</button><button type="button" data-return-range="6M">6M</button><button type="button" data-return-range="YTD">YTD</button><button type="button" data-return-range="1Y">1Y</button><button type="button" data-return-range="ALL" class="active">ALL</button>
+    </div>
+    <div class="wsReturnBreakdownList">
+      <h2 id="returnBreakdownListTitle">All time dividends</h2>
       <div id="returnBreakdownRows"></div>
     </div>
-    <div class="returnExplainer" id="returnBreakdownFootnote"></div>
+    <p class="wsFinancialNote" id="returnBreakdownFootnote"></p>
+    <button class="wsReturnCTA" type="button" id="returnBreakdownExitBtn">Back to Account Returns</button>
   </section>
 
   <section id="netWorthView" class="view active wealthHomeView">
@@ -3988,7 +4059,7 @@ button.returnLaunch.returnInteractive:focus-visible,.returnMetricTap:focus-visib
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.7 · Return Details</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.24.8 · Return Details</div>
   </div>
 </div>
 
@@ -6108,8 +6179,12 @@ function portfolioSummary(accountId="all"){
   return {ps,mv,bv,annual,divAll,accountValue,capital,total,totalPct,yieldPct:mv?annual/mv*100:0};
 }
 
-// V5.24.7 read-only account returns: no new storage keys, cloud writes or invented Sell records.
+// V5.24.8: Wealthsimple-inspired return drilldown. Display-only and cloud-write-free.
 const RETURN_DETAIL_ACCOUNTS=new Set(["wealthsimple_tfsa","questrade_tfsa","questrade_cash"]);
+const WS_RETURN_PERIODS=["1D","1W","1M","3M","6M","YTD","1Y","ALL"];
+const WS_RETURN_COLORS=["#4a78cf","#9871d4","#d15cae","#e0bc31","#42945e","#aeb2bb"];
+let returnDetailRange="ALL";
+let returnDivSelectedMonth=null;
 function canViewReturnDetails(id){return RETURN_DETAIL_ACCOUNTS.has(id)}
 function returnSignedAmount(n){return signedMoney(Number(n)||0)}
 function returnSetGain(el,n){
@@ -6117,6 +6192,46 @@ function returnSetGain(el,n){
   el.textContent=returnSignedAmount(n);
   el.classList.toggle("positive",Number(n)>=0);
   el.classList.toggle("negative",Number(n)<0);
+}
+function returnHtmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c])}
+function wsReturnPeriodText(range){
+  return range==="ALL"?"all time":range==="YTD"?"year to date":({"1D":"the past day","1W":"the past week","1M":"the past month","3M":"the past 3 months","6M":"the past 6 months","1Y":"the past year"}[range]||"all time");
+}
+function wsReturnPeriodValue(id,range){
+  const summary=portfolioSummary(id);
+  if(range==="ALL")return {value:summary.total,type:"total",estimated:false};
+  const chart=activeChartPayload;
+  if(!chart||chart.id!==id||chart.range!==range||!Array.isArray(chart.rows)||chart.rows.length<2)return {value:null,type:"change",estimated:false};
+  const rows=chart.rows;
+  if(rows.some(r=>!Number.isFinite(Number(r.value))))return {value:null,type:"change",estimated:false};
+  return {value:Number(rows[rows.length-1].value)-Number(rows[0].value),type:"change",estimated:rows.some(r=>Boolean(r.estimated))};
+}
+function wsReturnGroupPayments(payments){
+  const groups=new Map();
+  for(const p of payments){
+    const ticker=String(p.ticker||"").toUpperCase();if(!ticker)continue;
+    const row=groups.get(ticker)||{ticker,amount:0,count:0};
+    row.amount+=Number(p.amount)||0;row.count++;groups.set(ticker,row);
+  }
+  return [...groups.values()].sort((a,b)=>b.amount-a.amount);
+}
+function wsReturnComposition(id,range){
+  const payments=returnFilteredPayments(id,range);
+  const total=payments.reduce((s,p)=>s+(Number(p.amount)||0),0);
+  const groups=wsReturnGroupPayments(payments);
+  // Group beyond the top five into Other, just like a compact broker allocation graphic.
+  const top=groups.slice(0,5);
+  if(groups.length>5)top.push({ticker:"Other",amount:groups.slice(5).reduce((s,p)=>s+p.amount,0)});
+  const stack=document.getElementById("returnDividendComposition");
+  const legend=document.getElementById("returnDividendLegend");
+  if(!stack||!legend)return;
+  if(!(total>0)){
+    stack.innerHTML='<span style="width:100%;background:#e5e5e5"></span>';
+    legend.innerHTML='<span class="wsLegendCell">No recorded distributions for this period</span>';
+    return;
+  }
+  stack.innerHTML=top.map((g,i)=>`<span style="flex:${Math.max(.01,g.amount)};background:${WS_RETURN_COLORS[i%WS_RETURN_COLORS.length]}"></span>`).join("");
+  legend.innerHTML=top.map((g,i)=>`<span class="wsLegendCell"><i class="wsLegendDot" style="background:${WS_RETURN_COLORS[i%WS_RETURN_COLORS.length]}"></i><span class="wsLegendTicker">${returnHtmlSafe(g.ticker)}</span><strong>${fmt0(g.amount)}</strong></span>`).join("");
 }
 function updateReturnEntryAvailability(){
   const enabled=canViewReturnDetails(selectedPortfolioAccount);
@@ -6133,121 +6248,136 @@ function updateReturnEntryAvailability(){
 function showReturnPage(route){
   cancelValueChartGestures();
   document.body.classList.remove("manualDetailOpen");
+  document.body.classList.add("wsReturnOpen");
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".navbtn").forEach(n=>n.classList.remove("active"));
   if(route==="returns"){
-    returnDetailView.classList.add("active");
-    renderReturnDetails();
+    returnDetailView.classList.add("active");renderReturnDetails();
   }else{
-    returnBreakdownView.classList.add("active");
-    renderReturnBreakdown();
+    returnBreakdownView.classList.add("active");renderReturnBreakdown();
   }
-  appRecordRoute(route);
-  window.scrollTo(0,0);
+  appRecordRoute(route);window.scrollTo(0,0);
 }
 function openReturnDetails(id=selectedPortfolioAccount){
   if(!canViewReturnDetails(id))return;
   returnDetailAccount=id;
+  returnDetailRange=WS_RETURN_PERIODS.includes(currentPortfolioRange)?currentPortfolioRange:"ALL";
   showReturnPage("returns");
 }
 function openReturnBreakdown(kind){
   if(!canViewReturnDetails(returnDetailAccount)||!["realized","unrealized","dividends"].includes(kind))return;
   returnBreakdownKind=kind;
-  returnBreakdownRange="ALL";
+  returnBreakdownRange=returnDetailRange;
+  returnDivSelectedMonth=null;
   showReturnPage("return-breakdown");
 }
 function renderReturnDetails(){
   if(!canViewReturnDetails(returnDetailAccount))return;
-  const id=returnDetailAccount,summary=portfolioSummary(id);
-  const dep=depositsForAccount(id);
-  const rate=dep>0?summary.total/dep*100:null;
-  document.getElementById("returnDetailAccountName").textContent=accountName(id);
-  returnSetGain(document.getElementById("returnDetailTotal"),summary.total);
-  document.getElementById("returnDetailPercent").textContent=rate!==null
-    ?`Simple return ${rate>=0?"+":""}${rate.toFixed(2)}% · All time`
-    :"Simple return unavailable without net deposits";
+  const id=returnDetailAccount,summary=portfolioSummary(id),dep=depositsForAccount(id),range=returnDetailRange;
+  document.getElementById("returnPageTitle").textContent=accountName(id);
   document.getElementById("returnCurrentValue").textContent=fmt(summary.accountValue);
   document.getElementById("returnNetDeposits").textContent=dep>0?fmt(dep):"Not entered";
-  document.getElementById("returnHoldingsValue").textContent=fmt(summary.mv);
-  document.getElementById("returnCashValue").textContent=fmt(cashForAccount(id));
+  returnSetGain(document.getElementById("returnAllTimeTotal"),summary.total);
+  document.getElementById("returnAllTimeTotal").style.color=summary.total>=0?"#168d5d":"var(--red)";
+  const rate=dep>0?summary.total/dep*100:null;
+  document.getElementById("returnDetailPercent").textContent=rate!==null?`${rate>=0?"+":""}${rate.toFixed(2)}%`:"Not available";
+  document.getElementById("returnTimeWeighted").textContent="Not available";
   returnSetGain(document.getElementById("returnUnrealizedTotal"),summary.capital);
+  document.getElementById("returnUnrealizedTotal").style.color=summary.capital>=0?"#168d5d":"var(--red)";
+  const figure=wsReturnPeriodValue(id,range),hero=document.getElementById("returnDetailTotal");
+  const caption=document.getElementById("returnPeriodCaption"),warning=document.getElementById("returnPeriodWarning");
+  if(figure.value===null){hero.textContent="—";hero.className="returnHeroAmount";}
+  else returnSetGain(hero,figure.value);
+  caption.textContent=(figure.type==="total"?"Total return":"Account value change")+" for "+wsReturnPeriodText(range);
+  warning.hidden=range==="ALL";
+  warning.textContent=figure.value===null?
+    "A reliable period return needs dated deposits and withdrawals, which this app does not yet track.":
+    "This is a change in account value, not a cash-flow-adjusted investment return."+(figure.estimated?" Some historical prices are estimated.":"");
+  document.querySelectorAll("#returnDetailRanges [data-return-period]").forEach(b=>b.classList.toggle("active",b.dataset.returnPeriod===range));
+  document.getElementById("returnRealizedCaption").textContent="Realized returns for "+wsReturnPeriodText(range);
   document.getElementById("returnRealizedTotal").textContent="Not tracked";
-  document.getElementById("returnDividendsTotal").textContent=fmt(summary.divAll);
+  const payments=returnFilteredPayments(id,range);
+  const divs=payments.reduce((s,p)=>s+(Number(p.amount)||0),0);
+  document.getElementById("returnDividendCaption").textContent="Dividends earned for "+wsReturnPeriodText(range);
+  document.getElementById("returnDividendsTotal").textContent=fmt(divs);
+  wsReturnComposition(id,range);
 }
-function returnHtmlSafe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c])}
-function returnFilteredPayments(id,range){
-  return dividendPaymentsForAccount(id).filter(p=>p.date&&inRange(p.date,range));
-}
+function returnFilteredPayments(id,range){return dividendPaymentsForAccount(id).filter(p=>p.date&&inRange(p.date,range))}
 function returnMonthlyDividendSeries(payments,range){
   const totals=new Map();
-  for(const p of payments){const k=String(p.date).slice(0,7);totals.set(k,(totals.get(k)||0)+Number(p.amount||0))}
-  const now=new Date();
-  const months=(range==="ALL")?Array.from(totals.keys()).sort():[];
-  if(range!=="ALL"){
-    const first=new Date(now);
-    if(range==="YTD")first.setMonth(0,1);
-    else first.setDate(first.getDate()-((rangeMap[range]?.days)||31));
-    const cursor=new Date(first.getFullYear(),first.getMonth(),1);
-    const last=new Date(now.getFullYear(),now.getMonth(),1);
-    while(cursor<=last){
-      months.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,"0")}`);
-      cursor.setMonth(cursor.getMonth()+1);
-    }
+  for(const p of payments){const k=String(p.date).slice(0,7);totals.set(k,(totals.get(k)||0)+(Number(p.amount)||0))}
+  const today=new Date();
+  let start;
+  if(range==="ALL"){
+    const first=[...totals.keys()].sort()[0];
+    if(!first)return [];
+    start=new Date(first+"-01T12:00:00");
+  }else if(range==="YTD")start=new Date(today.getFullYear(),0,1);
+  else{start=new Date(today);start.setDate(start.getDate()-(rangeMap[range]?.days||31));start=new Date(start.getFullYear(),start.getMonth(),1);}
+  const cursor=new Date(start.getFullYear(),start.getMonth(),1);
+  const last=new Date(today.getFullYear(),today.getMonth(),1);
+  const months=[];
+  while(cursor<=last&&months.length<180){
+    const key=`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,"0")}`;
+    months.push({key,amount:totals.get(key)||0,label:cursor.toLocaleDateString("en-CA",{month:"short"}),fullLabel:cursor.toLocaleDateString("en-CA",{month:"long",year:"numeric"})});
+    cursor.setMonth(cursor.getMonth()+1);
   }
-  return months.map(key=>({key,amount:totals.get(key)||0,label:new Date(key+"-01T12:00:00").toLocaleDateString("en-CA",{month:"short",year:range==="ALL"?"2-digit":undefined})}));
+  return months;
+}
+function wsReturnListHtml(rows){
+  return wsReturnGroupPayments(rows).map(g=>{
+    const title=market(g.ticker).title||g.ticker;
+    return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(g.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(g.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(title)}</div></div><strong class="returnDetailAmount">${fmt(g.amount)}</strong></div>`;
+  }).join("");
 }
 function renderReturnBreakdown(){
   if(!canViewReturnDetails(returnDetailAccount))return;
-  const id=returnDetailAccount,kind=returnBreakdownKind;
+  const id=returnDetailAccount,kind=returnBreakdownKind,range=returnBreakdownRange;
   const titles={realized:"Realized returns",unrealized:"Unrealized return",dividends:"Dividends earned"};
   document.getElementById("returnBreakdownTitle").textContent=titles[kind];
-  document.getElementById("returnBreakdownAccountName").textContent=accountName(id);
-  const rangeTabs=document.getElementById("returnBreakdownRanges");
-  const chartCard=document.getElementById("returnBreakdownChartCard");
-  const totalEl=document.getElementById("returnBreakdownTotal");
-  const subtitle=document.getElementById("returnBreakdownSubtitle");
-  const note=document.getElementById("returnBreakdownFootnote");
-  const body=document.getElementById("returnBreakdownRows");
-  const listTitle=document.getElementById("returnBreakdownListTitle");
-  rangeTabs.hidden=kind!=="dividends";
-  rangeTabs.style.display=kind==="dividends"?"flex":"none";
-  chartCard.style.display=kind==="dividends"?"block":"none";
+  document.querySelectorAll("#returnBreakdownRanges [data-return-range]").forEach(b=>b.classList.toggle("active",b.dataset.returnRange===range));
+  const chartCard=document.getElementById("returnBreakdownChartCard"),totalEl=document.getElementById("returnBreakdownTotal"),subtitle=document.getElementById("returnBreakdownSubtitle");
+  const note=document.getElementById("returnBreakdownFootnote"),body=document.getElementById("returnBreakdownRows"),listTitle=document.getElementById("returnBreakdownListTitle"),bars=document.getElementById("returnBreakdownBars");
+  const isDiv=kind==="dividends";
+  chartCard.style.display=(isDiv||kind==="realized")?"block":"none";
+  document.getElementById("returnBreakdownRanges").style.display=(isDiv||kind==="realized")?"flex":"none";
+  document.getElementById("returnBreakdownCurrency").style.display=isDiv||kind==="unrealized"?"inline":"none";
   if(kind==="realized"){
     totalEl.textContent="—";totalEl.className="returnHeroAmount";
-    subtitle.textContent="Sales profit is not tracked yet";
-    listTitle.textContent="Sell trade history";
-    body.innerHTML='<div class="returnEmpty">There are no recorded sell transactions in this version. The app cannot calculate realized gains yet. Do not delete a purchase lot to record a sale.</div>';
-    note.textContent="When Sell Trade is added, realized profits and closed positions can be calculated without deleting original purchases.";
+    subtitle.textContent="Realized returns for "+wsReturnPeriodText(range)+" · not tracked";
+    listTitle.textContent="Breakdown for "+wsReturnPeriodText(range);
+    bars.innerHTML='<div class="returnEmpty" style="min-width:100%;margin:auto">No sell transaction history is available</div>';
+    body.innerHTML='<div class="returnEmpty">This app does not yet record Sell transactions, so realized profits cannot be calculated. Do not delete purchase lots to record sales.</div>';
+    note.textContent="Future Sell trades will appear here when Sell support is added; no amounts have been invented.";
     return;
   }
   if(kind==="unrealized"){
-    const summary=portfolioSummary(id);
-    returnSetGain(totalEl,summary.capital);
-    subtitle.textContent="Current holdings · CAD";
-    listTitle.textContent="By holding";
+    const summary=portfolioSummary(id);returnSetGain(totalEl,summary.capital);
+    subtitle.textContent="Unrealized return · current holdings";
+    listTitle.textContent="Breakdown by holding";
     const ps=positions(id).filter(p=>Number(p.shares)>0).sort((a,b)=>Math.abs(b.mv-b.bv)-Math.abs(a.mv-a.bv));
     body.innerHTML=ps.length?ps.map(p=>{
-      const g=p.mv-p.bv,pc=p.bv>0?g/p.bv*100:0;
-      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(p.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(p.ticker)}</div><div class="returnDetailDescription">${Number(p.shares).toLocaleString()} shares · ${returnHtmlSafe(p.title)} · ${pc>=0?"+":""}${pc.toFixed(2)}%</div></div><strong class="returnDetailAmount" style="color:${g>=0?"#17a78a":"var(--red)"}">${returnSignedAmount(g)}</strong></div>`;
+      const gain=p.mv-p.bv,pc=p.bv>0?gain/p.bv*100:0;
+      return `<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(p.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(p.ticker)}</div><div class="returnDetailDescription">${returnHtmlSafe(p.title)} · ${pc>=0?"+":""}${pc.toFixed(2)}%</div></div><strong class="returnDetailAmount" style="color:${gain>=0?"#168d5d":"var(--red)"}">${returnSignedAmount(gain)}</strong></div>`;
     }).join(""):'<div class="returnEmpty">No current holdings in this account.</div>';
-    note.textContent="Unrealized return = current holdings market value minus their book value, converted to CAD. It excludes already-sold positions and dividend income.";
+    note.textContent="Current market value minus remaining holding cost; does not include cash, dividends or sold positions.";
     return;
   }
-  const paymentRows=returnFilteredPayments(id,returnBreakdownRange);
-  const dividendTotal=paymentRows.reduce((s,p)=>s+Number(p.amount||0),0);
-  totalEl.textContent=fmt(dividendTotal);
-  totalEl.className="returnHeroAmount positive";
-  subtitle.textContent=returnBreakdownRange==="ALL"?"Estimated dividends earned · All time":`Estimated dividends earned · ${rangeMap[returnBreakdownRange]?.label||returnBreakdownRange}`;
-  listTitle.textContent="By holding";
-  rangeTabs.querySelectorAll("[data-return-range]").forEach(b=>b.classList.toggle("active",b.dataset.returnRange===returnBreakdownRange));
-  const series=returnMonthlyDividendSeries(paymentRows,returnBreakdownRange);
-  const top=Math.max(1,...series.map(p=>p.amount));
-  document.getElementById("returnBreakdownBars").innerHTML=series.length?series.map(p=>`<div class="returnBarItem"><div class="returnBarArea"><div class="returnBarFill" style="height:${Math.max(3,Math.round(108*p.amount/top))}px"></div></div><div class="returnBarLabel">${returnHtmlSafe(p.label)}</div><div class="returnBarValue">${fmt0(p.amount)}</div></div>`).join(""):'<div class="returnEmpty">No distribution history in this range.</div>';
-  const grouped=new Map();
-  for(const p of paymentRows){const ticker=String(p.ticker||"");const row=grouped.get(ticker)||{ticker,amount:0,count:0};row.amount+=Number(p.amount||0);row.count+=1;grouped.set(ticker,row)}
-  const groups=[...grouped.values()].sort((a,b)=>b.amount-a.amount);
-  body.innerHTML=groups.length?groups.map(g=>`<div class="returnDetailRow"><span class="returnDetailIcon">${returnHtmlSafe(g.ticker.slice(0,2))}</span><div><div class="returnDetailName">${returnHtmlSafe(g.ticker)}</div><div class="returnDetailDescription">${g.count} distribution${g.count===1?"":"s"} · CAD estimate</div></div><strong class="returnDetailAmount">${fmt(g.amount)}</strong></div>`).join(""):'<div class="returnEmpty">No dividends recorded for this period.</div>';
-  note.textContent="Dividend amounts are calculated from available distribution dates, historical share quantities and FX rates. They are not confirmed broker cash credits. Dividends already added to Cash Holding must not be added to Net Worth again.";
+  const payments=returnFilteredPayments(id,range),series=returnMonthlyDividendSeries(payments,range);
+  if(returnDivSelectedMonth&&!series.some(x=>x.key===returnDivSelectedMonth))returnDivSelectedMonth=null;
+  const selected=returnDivSelectedMonth?series.find(p=>p.key===returnDivSelectedMonth):null;
+  const rows=selected?payments.filter(p=>String(p.date).startsWith(selected.key)):payments;
+  const amount=rows.reduce((s,p)=>s+(Number(p.amount)||0),0);
+  totalEl.textContent=fmt(amount);totalEl.className="returnHeroAmount positive";
+  subtitle.textContent=selected?`Dividends earned · ${selected.fullLabel}`:"Dividends earned for "+wsReturnPeriodText(range);
+  listTitle.textContent=selected?`Dividends for ${selected.fullLabel}`:range==="ALL"?"All time dividends":"Dividends for "+wsReturnPeriodText(range);
+  const max=Math.max(1,...series.map(x=>x.amount));
+  bars.innerHTML=series.length?series.map(p=>{
+    const active=returnDivSelectedMonth===p.key;
+    return `<button class="returnBarItem${active?" active":""}" type="button" data-return-month="${p.key}" aria-pressed="${active}" aria-label="View dividends for ${returnHtmlSafe(p.fullLabel)}"><span class="returnBarArea"><span class="returnBarFill" style="height:${Math.max(3,Math.round(136*p.amount/max))}px"></span></span><span class="returnBarLabel">${returnHtmlSafe(p.label)}</span><span class="returnBarValue">${fmt0(p.amount)}</span></button>`;
+  }).join(""):'<div class="returnEmpty" style="margin:auto">No dividend history for this period</div>';
+  body.innerHTML=wsReturnListHtml(rows)||'<div class="returnEmpty">No dividends recorded for this selection.</div>';
+  note.textContent="Dividend values are estimates based on payment dates, historic shares and foreign exchange. They are not verified brokerage cash credits. Tap a month to see that month’s holdings; tap it again to return to the full period.";
 }
 portfolioGain.addEventListener("click",()=>openReturnDetails(selectedPortfolioAccount));
 if(returnMetricCard){
@@ -6259,9 +6389,30 @@ if(returnMetricCard){
 }
 document.getElementById("returnBackBtn").onclick=()=>appGoBack("home");
 document.getElementById("returnBreakdownBackBtn").onclick=()=>appGoBack("returns");
+document.getElementById("returnExitBtn").onclick=()=>showView("home");
+document.getElementById("returnBreakdownExitBtn").onclick=()=>showReturnPage("returns");
 document.querySelectorAll("[data-return-kind]").forEach(b=>b.onclick=()=>openReturnBreakdown(b.dataset.returnKind));
+document.querySelectorAll("#returnDetailRanges [data-return-period]").forEach(b=>b.onclick=()=>{
+  const next=b.dataset.returnPeriod;if(!WS_RETURN_PERIODS.includes(next))return;
+  returnDetailRange=next;renderReturnDetails();
+  // Reuse the investment chart's existing historical pricing pipeline (read-only).
+  if(selectedPortfolioAccount===returnDetailAccount && next!=="ALL"){
+    currentPortfolioRange=next;
+    document.querySelectorAll("#portfolioRanges button").forEach(x=>x.classList.toggle("active",String(x.textContent||"").trim()===next));
+    loadPortfolioHistory(next,{quiet:true}).then(()=>{
+      if(returnDetailView?.classList.contains("active")&&returnDetailRange===next)renderReturnDetails();
+    }).catch(()=>{});
+  }
+});
 document.querySelectorAll("#returnBreakdownRanges [data-return-range]").forEach(b=>b.onclick=()=>{
-  returnBreakdownRange=b.dataset.returnRange;
+  const next=b.dataset.returnRange;if(!WS_RETURN_PERIODS.includes(next))return;
+  returnBreakdownRange=next;returnDivSelectedMonth=null;renderReturnBreakdown();
+});
+document.getElementById("returnBreakdownBars").addEventListener("click",event=>{
+  const target=event.target.closest?.("[data-return-month]");
+  if(!target||returnBreakdownKind!=="dividends")return;
+  const next=target.dataset.returnMonth;
+  returnDivSelectedMonth=returnDivSelectedMonth===next?null:next;
   renderReturnBreakdown();
 });
 
@@ -6461,7 +6612,7 @@ let appCurrentRoute="networth";
 let appRouteCounter=0;
 const APP_ROUTES=new Set(["home","div","networth","transactions","stats","cibc","manual","holding","returns","return-breakdown"]);
 function appRouteSnapshot(route){
-  return {__portfolioRoute:true,route,accountId:(route==="returns"||route==="return-breakdown")?returnDetailAccount:(currentManualDetailId||null),returnKind:returnBreakdownKind,ticker:currentDetailTicker||null,origin:cibcFundReturnView||"networth",serial:++appRouteCounter};
+  return {__portfolioRoute:true,route,accountId:(route==="returns"||route==="return-breakdown")?returnDetailAccount:(currentManualDetailId||null),returnKind:returnBreakdownKind,returnDetailRange,returnBreakdownRange,ticker:currentDetailTicker||null,origin:cibcFundReturnView||"networth",serial:++appRouteCounter};
 }
 function appRecordRoute(route){
   if(!APP_ROUTES.has(route))return;
@@ -6496,6 +6647,8 @@ window.addEventListener("popstate",event=>{
     if(state.route==="returns"||state.route==="return-breakdown"){
       returnDetailAccount=canViewReturnDetails(state.accountId)?state.accountId:selectedPortfolioAccount;
       if(state.route==="return-breakdown")returnBreakdownKind=["realized","unrealized","dividends"].includes(state.returnKind)?state.returnKind:"dividends";
+      if(WS_RETURN_PERIODS.includes(state.returnDetailRange))returnDetailRange=state.returnDetailRange;
+      if(WS_RETURN_PERIODS.includes(state.returnBreakdownRange))returnBreakdownRange=state.returnBreakdownRange;
       showReturnPage(state.route);
     }else if(state.route==="cibc")openCibcFundDetail(state.origin||"networth");
     else if(state.route==="manual" && getManualAccount(state.accountId))openManualAccountDetail(state.accountId);
@@ -6515,6 +6668,7 @@ document.addEventListener("keydown",event=>{
 });
 function showView(name){
   if(name==="returns"||name==="return-breakdown"){showReturnPage(name);return}
+  document.body.classList.remove("wsReturnOpen");
   cancelValueChartGestures();
   document.body.classList.remove("manualDetailOpen");
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
