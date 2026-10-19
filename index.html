@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.3 Investment return and quote on separate lines; preserves Sell Trades, dividends and cloud sync -->
+<!-- 5.25.4 Sell Trade compact date and automatic USD/CAD; preserves Investment layout and protected sync -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3367,7 +3367,18 @@ body.wsReturnOpen nav.bottom{display:none!important}
 #sellModal .field input,#sellModal .field select{min-height:56px;padding:12px 14px;font-size:17px}
 #sellModal .primary{min-height:54px;margin-top:16px}
 #sellModal .note{font-size:12px;line-height:1.55;margin:12px 2px 4px}
-#sellFxField[hidden]{display:none!important}
+/* Same date control as Add Lot. iOS native date text must never widen the sheet. */
+#sellModal .sheet{min-width:0;overflow-x:hidden}
+#sellModal .field{min-width:0;max-width:100%}
+#sellModal .field input,#sellModal .field select{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+#sellModal .compactDateField{width:100%;max-width:100%;min-width:0;height:56px;min-height:56px}
+#sellDateDisplay{font-size:17px;font-weight:650;letter-spacing:.1px;color:var(--text)}
+#sellModal .compactDateField #sellDate{
+  position:absolute;inset:0;width:100%;max-width:100%;height:100%;min-height:0!important;
+  margin:0;padding:0!important;border:0;opacity:.001;cursor:pointer;
+  appearance:none;-webkit-appearance:none
+}
+#sellPreviewNativeRow[hidden]{display:none!important}
 .sellAvailability{color:#767b7e;font-size:12px;line-height:1.5;margin-top:6px;font-weight:650}
 .sellAvailability.error{color:#c73744}
 .sellPreview{border:1px solid var(--line);border-radius:17px;background:#f8f9f8;padding:14px 16px;margin-top:14px}
@@ -4040,22 +4051,28 @@ body.wsReturnOpen nav.bottom{display:none!important}
         <option value="questrade_tfsa">Questrade TFSA</option><option value="questrade_cash">Questrade Cash</option></select>
     </div>
     <div class="field"><label for="sellTicker">Holding</label><select id="sellTicker"></select></div>
-    <div class="field"><label for="sellDate">Trade Date</label><input id="sellDate" type="date" aria-label="Sale date"/></div>
+    <div class="field">
+      <label for="sellDate">Trade Date</label>
+      <div class="compactDateField">
+        <span id="sellDateDisplay">YYYY-MM-DD</span>
+        <span class="dateIcon" aria-hidden="true">&#9635;</span>
+        <input id="sellDate" type="date" aria-label="Sale date"/>
+      </div>
+    </div>
     <div class="field"><label for="sellShares">Shares Sold</label><input id="sellShares" type="number" min="0" step="any" inputmode="decimal" placeholder="10"/>
       <div class="sellAvailability" id="sellAvailable" role="status">Select an account and holding.</div></div>
     <div class="field"><label for="sellPrice">Sale Price / Share</label><input id="sellPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="25.00"/></div>
     <div class="field"><label for="sellFee">Trading Fee (same currency)</label><input id="sellFee" type="number" min="0" step="any" inputmode="decimal" value="0"/></div>
-    <div class="field" id="sellFxField" hidden><label for="sellFx">USD/CAD Exchange Rate for Realized Gain</label>
-      <input id="sellFx" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="1.4000"/></div>
     <div class="sellPreview" aria-live="polite">
       <div class="sellPreviewRow"><span>Net sale proceeds</span><strong id="sellPreviewProceeds">—</strong></div>
       <div class="sellPreviewRow"><span>Average cost basis</span><strong id="sellPreviewBasis">—</strong></div>
+      <div class="sellPreviewRow" id="sellPreviewNativeRow" hidden><span>Realized profit / loss (USD)</span><strong id="sellPreviewNativeGain">—</strong></div>
       <div class="sellPreviewRow"><span>Realized profit / loss (CAD)</span><strong id="sellPreviewGain">—</strong></div>
       <div class="sellPreviewStatus" id="sellPreviewStatus"></div>
     </div>
     <button class="primary" id="saveSellTrade" type="button">Save Sell Trade</button>
     <p class="note"><strong>Cash Holding is manual.</strong> Saving a sale reduces your shares and records realized profit, but does not credit the proceeds to Cash Holding. After the trade settles, update the cash balance in Settings once. This prevents double counting.</p>
-    <p class="note">Profit uses weighted average purchase cost. USD profit is converted using the rate above; this is an investment estimate, not a Canadian tax ACB report.</p>
+    <p class="note">Enter USD prices and fees for USD trades. Profit stays in USD; its CAD equivalent is calculated automatically using market FX for portfolio reporting. Wealthsimple's actual conversion rate may differ. This is not a Canadian tax ACB report.</p>
   </div>
 </div>
 
@@ -4148,7 +4165,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.3 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.4 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4340,15 +4357,16 @@ var closeSellModal=document.getElementById("closeSellModal");
 var sellAccount=document.getElementById("sellAccount");
 var sellTicker=document.getElementById("sellTicker");
 var sellDate=document.getElementById("sellDate");
+var sellDateDisplay=document.getElementById("sellDateDisplay");
 var sellShares=document.getElementById("sellShares");
 var sellPrice=document.getElementById("sellPrice");
 var sellFee=document.getElementById("sellFee");
-var sellFx=document.getElementById("sellFx");
-var sellFxField=document.getElementById("sellFxField");
 var sellAvailable=document.getElementById("sellAvailable");
 var sellPreviewProceeds=document.getElementById("sellPreviewProceeds");
 var sellPreviewBasis=document.getElementById("sellPreviewBasis");
 var sellPreviewGain=document.getElementById("sellPreviewGain");
+var sellPreviewNativeRow=document.getElementById("sellPreviewNativeRow");
+var sellPreviewNativeGain=document.getElementById("sellPreviewNativeGain");
 var sellPreviewStatus=document.getElementById("sellPreviewStatus");
 var saveSellTrade=document.getElementById("saveSellTrade");
 var homeMonthStrip=document.getElementById("homeMonthStrip");
@@ -6098,10 +6116,19 @@ function sharesHeldOn(ticker,dateStr,accountId="all",dividendEntitlement=false){
   return Math.max(0,bought-sold);
 }
 function fxAtDate(dateStr){
-  if(!fxHistory.length)return fx;
-  let best=null;
-  for(const p of fxHistory){ if(p.date<=dateStr)best=p; else break; }
-  return best && Number(best.close)>0 ? Number(best.close) : fx;
+  // FX history rows are returned with Unix `time`, not necessarily a `date`.
+  // Use the latest recorded daily rate on or before the trade date.
+  const target=String(dateStr||localDateISO()).slice(0,10);
+  let bestDate="",bestRate=0;
+  for(const p of fxHistory){
+    const rate=Number(p.close);
+    if(!(rate>0))continue;
+    const stamp=Number(p.time);
+    const date=typeof p.date==="string"?p.date.slice(0,10):
+      Number.isFinite(stamp)&&stamp>0?new Date(stamp*(stamp>1e12?1:1000)).toISOString().slice(0,10):"";
+    if(date && date<=target && date>=bestDate){bestDate=date;bestRate=rate;}
+  }
+  return bestRate>0?bestRate:fx;
 }
 function rebuildDividendPayments(){
   const out=[];
@@ -8741,13 +8768,10 @@ function sellRefreshTickers(preferredTicker=null){
     const eligible=availableTickers.find(t=>holdingTradeState(account,t,date).shares>1e-8);
     if(eligible)sellTicker.value=eligible;
   }
-  sellUpdateFx();sellUpdatePreview();
+  sellUpdatePreview();
 }
-function sellUpdateFx(){
-  const ticker=sellTicker.value;
-  const isUSD=ticker && market(ticker).currency==="USD";
-  sellFxField.hidden=!isUSD;
-  sellFx.value=isUSD?Number(fxAtDate(sellDate.value||localDateISO())).toFixed(4):"1";
+function sellSyncDateDisplay(){
+  sellDateDisplay.textContent=sellDate.value||"YYYY-MM-DD";
 }
 function sellUpdatePreview(){
   const ticker=sellTicker.value,account=sellAccount.value,date=sellDate.value;
@@ -8756,25 +8780,32 @@ function sellUpdatePreview(){
   sellAvailable.textContent=ticker?`Available on ${date||"selected date"}: ${Number(available.toFixed(6)).toLocaleString()} shares`:"No eligible holding selected.";
   sellAvailable.classList.toggle("error",Boolean(state?.error));
   const shares=Number(sellShares.value),price=Number(sellPrice.value),fee=Number(sellFee.value);
-  const currency=ticker?market(ticker).currency:"CAD",rate=currency==="USD"?Number(sellFx.value):1;
+  const currency=ticker?market(ticker).currency:"CAD";
+  const rate=currency==="USD"?Number(fxAtDate(date)):1;
+  sellPreviewNativeRow.hidden=currency!=="USD";
   const valid=ticker&&date&&shares>0&&Number.isFinite(shares)&&shares<=available+1e-7&&
     sellPrice.value.trim()!==""&&Number.isFinite(price)&&price>=0&&Number.isFinite(fee)&&fee>=0&&rate>0;
   if(valid){
-    const proceeds=shares*price-fee,basis=shares*state.avg,gain=(proceeds-basis)*rate;
+    const proceeds=shares*price-fee,basis=shares*state.avg,nativeGain=proceeds-basis,gain=nativeGain*rate;
     sellPreviewProceeds.textContent=fmtNativePrice(proceeds,currency);
     sellPreviewBasis.textContent=fmtNativePrice(basis,currency);
+    if(currency==="USD"){
+      sellPreviewNativeGain.textContent=(nativeGain>=0?"+":"-")+fmtNativePrice(Math.abs(nativeGain),"USD");
+      sellPreviewNativeGain.className=nativeGain>=0?"positive":"negative";
+    }
     sellPreviewGain.textContent=returnSignedAmount(gain);
     sellPreviewGain.className=gain>=0?"positive":"negative";
     sellPreviewStatus.textContent="";
   }else{
-    sellPreviewProceeds.textContent="—";sellPreviewBasis.textContent="—";sellPreviewGain.textContent="—";
-    sellPreviewGain.className="";
+    sellPreviewProceeds.textContent="\u2014";sellPreviewBasis.textContent="\u2014";sellPreviewGain.textContent="\u2014";
+    sellPreviewNativeGain.textContent="\u2014";
+    sellPreviewGain.className="";sellPreviewNativeGain.className="";
     sellPreviewStatus.textContent=state?.error||(!ticker?"Choose a holding with purchase lots.":shares>available+1e-7?"Cannot sell more shares than held on this trade date.":"");
   }
   saveSellTrade.disabled=!valid||Boolean(state?.error)||date>localDateISO();
 }
 function openSellModal(ticker=null){
-  const date=localDateISO();sellDate.value=date;sellDate.max=date;
+  const date=localDateISO();sellDate.value=date;sellDate.max=date;sellSyncDateDisplay();
   const eligible=sellEligibleAccounts(ticker,date);
   if(!eligible.length){alert(ticker?"No shares available to sell in this holding.":"Add a purchase lot before recording a Sell Trade.");return;}
   sellAccount.value=eligible.includes(selectedPortfolioAccount)?selectedPortfolioAccount:eligible[0];
@@ -8786,9 +8817,11 @@ if(holdingsSellTradeBtn)holdingsSellTradeBtn.onclick=()=>openSellModal();
 if(closeSellModal)closeSellModal.onclick=closeSellModalFn;
 sellModal.onclick=e=>{if(e.target===sellModal)closeSellModalFn()};
 sellAccount.addEventListener("change",()=>sellRefreshTickers());
-sellTicker.addEventListener("change",()=>{sellUpdateFx();sellUpdatePreview()});
-sellDate.addEventListener("change",()=>{sellUpdateFx();sellUpdatePreview()});
-for(const input of [sellShares,sellPrice,sellFee,sellFx])input.addEventListener("input",sellUpdatePreview);
+sellTicker.addEventListener("change",sellUpdatePreview);
+function sellOnDateChanged(){sellSyncDateDisplay();sellUpdatePreview();}
+sellDate.addEventListener("change",sellOnDateChanged);
+sellDate.addEventListener("input",sellOnDateChanged);
+for(const input of [sellShares,sellPrice,sellFee])input.addEventListener("input",sellUpdatePreview);
 function refreshAfterSellTrade(){
   rebuildDividendPayments();chartCache.clear();portfolioChartRequestSeq++;
   recordAccountObservation();renderHome();renderNetWorth();
@@ -8807,10 +8840,10 @@ function deleteSellTradeById(id){
 saveSellTrade.onclick=()=>{
   const ticker=sellTicker.value,accountId=sellAccount.value,date=sellDate.value;
   const shares=Number(sellShares.value),price=Number(sellPrice.value),fee=Number(sellFee.value);
-  const currency=market(ticker).currency,fxRate=currency==="USD"?Number(sellFx.value):1;
+  const currency=market(ticker).currency,fxRate=currency==="USD"?Number(fxAtDate(date)):1;
   if(!ticker||!date||date>localDateISO()||!(shares>0)||!Number.isFinite(shares)||
      sellPrice.value.trim()===""||!(price>=0)||!Number.isFinite(price)||!(fee>=0)||!Number.isFinite(fee)||!(fxRate>0)){
-    alert("Check the date, shares, price, fee and exchange rate.");return;
+    alert("Check the date, shares, price and fee.");return;
   }
   const id=globalThis.crypto?.randomUUID?.()||`sell_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const trade={id,ticker,accountId,date,shares,price,fee,currency,fxRate,createdAt:Date.now()};
@@ -8819,7 +8852,10 @@ saveSellTrade.onclick=()=>{
   if(state.error){alert(state.error);return;}
   const recorded=state.realized.find(t=>t.id===id);
   if(!recorded){alert("Unable to calculate this sale. Nothing was saved.");return;}
-  const message=`Record this Sell Trade?\n\n${accountName(accountId)} · ${ticker}\n${shares} shares × ${fmtNativePrice(price,currency)}\nNet proceeds: ${fmtNativePrice(recorded.proceedsNative,currency)}\nRealized gain: ${returnSignedAmount(recorded.realizedCAD)} CAD\n\nCash Holding will NOT be changed. Update it in Settings after settlement.`;
+  const nativeGain=(recorded.realizedNative>=0?"+":"-")+fmtNativePrice(Math.abs(recorded.realizedNative),currency);
+  const gainLabel=currency==="USD"?`${nativeGain} USD / ${returnSignedAmount(recorded.realizedCAD)} CAD`:
+    `${returnSignedAmount(recorded.realizedCAD)} CAD`;
+  const message=`Record this Sell Trade?\n\n${accountName(accountId)} \u00b7 ${ticker}\n${shares} shares \u00d7 ${fmtNativePrice(price,currency)}\nNet proceeds: ${fmtNativePrice(recorded.proceedsNative,currency)}\nRealized gain: ${gainLabel}\n\nCash Holding will NOT be changed. Update it in Settings after settlement.`;
   if(!confirm(message))return;
   sellTrades=proposed;
   try{saveSellTradesSafe()}catch(e){sellTrades=sellTrades.filter(t=>t.id!==id);alert("Sell Trade was NOT saved: "+String(e?.message||e));return;}
