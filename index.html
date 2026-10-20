@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.7: + Add Lot / minus Sell Trade UI consistent across Investment and Holding -->
+<!-- 5.25.9: trade-day cash/share reconciliation for intraday charts -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -4032,7 +4032,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.7 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.9 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4764,6 +4764,10 @@ function accountCashAt(accountId,t){
 function recordAccountObservation(){
   const observations=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{}),now=Date.now()/1000,date=chartDateKey(now);
   for(const id of ["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)]){
+    // Between recording a buy/sale and manually reconciling Cash Holding,
+    // the displayed balance is transient, not a market observation.
+    const tradeDay= id==="cibc_mutual_fund"?null:tradeDayObservedPortfolioRows(id,date);
+    if(tradeDay&&!tradeDay.reconciled)continue;
     const summary=portfolioSummary(id);if(summary.ps.some(p=>!(p.price>0)))continue;
     const entry=observations[id]||(observations[id]={daily:[],intraday:[]});
     const row={date,time:now,value:summary.accountValue,cash:cashForAccount(id),basis:depositsForAccount(id),source:"Observed account value"};
@@ -4795,20 +4799,32 @@ function previousRecordedPortfolioValue(id,date=chartDateKey(Date.now()/1000)){
   const gap=(chartDayTime(date)-chartDayTime(previous.date))/86400;
   return gap>0&&gap<=7?previous:null;
 }
-// A Sell Trade changes the number of shares immediately, but Cash Holding is
-// updated separately. Between these TWO manual saves the observed account
-// value is incomplete (or double-counted if cash was entered first).
-// Never turn that temporary state into a 1D market gain or a price-chart spike.
+// Buys and sells are entered separately from the manual Cash Holding change.
+// A date-only buy may appear to be held since 9:30 AM, even though its cash
+// deduction was recorded later; that otherwise creates a fictitious 1D crash.
+// A transfer is verified only against an actual, matching cash-history delta.
+// If it cannot be verified, prefer an unavailable chart to fabricated P&L.
 function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
-  const trades=realizedTradesForAccount(id).filter(t=>t.date===date&&Number(t.createdAt)>0);
-  if(!trades.length)return null;
+  const sales=realizedTradesForAccount(id).filter(t=>t.date===date&&Number(t.createdAt)>0);
+  const buys=lotsForAccount(id).filter(l=>l.date===date&&!l.openingPosition&&!l.positionAdjustment&&Number(l.shares)>0);
+  if(!sales.length&&!buys.length)return null;
   const histories=readLocalJSON(INVESTMENT_CASH_HISTORY_KEY,{});
-  const used=new Set(),invalidWindows=[];
+  const used=new Set(),invalidWindows=[],transitions=[];
+  const cashRowsFor=accountId=>(histories[accountId]||[])
+    .filter(p=>chartFinite(p.time)&&chartFinite(p.value))
+    .slice().sort((a,b)=>Number(a.time)-Number(b.time));
+  const markWindow=(when,cashAt,previousCashAt=null)=>{
+    // Old lots have no precise creation time: exclude observations since the
+    // preceding cash anchor instead of trusting an inflated intermediate value.
+    const earlier=Number(when)>0?Number(when):Number(previousCashAt)||Number(cashAt);
+    invalidWindows.push({start:Math.floor(Math.min(earlier,Number(cashAt))/60)*60,
+      end:Math.ceil(Math.max(earlier,Number(cashAt))/60)*60});
+  };
   let reconciled=true;
-  for(const trade of trades){
-    const cashRows=(histories[trade.accountId]||[]).filter(p=>chartFinite(p.time)&&chartFinite(p.value))
-      .slice().sort((a,b)=>Number(a.time)-Number(b.time));
-    const saleAt=Number(trade.createdAt)/1000;
+
+  // Keep the existing sale-proceeds matching, now with typed transitions.
+  for(const trade of sales){
+    const cashRows=cashRowsFor(trade.accountId),saleAt=Number(trade.createdAt)/1000;
     const proceeds=Number(trade.proceedsCAD);
     if(!(proceeds>0)){reconciled=false;break;}
     let match=null,bestScore=Infinity;
@@ -4817,41 +4833,91 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
       const delta=Number(row.value)-Number(previous.value);
       const key=trade.accountId+"|"+row.time;
       const distance=Math.abs(Number(row.time)-saleAt);
-      // An actual cash update, not an arbitrary observation, must reconcile
-      // approximately to the sale proceeds. Allow FX and balance rounding.
-      if(used.has(key)||distance>36*3600||Math.abs(delta-proceeds)>Math.max(30,Math.abs(proceeds)*0.2))continue;
+      if(used.has(key)||!(delta>0)||distance>36*3600||Math.abs(delta-proceeds)>Math.max(30,Math.abs(proceeds)*0.2))continue;
       const score=Math.abs(delta-proceeds)/Math.max(1,Math.abs(proceeds))+distance/(36*3600)*0.05;
-      if(score<bestScore){bestScore=score;match=row;}
+      if(score<bestScore){bestScore=score;match={row,previous};}
     }
     if(!match){reconciled=false;break;}
-    used.add(trade.accountId+"|"+match.time);
-    const start=Math.floor(Math.min(saleAt,Number(match.time))/60)*60;
-    const end=Math.ceil(Math.max(saleAt,Number(match.time))/60)*60;
-    invalidWindows.push({start,end,ticker:trade.ticker,shares:Number(trade.shares),cashAt:Number(match.time)});
+    used.add(trade.accountId+"|"+match.row.time);
+    const cashAt=Number(match.row.time);
+    transitions.push({kind:"sell",ticker:trade.ticker,accountId:trade.accountId,
+      shares:Number(trade.shares),cashAt});
+    markWindow(saleAt,cashAt,match.previous.time);
   }
-  if(!reconciled)return {rows:[],reconciled:false,transitions:[]};
+
+  // Match today's purchase(s) against negative cash changes. Permit one cash
+  // edit covering multiple Add Lots, or separate cash edits for separate lots.
+  if(reconciled){
+    const accounts=[...new Set(buys.map(l=>l.accountId||DEFAULT_INVESTMENT_ACCOUNT))];
+    for(const accountId of accounts){
+      const cashRows=cashRowsFor(accountId);
+      const pending=buys.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)===accountId)
+        .map(l=>({ticker:l.ticker,shares:Number(l.shares),
+          amount:Number(l.shares)*Number(l.cost)*(market(l.ticker).currency==="USD"?fxAtDate(l.date):1),
+          at:Number(l.createdAt)>0?Number(l.createdAt)/1000:0}))
+        .sort((a,b)=>(a.at||0)-(b.at||0));
+      if(pending.some(b=>!(b.amount>0))){reconciled=false;break;}
+      while(pending.length){
+        let best=null,bestScore=Infinity;
+        for(let i=1;i<cashRows.length;i++){
+          const row=cashRows[i],previous=cashRows[i-1];
+          const key=accountId+"|"+row.time;
+          const paid=Number(previous.value)-Number(row.value);
+          if(used.has(key)||!(paid>0)||chartDateKey(Number(row.time))!==date)continue;
+          for(let first=0;first<pending.length;first++){
+            let amount=0;
+            for(let last=first;last<pending.length;last++){
+              amount+=pending[last].amount;
+              const entries=pending.slice(first,last+1);
+              const dates=entries.map(x=>x.at).filter(t=>t>0);
+              const when=dates.length?Math.min(...dates):0;
+              const distance=when>0?Math.abs(Number(row.time)-when):0;
+              if(distance>36*3600)continue;
+              const difference=Math.abs(paid-amount);
+              if(difference>Math.max(5,amount*0.15))continue;
+              const score=difference/Math.max(1,amount)+distance/(36*3600)*0.05+(entries.length-1)*0.002;
+              if(score<bestScore){bestScore=score;best={row,previous,first,last,entries,when};}
+            }
+          }
+        }
+        if(!best){reconciled=false;break;}
+        used.add(accountId+"|"+best.row.time);
+        const cashAt=Number(best.row.time);
+        for(const buy of best.entries){
+          transitions.push({kind:"buy",ticker:buy.ticker,accountId,
+            shares:buy.shares,cashAt});
+        }
+        markWindow(best.when,cashAt,best.previous.time);
+        pending.splice(best.first,best.last-best.first+1);
+      }
+      if(!reconciled)break;
+    }
+  }
+  if(!reconciled)return {rows:[],date,reconciled:false,transitions:[],hasBuys:buys.length>0,hasSales:sales.length>0};
   const rows=currentCashChartRows(id,"1D")
     .filter(p=>!invalidWindows.some(w=>p.time>=w.start&&p.time<=w.end));
-  // A current observed balance can close the chart after a manual update.
-  // It is never substituted for an older market quotation.
+  // Only a reconciled current balance is a valid new account observation.
   const now=Math.floor(Date.now()/60000)*60,latest=rows.at(-1)?.time||0;
   if(now>latest&&chartDateKey(now)===date){
     const value=portfolioSummary(id).accountValue;
-    if(Number.isFinite(value))rows.push({time:now,date,value,source:"Current saved account value"});
+    if(Number.isFinite(value))rows.push({time:now,date,value,source:"Current reconciled account value"});
   }
-  return {rows:chartPrepare(rows,"intraday"),reconciled:true,transitions:invalidWindows};
+  return {rows:chartPrepare(rows,"intraday"),date,reconciled:true,
+    transitions,hasBuys:buys.length>0,hasSales:sales.length>0};
 }
-// Trade dates are day-only. For intraday chart reconstruction, hold sold shares
-// until the corresponding manual cash update, then switch to cash at the same
-// recorded timestamp. The sale proceeds are never counted twice.
+// End-of-day sharesHeldOn() includes every purchase and sale for its date.
+// For a 1D market chart, reconstruct the shares actually backed by cash at
+// each timestamp, treating a verified cash edit as the transfer boundary.
 function intradaySharesWithSales(ticker,date,accountId,time,tradeDay){
   let shares=sharesHeldOn(ticker,date,accountId);
-  if(tradeDay?.reconciled){
+  if(tradeDay?.reconciled&&tradeDay.date===date){
     for(const transfer of tradeDay.transitions){
-      if(transfer.ticker===ticker && time<transfer.cashAt)shares+=transfer.shares;
+      if(transfer.ticker!==ticker||time>=transfer.cashAt)continue;
+      if(accountId!=="all"&&transfer.accountId!==accountId)continue;
+      shares+=transfer.kind==="sell"?transfer.shares:-transfer.shares;
     }
   }
-  return shares;
+  return Math.max(0,shares);
 }
 function cifNavRows(range){
   const dates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
@@ -5027,10 +5093,9 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
   updateValueSource();if(!keepChart)setPortfolioChartNote("");
   if(!quiet){lineChart.innerHTML='<div class="unifiedEmpty">Loading history...</div>';}
   const allTime=()=>setPortfolioPeriodGain(portfolioSummary(id).total,"ALL");
-  // A dated sale removes shares from the entire day in sharesHeldOn().
-  // When cash anchors verify the transfer, Yahoo intraday history can still
-  // be drawn by switching from shares to cash at the recorded cash update.
-  // Otherwise use only verified account observations, never a false spike.
+  // A dated purchase/sale changes sharesHeldOn() for the entire day.
+  // Reconstruct the cash-backed share quantity for each quote timestamp.
+  // If the manual cash correction is still pending, show no synthetic spike.
   const tradeDay=range==="1D"&&id!=="cibc_mutual_fund"?tradeDayObservedPortfolioRows(id):null;
   function renderTradeDayObservations(){
     if(!tradeDay)return false;
@@ -5049,8 +5114,8 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     activeChartPayload={id,range,rows,reconciled:tradeDay.reconciled,tradeDay:true};
     renderLineChart(rows,null,{grain:"intraday"});
     setPortfolioChartNote(tradeDay.reconciled
-      ?"Recorded account values · Sell Trade day (cash transfer excluded)"
-      :"1D history unavailable: Sell Trade cash update cannot be verified");
+      ?"Recorded account values · trade day (cash transfer excluded)"
+      :"1D history unavailable: trade cash update cannot be verified");
     return true;
   }
   if(tradeDay&&(!tradeDay.reconciled||!marketApiBase)){
@@ -5417,7 +5482,7 @@ function cloudBuildModel(){
   }
   const cibc=(Array.isArray(CIBC_MUTUAL_FUNDS)?CIBC_MUTUAL_FUNDS:[]).map(f=>({
     ticker:String(f.ticker||"").toUpperCase(),name:String(f.name||""),units:Number(f.units)||0,
-    bookValue:Number(f.bookValue)||0,lastPrice:Number(f.displayPrice)||0
+    bookValue:Number(f.bookValue)||0,lastPrice:Number(f.displayPrice)||0,lastPriceDate:String(f.priceDate||"")
   }));
   let currentSnapshot=null;
   try{
@@ -5436,7 +5501,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.7",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.9",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -5578,6 +5643,7 @@ const CIBC_MUTUAL_FUNDS=[
   {ticker:"ATL525",name:"CIBC U.S. Equity Fund, Class A",units:201.869,bookValue:5194.48,marketValue:8362.74,displayPrice:41.43,priceDate:"2026-10-09",priceSource:"CIBC statement"}
 ];
 let cibcFundNavFetchedAt=0;
+let cibcNavRefreshFailed=false;
 // Persist only observed, dated NAVs. No interpolation or fictitious historical prices.
 const CIBC_NAV_HISTORY_KEY="cibcMutualFundNavHistoryV1";
 const CIBC_NAV_SEED={
@@ -6034,14 +6100,20 @@ async function refreshCibcFundPrices(render=true){
   if(!marketApiBase)return false;
   try{
     const data=await apiCibcFunds();
+    cibcNavRefreshFailed=false;
     let changed=false;
     for(const row of (data.funds||[])){
       const f=CIBC_MUTUAL_FUNDS.find(x=>x.ticker===String(row.ticker||"").toUpperCase());
-      const px=Number(row.price);
-      if(!f||!(px>0))continue;
+      const px=Number(row.price),date=String(row.date||"").trim();
+      if(!f||!(px>0)||!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+      const time=Date.parse(`${date}T12:00:00Z`);
+      if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,10)!==date||time>Date.now()+36*3600000)continue;
+      // Never let a delayed provider overwrite a newer saved NAV.
+      if(f.priceDate&&date<f.priceDate)continue;
+      if(date===f.priceDate&&Math.abs(px-Number(f.displayPrice))<0.000001)continue;
       f.displayPrice=px;
       f.marketValue=Number((px*Number(f.units)).toFixed(2));
-      f.priceDate=row.date||f.priceDate;
+      f.priceDate=date;
       f.priceSource=row.source||"Auto NAV";
       recordCibcNav(f.ticker,f.priceDate,px,f.priceSource);
       changed=true;
@@ -6058,6 +6130,7 @@ async function refreshCibcFundPrices(render=true){
     return changed;
   }catch(err){
     console.warn("CIBC mutual-fund NAV refresh failed",err);
+    cibcNavRefreshFailed=true;
     if(cibcFundNavStatus && cibcFundView?.classList.contains("active")){
       cibcFundNavStatus.textContent="Daily NAV · using last saved price";
       cibcFundNavStatus.classList.remove("live");
@@ -8306,6 +8379,20 @@ function renderNetWorth(){
   document.querySelectorAll('.investmentAccountRow').forEach(row=>row.onclick=()=>{setSelectedPortfolioAccount(row.dataset.investmentAccount);showView('home')});
   document.querySelectorAll('.manualAccountRow').forEach(row=>row.onclick=()=>openManualAccountDetail(row.dataset.manualId));
 }
+function cibcNavBusinessDaysSince(date){
+  const from=Date.parse(`${date}T12:00:00Z`);
+  if(!Number.isFinite(from))return 0;
+  const parts=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"America/Toronto",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+  // Count only market days whose after-close NAV could have been published.
+  const today=Date.parse(`${parts.year}-${parts.month}-${parts.day}T12:00:00Z`);
+  const through=today-(Number(parts.hour)<19?86400000:0);
+  let days=0;
+  for(let at=from+86400000;at<=through&&days<100;at+=86400000){
+    const weekday=new Date(at).getUTCDay();
+    if(weekday!==0&&weekday!==6)days++;
+  }
+  return days;
+}
 function renderCibcFundDetail(){
   const s=cibcMutualFundSummary();
   cibcFundBalance.textContent=fmt(s.marketValue);
@@ -8315,10 +8402,14 @@ function renderCibcFundDetail(){
   cibcFundGainCard.textContent=signedMoney(s.gain);
   cibcFundGainCard.style.color=s.gain>=0?"var(--teal)":"var(--red)";
   const latestDates=CIBC_MUTUAL_FUNDS.map(f=>f.priceDate).filter(Boolean).sort();
-  const latestDate=latestDates.length?latestDates[latestDates.length-1]:null;
+  const oldestDate=latestDates[0]||null;
+  const newestDate=latestDates[latestDates.length-1]||null;
+  const dateLabel=oldestDate===newestDate?cibcDateLabel(oldestDate):`${cibcDateLabel(oldestDate)} – ${cibcDateLabel(newestDate)}`;
+  const delayed=Boolean(oldestDate&&cibcNavBusinessDaysSince(oldestDate)>=2);
   if(cibcFundNavStatus){
-    cibcFundNavStatus.textContent=`Daily NAV · ${cibcDateLabel(latestDate)} · Auto update`;
-    cibcFundNavStatus.classList.toggle("live",Boolean(cibcFundNavFetchedAt));
+    const state=cibcNavRefreshFailed?"using saved NAV":delayed?"source delayed":cibcFundNavFetchedAt?"Auto update":"saved NAV";
+    cibcFundNavStatus.textContent=`Daily NAV · ${dateLabel} · ${state}`;
+    cibcFundNavStatus.classList.toggle("live",Boolean(cibcFundNavFetchedAt)&&!delayed&&!cibcNavRefreshFailed);
   }
   cibcFundHoldings.innerHTML=CIBC_MUTUAL_FUNDS.map(f=>{
     const gain=f.marketValue-f.bookValue;
@@ -8669,7 +8760,11 @@ saveLot.onclick=()=>{
   const ticker=fTicker.value.trim().toUpperCase(), shares=Number(fShares.value), cost=Number(fCost.value), date=fDate.value;
   if(!ticker||!date||date>localDateISO()||!Number.isFinite(shares)||!(shares>0)||!Number.isFinite(cost)||!(cost>=0)||fCost.value.trim()===""){alert("Enter a valid ticker, non-future date, shares and cost/share.");return}
   const accountId=fAccount?.value||DEFAULT_INVESTMENT_ACCOUNT;
-  lots.push({ticker,date,shares,cost,accountId});
+  // A buy and its manual Cash Holding correction are two separate saves.
+  // Preserve the cash/portfolio baseline before adding today's new shares.
+  recordCashAnchor();
+  recordAccountObservation();
+  lots.push({ticker,date,shares,cost,accountId,createdAt:Date.now()});
   if(selectedTickerResult){
     catalog[ticker]={
       ...(catalog[ticker]||{}),

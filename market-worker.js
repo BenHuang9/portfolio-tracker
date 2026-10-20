@@ -539,14 +539,12 @@ async function alphaDividendHistory(symbol, apiKey){
 
 
 // ----- CIBC mutual funds (Class A) -----
-// CIBC changed the FundServ prefixes from CIB to ATL in Oct 2025.  The user's
-// three holdings are the CAD Class A funds below.  We try CIBC public pages
-// first and use the public YCharts price page as a resilient fallback because
-// the CIBC pricing pages are sometimes rendered dynamically.
+// Source pages can update at different times. Compare independently dated NAVs
+// and use the newest valid value; a stale /price page must not win by position.
 const CIBC_MUTUAL_FUND_CONFIG={
-  ATL486:{legacy:"486",name:"CIBC Dividend Growth Fund, Class A"},
-  ATL496:{legacy:"496",name:"CIBC Technology Innovation Fund, Class A"},
-  ATL525:{legacy:"525",name:"CIBC U.S. Equity Fund, Class A"}
+  ATL486:{legacy:"486",fundLibraryId:"324",name:"CIBC Dividend Growth Fund, Class A"},
+  ATL496:{legacy:"496",fundLibraryId:"322",name:"CIBC Technology Innovation Fund, Class A"},
+  ATL525:{legacy:"525",fundLibraryId:"6100",name:"CIBC U.S. Equity Fund, Class A"}
 };
 function stripHtmlText(html){
   return htmlDecode(String(html||"")
@@ -557,73 +555,87 @@ function stripHtmlText(html){
     .trim());
 }
 function isoHumanDate(s){
-  const d=parseFlexibleDate(String(s||"").replace(/\./g,""));
-  return d||null;
+  return parseFlexibleDate(String(s||"").replace(/\./g,""))||null;
+}
+function verifiedNavDate(date){
+  if(!validDate(date))return false;
+  const value=Date.parse(`${date}T12:00:00Z`);
+  return Number.isFinite(value) && new Date(value).toISOString().slice(0,10)===date &&
+    value>=Date.parse("2010-01-01T00:00:00Z") && value<Date.now()+36*3600000;
+}
+function normalizedFundName(name){
+  return String(name||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 }
 function parseCibcOfficialPrice(ticker,html){
-  const text=stripHtmlText(html);
-  if(!text)return null;
-
-  // Product pages usually expose an "As of" date and a Class A price.
+  const text=stripHtmlText(html),cfg=CIBC_MUTUAL_FUND_CONFIG[ticker];
+  if(!text || !cfg || !normalizedFundName(text).includes(normalizedFundName(cfg.name)))return null;
   let date=null;
-  let dm=text.match(/\bAs of\s*:?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})/i);
+  const dm=text.match(/\bAs of\s*:?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})/i);
   if(dm)date=isoHumanDate(dm[1]);
-
   let price=null;
   const pricesPos=text.search(/\bPrices\b/i);
   const segment=pricesPos>=0?text.slice(pricesPos,pricesPos+1800):text;
-  let pm=segment.match(/(?:Class|Series)\s+A\s+\$?\s*([0-9]{1,4}(?:\.[0-9]{2,6}))/i);
+  const pm=segment.match(/(?:Class|Series)\s+A\s+\$?\s*([0-9]{1,4}(?:\.[0-9]{2,6}))/i);
   if(pm)price=Number(pm[1]);
-
-  // Historical pricing page fallback: first visible row after "Unit Prices".
   if(!(price>0)){
     const up=text.search(/Unit Prices/i);
     const hist=up>=0?text.slice(up,up+2500):text;
     const hm=hist.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}[\/-]\d{1,2}[\/-]\d{1,2})\s+\$?\s*([0-9]{1,4}(?:\.[0-9]{2,6}))/i);
     if(hm){date=isoHumanDate(hm[1]);price=Number(hm[2]);}
   }
-  return price>0?{ticker,price,date,source:"CIBC Global Asset Management"}:null;
+  return price>0&&verifiedNavDate(date)?{ticker,price,date,source:"CIBC Global Asset Management"}:null;
 }
 function parseYChartsMutualFundPrice(ticker,html){
   const text=stripHtmlText(html);
   if(!text)return null;
   const esc=escapeRegex(ticker);
   let m=text.match(new RegExp(`${esc}\\s+Price:\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)\\s+for\\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})`,`i`));
-  if(m)return {ticker,price:Number(m[1].replaceAll(",","")),date:isoHumanDate(m[2]),source:"YCharts public mutual-fund price page"};
-
-  // Header fallback, e.g. "(ATL496) 112.40 +0.71 ... CAD | Oct 09 2026".
+  if(m)return {ticker,price:Number(m[1].replaceAll(",","")),date:isoHumanDate(m[2]),source:"YCharts"};
+  // The fund overview is often newer than the separate /price history page.
   const pos=text.toUpperCase().indexOf(`(${ticker})`);
-  const seg=pos>=0?text.slice(pos,pos+600):text;
-  m=seg.match(/\)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+[+\-−]?[0-9.,]+[\s\S]{0,80}?CAD\s*\|?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})/i);
-  if(m)return {ticker,price:Number(m[1].replaceAll(",","")),date:isoHumanDate(m[2]),source:"YCharts public mutual-fund price page"};
-  return null;
+  if(pos<0)return null;
+  const segment=text.slice(pos,pos+600);
+  m=segment.match(/\)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+[+\-−]?[0-9.,]+[\s\S]{0,100}?CAD\s*\|?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})/i);
+  return m?{ticker,price:Number(m[1].replaceAll(",","")),date:isoHumanDate(m[2]),source:"YCharts"}:null;
+}
+function parseFundLibraryMutualFundPrice(ticker,html){
+  const cfg=CIBC_MUTUAL_FUND_CONFIG[ticker],text=stripHtmlText(html);
+  if(!cfg || !normalizedFundName(text).includes(normalizedFundName(cfg.name)))return null;
+  // Fund Library publishes NAVPS as a dated unit price, e.g. NAVPS (10-16-2026) $57.77.
+  const pos=text.search(/\bNAVPS\b/i);
+  if(pos<0)return null;
+  const section=text.slice(pos,pos+350);
+  const m=section.match(/\bNAVPS\s*\(?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{4})\s*\)?\s*(?:\|)?\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
+  if(!m)return null;
+  return {ticker,price:Number(m[2].replaceAll(",","")),date:parseFlexibleDate(m[1]),source:"Fund Library / Fundata"};
 }
 async function fetchCibcMutualFundPrice(ticker){
   const cfg=CIBC_MUTUAL_FUND_CONFIG[ticker];
   if(!cfg)throw new Error(`Unsupported CIBC fund ${ticker}`);
-  const headers={"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/1.5)","Accept":"text/html,application/xhtml+xml"};
-  const officialUrls=[
-    `https://www.cibcassetmanagement.com/investments/products/${cfg.legacy}`,
-    `https://www.cibcassetmanagement.com/investments/prices/hprice?fund=${cfg.legacy}&type=mutual`
+  const headers={"User-Agent":"Mozilla/5.0 (compatible; PortfolioTracker/1.6)","Accept":"text/html,application/xhtml+xml"};
+  const ychartsBase=`https://ycharts.com/mutual_funds/M%3A${encodeURIComponent(ticker)}.TO`;
+  const lookups=[
+    {url:`https://www.fundlibrary.com/MutualFunds/Detail/${cfg.fundLibraryId}`,parse:parseFundLibraryMutualFundPrice,rank:2},
+    {url:ychartsBase,parse:parseYChartsMutualFundPrice,rank:3},
+    {url:`${ychartsBase}/price`,parse:parseYChartsMutualFundPrice,rank:4},
+    {url:`https://www.cibcassetmanagement.com/investments/products/${cfg.legacy}`,parse:parseCibcOfficialPrice,rank:0},
+    {url:`https://www.cibcassetmanagement.com/investments/prices/hprice?fund=${cfg.legacy}&type=mutual`,parse:parseCibcOfficialPrice,rank:1}
   ];
-  for(const sourceUrl of officialUrls){
-    try{
-      const r=await fetch(sourceUrl,{headers,cf:{cacheTtl:1800,cacheEverything:true}});
-      if(r.ok){
-        const parsed=parseCibcOfficialPrice(ticker,await r.text());
-        if(parsed)return {...parsed,name:cfg.name,sourceUrl};
-      }
-    }catch(e){console.warn("CIBC official NAV lookup failed",ticker,sourceUrl,String(e?.message||e));}
-  }
-
-  const sourceUrl=`https://ycharts.com/mutual_funds/M%3A${encodeURIComponent(ticker)}.TO/price`;
-  const r=await fetch(sourceUrl,{headers,cf:{cacheTtl:1800,cacheEverything:true}});
-  if(!r.ok)throw new Error(`CIBC NAV fallback HTTP ${r.status}`);
-  const parsed=parseYChartsMutualFundPrice(ticker,await r.text());
-  if(!parsed)throw new Error(`Could not parse latest NAV for ${ticker}`);
-  return {...parsed,name:cfg.name,sourceUrl};
+  const settled=await Promise.allSettled(lookups.map(async entry=>{
+    const response=await fetch(entry.url,{
+      headers,cf:{cacheTtl:900,cacheEverything:true},signal:AbortSignal.timeout(12000)
+    });
+    if(!response.ok)throw new Error(`Source returned HTTP ${response.status}`);
+    const parsed=entry.parse(ticker,await response.text());
+    if(!parsed || !(Number(parsed.price)>0) || !verifiedNavDate(parsed.date))throw new Error("No valid dated NAV on source page");
+    return {...parsed,name:cfg.name,sourceUrl:entry.url,sourcePriority:entry.rank};
+  }));
+  const usable=settled.filter(r=>r.status==="fulfilled").map(r=>r.value);
+  if(!usable.length)throw new Error(`No valid dated NAV for ${ticker} from CIBC, Fund Library or YCharts`);
+  usable.sort((a,b)=>b.date.localeCompare(a.date)||a.sourcePriority-b.sourcePriority);
+  const {sourcePriority,...best}=usable[0];
+  return best;
 }
-
 
 const CLOUD_MAX_BODY_BYTES=1800000;
 const CLOUD_USER_ID="primary";
@@ -758,7 +770,10 @@ async function computeDailySnapshotFromPayload(payload,snapshotDate=null){
     const navResults=await Promise.allSettled(cibcFunds.map(f=>fetchCibcMutualFundPrice(String(f.ticker||"").toUpperCase())));
     navResults.forEach((r,i)=>{
       const units=Number(cibcFunds[i]?.units)||0;
-      if(r.status==="fulfilled" && Number(r.value?.price)>0)cibcMarketValue+=units*Number(r.value.price);
+      const savedDate=String(cibcFunds[i]?.lastPriceDate||"");
+      // Keep the last known good NAV if every upstream source is older.
+      if(r.status==="fulfilled" && Number(r.value?.price)>0 && (!validDate(savedDate)||r.value.date>=savedDate))
+        cibcMarketValue+=units*Number(r.value.price);
       else cibcMarketValue+=units*(Number(cibcFunds[i]?.lastPrice)||0);
     });
   }
@@ -923,7 +938,7 @@ export default {
         priceSource:"Yahoo Finance chart proxy",
         dividendSource:"Official issuer history, then Alpha Vantage, then Yahoo fallback",
         officialFundSources:["Harvest Portfolios","Purpose Investments","Hamilton ETFs","Vanguard Canada","Evolve ETFs","CIBC Global Asset Management"],
-        cibcMutualFundNav:"CIBC public pages first; YCharts public price page fallback",
+        cibcMutualFundNav:"Newest valid dated NAV from CIBC, Fund Library, and YCharts",
         alphaVantageConfigured:Boolean(env.ALPHAVANTAGE_API_KEY),
         cloudDatabaseConfigured:Boolean(env.DB),
         cloudSyncSecretConfigured:Boolean(env.PORTFOLIO_SYNC_TOKEN),
@@ -947,7 +962,7 @@ export default {
         else errors.push({ticker:symbols[i],error:String(r.reason?.message||r.reason)});
       });
       if(!funds.length)return json({error:"CIBC mutual-fund NAV unavailable",errors},502,origin,0);
-      return json({funds,errors,updatedAt:new Date().toISOString()},200,origin,900);
+      return json({funds,errors,updatedAt:new Date().toISOString()},200,origin,180);
     }
 
     if(url.pathname==="/search"){
