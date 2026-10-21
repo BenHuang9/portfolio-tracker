@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.11: intraday trade-time valuation with deferred cash reconciliation -->
+<!-- 5.25.12: align intraday trade reconciliation to the actual quote session (including overnight) -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -4032,7 +4032,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.11 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.12 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4766,8 +4766,11 @@ function recordAccountObservation(){
   for(const id of ["all",...INVESTMENT_ACCOUNTS.map(a=>a.id)]){
     // Between recording a buy/sale and manually reconciling Cash Holding,
     // the displayed balance is transient, not a market observation.
-    const tradeDay= id==="cibc_mutual_fund"?null:tradeDayObservedPortfolioRows(id,date);
-    if(tradeDay&&!tradeDay.reconciled)continue;
+    const datesToCheck=[date,chartDateKey(now-86400),chartDateKey(now-2*86400)];
+    if(id!=="cibc_mutual_fund"&&datesToCheck.some(d=>{
+      const trade=tradeDayObservedPortfolioRows(id,d);
+      return trade&&!trade.reconciled;
+    }))continue;
     const summary=portfolioSummary(id);if(summary.ps.some(p=>!(p.price>0)))continue;
     const entry=observations[id]||(observations[id]={daily:[],intraday:[]});
     const row={date,time:now,value:summary.accountValue,cash:cashForAccount(id),basis:depositsForAccount(id),source:"Observed account value"};
@@ -4782,15 +4785,24 @@ function recordAccountObservation(){
   }
   writeLocalJSON(INVESTMENT_OBSERVATIONS_KEY,observations);
 }
-function currentCashChartRows(id,range){
+function currentCashChartRows(id,range,sessionDate=chartDateKey(Date.now()/1000)){
   const entry=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{})[id]||{daily:[],intraday:[]};
   const grain=range==="1D"?"intraday":"daily";
   let rows=chartPrepare(range==="1D"?entry.intraday:entry.daily,grain);
-  rows=range==="1D"?rows.filter(p=>p.date===chartDateKey(Date.now()/1000)):chartRangeRows(rows,range);
+  rows=range==="1D"?rows.filter(p=>p.date===sessionDate):chartRangeRows(rows,range);
   return rows;
 }
 // A saved account value from the preceding trading day is a usable balance
 // comparison, but it is NOT necessarily an official market closing quote.
+function lastPortfolioQuoteSession(id){
+  const quoteTimes=positions(id).map(p=>Number(p.regularMarketTime))
+    .filter(n=>Number.isFinite(n)&&n>0);
+  if(quoteTimes.length)return chartDateKey(Math.max(...quoteTimes));
+  const observations=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{})[id]?.intraday||[];
+  const last=observations.filter(p=>chartFinite(p.time))
+    .sort((a,b)=>Number(a.time)-Number(b.time)).at(-1);
+  return last?chartDateKey(last.time):chartDateKey(Date.now()/1000);
+}
 function previousRecordedPortfolioValue(id,date=chartDateKey(Date.now()/1000)){
   const rows=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{})[id]?.daily||[];
   const previous=rows.filter(p=>p?.date<date&&chartFinite(p.value))
@@ -4890,7 +4902,7 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
           const row=cashRows[i],previous=cashRows[i-1];
           const key=accountId+"|"+row.time;
           const paid=Number(previous.value)-Number(row.value);
-          if(used.has(key)||!(paid>0)||chartDateKey(Number(row.time))!==date)continue;
+          if(used.has(key)||!(paid>0))continue;
           for(let first=0;first<pending.length;first++){
             let amount=0;
             for(let last=first;last<pending.length;last++){
@@ -4899,7 +4911,7 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
               const dates=entries.map(x=>x.at).filter(t=>t>0);
               const when=dates.length?Math.min(...dates):0;
               const distance=when>0?Math.abs(Number(row.time)-when):0;
-              if(distance>36*3600)continue;
+              if(distance>36*3600||dates.length&&Number(row.time)<when-300)continue;
               const difference=Math.abs(paid-amount);
               if(difference>Math.max(5,amount*0.15))continue;
               const score=difference/Math.max(1,amount)+distance/(36*3600)*0.05+(entries.length-1)*0.002;
@@ -4927,7 +4939,7 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
     }
   }
   if(!reconciled)return {rows:[],date,reconciled:false,transitions:[],hasBuys:buys.length>0,hasSales:sales.length>0};
-  const rows=currentCashChartRows(id,"1D")
+  const rows=currentCashChartRows(id,"1D",date)
     .filter(p=>!invalidWindows.some(w=>p.time>=w.start&&p.time<=w.end));
   // Only a reconciled current balance is a valid new account observation.
   const now=Math.floor(Date.now()/60000)*60,latest=rows.at(-1)?.time||0;
@@ -5139,33 +5151,30 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
   updateValueSource();if(!keepChart)setPortfolioChartNote("");
   if(!quiet){lineChart.innerHTML='<div class="unifiedEmpty">Loading history...</div>';}
   const allTime=()=>setPortfolioPeriodGain(portfolioSummary(id).total,"ALL");
-  // A dated purchase/sale changes sharesHeldOn() for the entire day.
-  // Reconstruct the cash-backed share quantity for each quote timestamp.
-  // If the manual cash correction is still pending, show no synthetic spike.
-  const tradeDay=range==="1D"&&id!=="cibc_mutual_fund"?tradeDayObservedPortfolioRows(id):null;
+  // A 1D Yahoo chart shows the latest MARKET session, which may be yesterday
+  // in New York (even when the phone still says yesterday in Vancouver).
+  // Resolve transaction time against that quote session, never Date.now().
+  let tradeDay=null;
   function renderTradeDayObservations(){
     if(!tradeDay)return false;
-    const rows=tradeDay.rows,previous=previousRecordedPortfolioValue(id);
+    const rows=tradeDay.rows,previous=previousRecordedPortfolioValue(id,tradeDay.date);
     if(!tradeDay.reconciled){
       portfolioGain.textContent="— 1D change unavailable";
       portfolioGain.style.setProperty("color","var(--muted)","important");
     }else if(previous){
       setPortfolioPeriodGain(summary.accountValue-Number(previous.value),range,"since last saved day");
     }else if(rows.length>1){
-      setPortfolioPeriodGain(rows.at(-1).value-rows[0].value,range,"since first record today");
+      setPortfolioPeriodGain(rows.at(-1).value-rows[0].value,range,"since first recorded point");
     }else{
       portfolioGain.textContent="— 1D change unavailable";
       portfolioGain.style.setProperty("color","var(--muted)","important");
     }
-    activeChartPayload={id,range,rows,reconciled:tradeDay.reconciled,tradeDay:true};
+    activeChartPayload={id,range,rows,reconciled:tradeDay.reconciled,tradeDay:true,sessionDate:tradeDay.date};
     renderLineChart(rows,null,{grain:"intraday"});
     setPortfolioChartNote(tradeDay.reconciled
       ?"Recorded account values · trade day (cash transfer excluded)"
       :"1D history unavailable: trade cash update cannot be verified");
     return true;
-  }
-  if(tradeDay&&(!tradeDay.reconciled||!marketApiBase)){
-    renderTradeDayObservations();return;
   }
   if(id==="cibc_mutual_fund"){
     const rows=cifNavRows(range);
@@ -5180,7 +5189,13 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     activeChartPayload={id,range,rows};
     renderLineChart(rows,null,{grain:range==="1D"?"intraday":"daily",step:true});setPortfolioChartNote("Saved account balances \u00b7 cash has no market price");return;
   }
-  if(!marketApiBase){renderLineChart(currentCashChartRows(id,range));setPortfolioChartNote("Saved values \u00b7 market connection unavailable");return;}
+  if(!marketApiBase){
+    if(range==="1D"&&id!=="cibc_mutual_fund"){
+      tradeDay=tradeDayObservedPortfolioRows(id,lastPortfolioQuoteSession(id));
+      if(tradeDay){renderTradeDayObservations();return;}
+    }
+    renderLineChart(currentCashChartRows(id,range));setPortfolioChartNote("Saved values \u00b7 market connection unavailable");return;
+  }
   try{
     const grain=range==="1D"?"intraday":"daily";
     const cfg=range==="ALL"?{...allRangeConfig(id),interval:"1d"}:({"1D":{range:"1d",interval:"1m"},"1W":{range:"1mo",interval:"1d"}}[range]||portfolioRangeConfig[range]);
@@ -5222,8 +5237,11 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     let times=[...new Set(tickers.flatMap(t=>(histMap[t]||[]).map(p=>p.time)))].sort((a,b)=>a-b);
     if(grain==="daily")times=chartRangeRows(times.map(time=>({time,date:new Date(time*1000).toISOString().slice(0,10)})),range).map(p=>p.time);
     if(grain==="intraday"&&times.length){
-      // Only one actual market date; old sessions are never relabeled as today.
-      const session=chartDateKey(times.at(-1));times=times.filter(t=>chartDateKey(t)===session);
+      // One actual quote session; it may differ from today's calendar date.
+      const session=chartDateKey(times.at(-1));
+      times=times.filter(t=>chartDateKey(t)===session);
+      tradeDay=tradeDayObservedPortfolioRows(id,session);
+      if(tradeDay&&!tradeDay.reconciled){renderTradeDayObservations();return;}
     }
     function at(rows,time){let lo=0,hi=rows.length-1,out=null;while(lo<=hi){const mid=(lo+hi)>>1;if(rows[mid].time<=time){out=rows[mid];lo=mid+1}else hi=mid-1;}return out;}
     const includesFunds=id==="all";let estimated=false;
@@ -5287,9 +5305,9 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     else if(range==="1D"){
       const ps=positions(id).filter(p=>!p.isCibcMutualFund);
       if(tradeDay){
-        const previous=previousRecordedPortfolioValue(id);
+        const previous=previousRecordedPortfolioValue(id,tradeDay.date);
         if(previous)setPortfolioPeriodGain(summary.accountValue-Number(previous.value),range,"since last saved day");
-        else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range,"since first quote today");
+        else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range,"since first quote");
         else setPortfolioPeriodGain(null,range);
       }else if(ps.length&&ps.every(p=>p.dailyBaselineAvailable))
         setPortfolioPeriodGain(ps.reduce((s,p)=>s+p.today,0),range);
@@ -5300,13 +5318,17 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
       }
     }else if(clean.length>1)setPortfolioPeriodGain(clean.at(-1).value-clean[0].value,range);
     else{portfolioGain.textContent="Current value";portfolioGain.style.setProperty("color","var(--muted)","important");}
-    activeChartPayload={id,range,rows:clean,reconciled:tradeDay?tradeDay.reconciled:true,tradeDay:Boolean(tradeDay)};
+    activeChartPayload={id,range,rows:clean,reconciled:tradeDay?tradeDay.reconciled:true,tradeDay:Boolean(tradeDay),
+      sessionDate:grain==="intraday"?clean.at(-1)?.date||tradeDay?.date||null:null};
     renderLineChart(clean,null,{grain});
     setPortfolioChartNote(range==="1D"?"1-minute points \u00b7 checks every 60s \u00b7 feed may be delayed":approximatedTickers.size
       ? "Estimated history: missing Yahoo prices for "+[...approximatedTickers].join(", ")+". Uses observed prices where available; no actual historic quote is implied."
       :estimated?"Daily values \u00b7 historical cash estimated where unrecorded":"Daily values \u00b7 recorded dates only");
   }catch(e){
     if(!isCurrent())return;
+    if(range==="1D"&&id!=="cibc_mutual_fund"){
+      tradeDay=tradeDay||tradeDayObservedPortfolioRows(id,lastPortfolioQuoteSession(id));
+    }
     if(tradeDay){renderTradeDayObservations();console.warn("Trade-day quote history unavailable; using saved observations",e);return;}
     const observed=currentCashChartRows(id,range);
     if(range==="ALL")allTime();else{portfolioGain.textContent="Saved value";portfolioGain.style.setProperty("color","var(--muted)","important");}
@@ -5552,7 +5574,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.11",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.12",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -6525,10 +6547,13 @@ function wsReturnPeriodValue(id,range){
   if(range==="1D"){
     // Neither a purchase nor a sale is a return until the separate manual
     // Cash Holding change is verified. The Return page must agree with 1D.
-    const tradeDay=tradeDayObservedPortfolioRows(id);
+    const session=chart?.id===id&&chart?.range===range
+      ?chart.sessionDate||chart.rows?.at(-1)?.date||lastPortfolioQuoteSession(id)
+      :lastPortfolioQuoteSession(id);
+    const tradeDay=tradeDayObservedPortfolioRows(id,session);
     if(tradeDay&&(!tradeDay.reconciled||!chart||chart.id!==id||chart.range!==range||chart.reconciled!==true))
       return {value:null,type:"change",estimated:false};
-    const previous=previousRecordedPortfolioValue(id);
+    const previous=previousRecordedPortfolioValue(id,session);
     if(previous)return {value:summary.accountValue-Number(previous.value),type:"change",estimated:false,basis:"previous_saved_day"};
   }
   if(!chart||chart.id!==id||chart.range!==range||!Array.isArray(chart.rows)||chart.rows.length<2)return {value:null,type:"change",estimated:false};
@@ -6629,7 +6654,7 @@ function renderReturnDetails(){
   if(figure.value===null){hero.textContent="—";hero.className="returnHeroAmount";}
   else returnSetGain(hero,figure.value);
   caption.textContent=figure.basis==="previous_saved_day"?"Account value change since last saved day":
-    figure.basis==="first_observation"?"Account value change since first recorded today":
+    figure.basis==="first_observation"?"Account value change since first recorded point":
     (figure.type==="total"?"Total return":"Account value change")+" for "+wsReturnPeriodText(range);
   warning.hidden=range==="ALL";
   warning.textContent=figure.value===null?
