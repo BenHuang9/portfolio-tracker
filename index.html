@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.9: trade-day cash/share reconciliation for intraday charts -->
+<!-- 5.25.10: grouped sell cash reconciliation and pending-buy 1D Return consistency -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -4032,7 +4032,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.9 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.10 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4822,27 +4822,48 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
   };
   let reconciled=true;
 
-  // Keep the existing sale-proceeds matching, now with typed transitions.
-  for(const trade of sales){
-    const cashRows=cashRowsFor(trade.accountId),saleAt=Number(trade.createdAt)/1000;
-    const proceeds=Number(trade.proceedsCAD);
-    if(!(proceeds>0)){reconciled=false;break;}
-    let match=null,bestScore=Infinity;
-    for(let i=1;i<cashRows.length;i++){
-      const row=cashRows[i],previous=cashRows[i-1];
-      const delta=Number(row.value)-Number(previous.value);
-      const key=trade.accountId+"|"+row.time;
-      const distance=Math.abs(Number(row.time)-saleAt);
-      if(used.has(key)||!(delta>0)||distance>36*3600||Math.abs(delta-proceeds)>Math.max(30,Math.abs(proceeds)*0.2))continue;
-      const score=Math.abs(delta-proceeds)/Math.max(1,Math.abs(proceeds))+distance/(36*3600)*0.05;
-      if(score<bestScore){bestScore=score;match={row,previous};}
+  // A single manual Cash Holding edit can contain the proceeds of several
+  // Sell Trades. Match consecutive same-day sales as a group, just as for buys.
+  const saleAccounts=[...new Set(sales.map(t=>t.accountId))];
+  for(const accountId of saleAccounts){
+    const cashRows=cashRowsFor(accountId);
+    const pending=sales.filter(t=>t.accountId===accountId)
+      .map(t=>({ticker:t.ticker,shares:Number(t.shares),amount:Number(t.proceedsCAD),at:Number(t.createdAt)/1000}))
+      .sort((a,b)=>a.at-b.at);
+    if(pending.some(t=>!(t.amount>0)||!(t.at>0))){reconciled=false;break;}
+    while(pending.length){
+      let best=null,bestScore=Infinity;
+      for(let i=1;i<cashRows.length;i++){
+        const row=cashRows[i],previous=cashRows[i-1];
+        const added=Number(row.value)-Number(previous.value);
+        const key=accountId+"|"+row.time;
+        if(used.has(key)||!(added>0))continue;
+        for(let first=0;first<pending.length;first++){
+          let amount=0;
+          for(let last=first;last<pending.length;last++){
+            amount+=pending[last].amount;
+            const entries=pending.slice(first,last+1);
+            const when=entries[0].at;
+            const distance=Math.max(...entries.map(t=>Math.abs(Number(row.time)-t.at)));
+            if(distance>36*3600)continue;
+            const difference=Math.abs(added-amount);
+            if(difference>Math.max(30,amount*0.2))continue;
+            const score=difference/Math.max(1,amount)+distance/(36*3600)*0.05+(entries.length-1)*0.002;
+            if(score<bestScore){bestScore=score;best={row,previous,first,last,entries,when};}
+          }
+        }
+      }
+      if(!best){reconciled=false;break;}
+      used.add(accountId+"|"+best.row.time);
+      const cashAt=Number(best.row.time);
+      for(const sale of best.entries){
+        transitions.push({kind:"sell",ticker:sale.ticker,accountId,
+          shares:sale.shares,cashAt});
+      }
+      markWindow(best.when,cashAt,best.previous.time);
+      pending.splice(best.first,best.last-best.first+1);
     }
-    if(!match){reconciled=false;break;}
-    used.add(trade.accountId+"|"+match.row.time);
-    const cashAt=Number(match.row.time);
-    transitions.push({kind:"sell",ticker:trade.ticker,accountId:trade.accountId,
-      shares:Number(trade.shares),cashAt});
-    markWindow(saleAt,cashAt,match.previous.time);
+    if(!reconciled)break;
   }
 
   // Match today's purchase(s) against negative cash changes. Permit one cash
@@ -5501,7 +5522,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.9",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.10",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -6472,9 +6493,10 @@ function wsReturnPeriodValue(id,range){
   if(range==="ALL")return {value:summary.total,type:"total",estimated:false};
   const chart=activeChartPayload;
   if(range==="1D"){
-    const tradeToday=realizedTradesForAccount(id).some(t=>t.date===chartDateKey(Date.now()/1000));
-    // A sale with unreconciled manual cash cannot produce a valid 1D change.
-    if(tradeToday&&(!chart||chart.id!==id||chart.range!==range||chart.reconciled!==true))
+    // Neither a purchase nor a sale is a return until the separate manual
+    // Cash Holding change is verified. The Return page must agree with 1D.
+    const tradeDay=tradeDayObservedPortfolioRows(id);
+    if(tradeDay&&(!tradeDay.reconciled||!chart||chart.id!==id||chart.range!==range||chart.reconciled!==true))
       return {value:null,type:"change",estimated:false};
     const previous=previousRecordedPortfolioValue(id);
     if(previous)return {value:summary.accountValue-Number(previous.value),type:"change",estimated:false,basis:"previous_saved_day"};
