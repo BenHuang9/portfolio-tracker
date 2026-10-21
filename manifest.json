@@ -1,7 +1,7 @@
 {
   "name": "Income Portfolio Tracker",
   "short_name": "Portfolio",
-  "start_url": "./?v=5.25.10",
+  "start_url": "./?v=5.25.11",
   "display": "standalone",
   "background_color": "#f6f6f4",
   "theme_color": "#f6f6f4",

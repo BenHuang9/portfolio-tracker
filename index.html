@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.10: grouped sell cash reconciliation and pending-buy 1D Return consistency -->
+<!-- 5.25.11: intraday trade-time valuation with deferred cash reconciliation -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -4032,7 +4032,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.10 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.11 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4856,9 +4856,15 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
       if(!best){reconciled=false;break;}
       used.add(accountId+"|"+best.row.time);
       const cashAt=Number(best.row.time);
+      // Allocate the verified cash credit to each sale. The broker trade
+      // happened at the saved trade timestamp, not when Settings was edited.
+      const credited=Number(best.row.value)-Number(best.previous.value);
+      const groupTotal=best.entries.reduce((sum,sale)=>sum+sale.amount,0);
       for(const sale of best.entries){
+        const tradeAt=sale.at>0?Math.min(sale.at,cashAt):cashAt;
         transitions.push({kind:"sell",ticker:sale.ticker,accountId,
-          shares:sale.shares,cashAt});
+          shares:sale.shares,tradeAt,cashAt,
+          cashDelta:credited*sale.amount/groupTotal});
       }
       markWindow(best.when,cashAt,best.previous.time);
       pending.splice(best.first,best.last-best.first+1);
@@ -4904,9 +4910,15 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
         if(!best){reconciled=false;break;}
         used.add(accountId+"|"+best.row.time);
         const cashAt=Number(best.row.time);
+        // A later manual cash edit must not delay the moment that the
+        // acquired shares began to gain or lose market value.
+        const debited=Number(best.previous.value)-Number(best.row.value);
+        const groupTotal=best.entries.reduce((sum,buy)=>sum+buy.amount,0);
         for(const buy of best.entries){
+          const tradeAt=buy.at>0?Math.min(buy.at,cashAt):cashAt;
           transitions.push({kind:"buy",ticker:buy.ticker,accountId,
-            shares:buy.shares,cashAt});
+            shares:buy.shares,tradeAt,cashAt,
+            cashDelta:-debited*buy.amount/groupTotal});
         }
         markWindow(best.when,cashAt,best.previous.time);
         pending.splice(best.first,best.last-best.first+1);
@@ -4926,14 +4938,27 @@ function tradeDayObservedPortfolioRows(id,date=chartDateKey(Date.now()/1000)){
   return {rows:chartPrepare(rows,"intraday"),date,reconciled:true,
     transitions,hasBuys:buys.length>0,hasSales:sales.length>0};
 }
-// End-of-day sharesHeldOn() includes every purchase and sale for its date.
-// For a 1D market chart, reconstruct the shares actually backed by cash at
-// each timestamp, treating a verified cash edit as the transfer boundary.
+// A separate Settings save can happen minutes after execution. Reconstruct
+// the intervening cash balance as though the verified cash transfer occurred
+// when the lot or sale was recorded; never double count it after the actual
+// cash-history edit. No cash auto-edit is made to the user's saved settings.
+function intradayCashWithTrades(accountId,time,tradeDay){
+  const cash=accountCashAt(accountId,time);
+  if(!tradeDay?.reconciled||tradeDay.date!==chartDateKey(time))return cash;
+  let pendingDelta=0;
+  for(const transfer of tradeDay.transitions){
+    if(accountId!=="all"&&transfer.accountId!==accountId)continue;
+    if(time>=transfer.tradeAt&&time<transfer.cashAt)pendingDelta+=Number(transfer.cashDelta)||0;
+  }
+  return {...cash,value:cash.value+pendingDelta};
+}
+// End-of-day holdings are corrected backwards for each intraday trade, using
+// the lot's recorded entry time (or the cash edit for legacy date-only lots).
 function intradaySharesWithSales(ticker,date,accountId,time,tradeDay){
   let shares=sharesHeldOn(ticker,date,accountId);
   if(tradeDay?.reconciled&&tradeDay.date===date){
     for(const transfer of tradeDay.transitions){
-      if(transfer.ticker!==ticker||time>=transfer.cashAt)continue;
+      if(transfer.ticker!==ticker||time>=transfer.tradeAt)continue;
       if(accountId!=="all"&&transfer.accountId!==accountId)continue;
       shares+=transfer.kind==="sell"?transfer.shares:-transfer.shares;
     }
@@ -5207,7 +5232,10 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
     const series=[];
     for(const t of times){
       const date=grain==="daily"?new Date(t*1000).toISOString().slice(0,10):chartDateKey(t);
-      const cash=accountCashAt(id,grain==="daily"?chartDayEnd(date):t);let value=cash.value,missing=false,hasPosition=false,estimatedPoint=false;
+      const cash=grain==="intraday"&&tradeDay
+        ?intradayCashWithTrades(id,t,tradeDay)
+        :accountCashAt(id,grain==="daily"?chartDayEnd(date):t);
+      let value=cash.value,missing=false,hasPosition=false,estimatedPoint=false;
       let fxAt=needsFx?at(fxHist,t):null;
       for(const ticker of tickers){
         const shares=grain==="intraday"&&tradeDay
@@ -5235,7 +5263,9 @@ async function loadPortfolioHistory(label,{quiet=false}={}){
       if(latest){
         const date=chartDateKey(latest);
         // Do not attach TODAY'S manually updated cash to an OLDER quote time.
-        const historicalCash=grain==="intraday"?accountCashAt(id,latest).value:cashForAccount(id);
+        const historicalCash=grain==="intraday"
+          ?(tradeDay?intradayCashWithTrades(id,latest,tradeDay):accountCashAt(id,latest)).value
+          :cashForAccount(id);
         let value=historicalCash,valid=true;
         for(const ticker of tickers){
           const shares=grain==="intraday"&&tradeDay
@@ -5522,7 +5552,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.10",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.11",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
