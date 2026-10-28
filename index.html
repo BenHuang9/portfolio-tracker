@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.13: keep Stats month labels anchored to the chart when category details scroll -->
+<!-- 5.25.14: Stats expense-by-account breakdown with credit-card totals and drilldown -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -2756,6 +2756,16 @@ html,body{
 .categoryDetailBars + .categoryDetailTransactions{margin-top:2px}
 
 
+/* Stats account spend: aligned with category bars and three-view detail control. */
+.statsAccountLabel{min-width:0;flex:1}
+.statsAccountLabel .categoryName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statsAccountSub{font-size:10px;line-height:1.4;color:var(--muted);font-weight:700;margin-top:3px}
+.statsAccountRow .categoryNameWrap{min-width:0;flex:1}
+.statsAccountRow .categoryTop{display:grid;grid-template-columns:minmax(0,1fr) auto 16px}
+.categoryDetailViewTabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.categoryDetailViewTabs button{min-width:0;white-space:nowrap;font-size:11px}
+.categoryDetailViewTabs button[hidden]{display:none!important}
+
 /* v5.17.2 account dropdown cleanup */
 #txAccount,#txFromAccount,#txToAccount{
   white-space:nowrap!important;
@@ -3673,6 +3683,11 @@ body.wsReturnOpen nav.bottom{display:none!important}
     </div>
 
     <div class="statsSection">
+      <div class="statsSectionHead"><h2>Expense by account</h2><span id="statsExpenseAccountCount"></span></div>
+      <div class="statsCard" id="statsExpenseAccounts"></div>
+    </div>
+
+    <div class="statsSection">
       <div class="statsSectionHead"><h2>Expense by category</h2><span id="statsExpenseCount"></span></div>
       <div class="statsCard" id="statsExpenseCategories"></div>
     </div>
@@ -4037,7 +4052,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.13 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.14 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4152,6 +4167,8 @@ body.wsReturnOpen nav.bottom{display:none!important}
     <div class="categoryDetailViewTabs" id="categoryDetailViewTabs" aria-label="Category detail view">
       <button class="active" type="button" data-category-view="transactions">Transactions</button>
       <button type="button" data-category-view="notes">By note</button>
+      <button type="button" data-category-view="accounts">By account</button>
+      <button type="button" data-category-view="categories" hidden>By category</button>
     </div>
     <div class="categoryDetailBars" id="categoryDetailBars"></div>
     <div class="categoryDetailTransactions" id="categoryDetailTransactions"></div>
@@ -4312,6 +4329,8 @@ var statsIncome=document.getElementById("statsIncome");
 var statsExpense=document.getElementById("statsExpense");
 var statsNet=document.getElementById("statsNet");
 var statsExpenseCategories=document.getElementById("statsExpenseCategories");
+var statsExpenseAccounts=document.getElementById("statsExpenseAccounts");
+var statsExpenseAccountCount=document.getElementById("statsExpenseAccountCount");
 var statsIncomeCategories=document.getElementById("statsIncomeCategories");
 var statsExpenseCount=document.getElementById("statsExpenseCount");
 var statsIncomeCount=document.getElementById("statsIncomeCount");
@@ -5579,7 +5598,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.13",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.14",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -7473,9 +7492,11 @@ let currentTransactionType="expense";
 let statsCurrentMode="month";
 let statsMonth=localDateISO().slice(0,7);
 let statsYear=Number(localDateISO().slice(0,4));
-let categoryDetailGrouped=false;
+let categoryDetailView="transactions";
 let categoryDetailCurrentType="expense";
 let categoryDetailCurrentCategory="";
+let categoryDetailCurrentScope="category";
+let categoryDetailCurrentTitle="";
 
 function ledgerAccountById(id){return manualAccounts.find(a=>a.id===id)||null}
 const MIAO_2026_IMPORT_FLAG="miao2026HistoryImportedV514";
@@ -8083,6 +8104,63 @@ function renderTransactions(){
   }).join("");
   ledgerTransactionList.querySelectorAll("[data-tx-id]").forEach(b=>b.onclick=()=>openTransactionModal(b.dataset.txId));
 }
+
+// One account per card, even if the display name is changed. Legacy imported
+// transactions may have only accountKey / historicalAccountLabel, so keep them
+// visible and merge aliases with the corresponding current manual account.
+function statsAccountIdentity(tx){
+  const id=resolvedTransactionAccountId(tx);
+  const account=id?ledgerAccountById(id):null;
+  if(account){
+    return {key:`id:${account.id}`,name:String(account.name||"Unknown account"),type:String(account.category||""),currency:String(account.currency||"CAD")};
+  }
+  const historicalKey=String(tx?.accountKey||"").trim();
+  const historicalLabel=String(tx?.historicalAccountLabel||"").trim();
+  const accountId=String(tx?.accountId||"").trim();
+  if(historicalKey){
+    return {key:`legacy:${historicalKey}`,name:historicalLabel||historicalKey.replaceAll("_"," "),type:"",currency:String(tx?.currency||"CAD")};
+  }
+  if(accountId){
+    return {key:`missing:${accountId}`,name:historicalLabel||"Unknown account",type:"",currency:String(tx?.currency||"CAD")};
+  }
+  return {key:`label:${normalizeLedgerAccountName(historicalLabel)||"unknown"}`,name:historicalLabel||"Unknown account",type:"",currency:String(tx?.currency||"CAD")};
+}
+function statsAccountGroups(rows){
+  const map=new Map();
+  rows.forEach(t=>{
+    if(t.type!=="expense" && t.type!=="income")return;
+    const info=statsAccountIdentity(t);
+    if(!map.has(info.key))map.set(info.key,{...info,total:0,count:0});
+    const row=map.get(info.key);
+    row.total+=transactionAmountCAD(t);
+    row.count++;
+  });
+  return [...map.values()].sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
+}
+function statsAccountIcon(type,name){
+  const credit=type==="credit_card" || (!type && /\b(credit card|visa|mastercard|amex)\b/i.test(name));
+  return credit
+    ? lineIcon('<rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19"/><path d="M6 15h5"/>')
+    : lineIcon('<rect x="3" y="8" width="18" height="13" rx="2"/><path d="m3 8 9-5 9 5"/><path d="M8 12v6M12 12v6M16 12v6"/>');
+}
+function renderExpenseByAccount(rows){
+  if(!statsExpenseAccounts)return;
+  const groups=statsAccountGroups(rows.filter(t=>t.type==="expense"));
+  statsExpenseAccountCount.textContent=`${groups.length} account${groups.length===1?"":"s"}`;
+  if(!groups.length){statsExpenseAccounts.innerHTML='<div class="statsEmpty">No expenses in this period.</div>';return}
+  const max=Math.max(...groups.map(x=>x.total),1);
+  statsExpenseAccounts.innerHTML=groups.map(g=>`<button type="button" class="categoryRowButton statsAccountRow" data-stats-account="${safeHtml(g.key)}">
+    <div class="categoryTop">
+      <div class="categoryNameWrap"><span class="categoryBadge">${statsAccountIcon(g.type,g.name)}</span>
+        <div class="statsAccountLabel"><div class="categoryName">${safeHtml(g.name)}</div><div class="statsAccountSub">${g.count} transaction${g.count===1?"":"s"}</div></div>
+      </div>
+      <div class="categoryValue">${fmt(g.total)}</div><div class="categoryRowChevron">›</div>
+    </div>
+    <div class="categoryTrack"><div class="categoryFill expense" style="width:${Math.max(2,g.total/max*100).toFixed(1)}%"></div></div>
+  </button>`).join("");
+  statsExpenseAccounts.querySelectorAll("[data-stats-account]").forEach(btn=>btn.onclick=()=>openExpenseAccountDetail(btn.dataset.statsAccount));
+}
+
 function renderCategoryStats(container,rows,type){
   const cats=categoryTotals(rows,type);
   if(!cats.length){container.innerHTML='<div class="statsEmpty">No '+type+' transactions in this period.</div>';return}
@@ -8094,9 +8172,9 @@ function renderCategoryStats(container,rows,type){
   container.querySelectorAll("[data-category]").forEach(btn=>btn.onclick=()=>openCategoryDetail(btn.dataset.categoryType,btn.dataset.category));
 }
 
-function categoryDetailRows(type,category){
+function categoryDetailRows(type,target,scope="category"){
   return periodRowsForStats()
-    .filter(t=>t.type===type && t.category===category)
+    .filter(t=>t.type===type && (scope==="account"?statsAccountIdentity(t).key===target:t.category===target))
     .slice()
     .sort((a,b)=>b.date.localeCompare(a.date)||(Number(b.createdAt)-Number(a.createdAt)));
 }
@@ -8157,27 +8235,59 @@ function renderCategoryDetailGrouped(rows,type){
     </div>
   `).join("")}</div>`;
 }
+function renderCategoryDetailAccounts(rows,type){
+  const groups=statsAccountGroups(rows);
+  renderCategoryDetailSummary(groups.map(g=>({name:g.name,total:g.total,count:g.count})),type);
+}
+function renderCategoryDetailCategories(rows,type){
+  const counts=new Map();
+  rows.forEach(t=>counts.set(t.category||"Other",(counts.get(t.category||"Other")||0)+1));
+  const groups=categoryTotals(rows,type).map(g=>({...g,total:g.value,count:counts.get(g.name)||0}));
+  renderCategoryDetailSummary(groups,type);
+}
+function renderCategoryDetailSummary(groups,type){
+  if(!groups.length){categoryDetailTransactions.innerHTML='<div class="statsEmpty">No transactions in this period.</div>';return}
+  categoryDetailTransactions.innerHTML=`<div class="categoryNoteSummary">${groups.map(g=>`
+    <div class="categoryNoteRow">
+      <div class="categoryNoteMain"><div class="categoryNoteName">${safeHtml(g.name)}</div>
+        <div class="categoryNoteSub">${g.count} transaction${g.count===1?"":"s"}</div></div>
+      <div class="categoryNoteAmount ${type}">${type==="expense"?"−":"+"}${fmt(g.total)}</div>
+    </div>`).join("")}</div>`;
+}
 function renderCurrentCategoryDetailBody(){
-  const rows=categoryDetailRows(categoryDetailCurrentType,categoryDetailCurrentCategory);
-  if(categoryDetailGrouped)renderCategoryDetailGrouped(rows,categoryDetailCurrentType);
+  const rows=categoryDetailRows(categoryDetailCurrentType,categoryDetailCurrentCategory,categoryDetailCurrentScope);
+  if(categoryDetailView==="notes")renderCategoryDetailGrouped(rows,categoryDetailCurrentType);
+  else if(categoryDetailView==="accounts")renderCategoryDetailAccounts(rows,categoryDetailCurrentType);
+  else if(categoryDetailView==="categories")renderCategoryDetailCategories(rows,categoryDetailCurrentType);
   else renderCategoryDetailTransactions(rows,categoryDetailCurrentType);
   if(categoryDetailViewTabs){
     categoryDetailViewTabs.querySelectorAll("[data-category-view]").forEach(btn=>{
-      const shouldBeActive=categoryDetailGrouped ? btn.dataset.categoryView==="notes" : btn.dataset.categoryView==="transactions";
-      btn.classList.toggle("active",shouldBeActive);
+      btn.hidden=btn.dataset.categoryView===(categoryDetailCurrentScope==="account"?"accounts":"categories");
+      btn.classList.toggle("active",categoryDetailView===btn.dataset.categoryView);
     });
   }
 }
 
 function openCategoryDetail(type,category){
-  const rows=categoryDetailRows(type,category);
+  openStatsDetail(type,category,category,"category");
+}
+function openExpenseAccountDetail(accountKey){
+  const matching=statsAccountGroups(periodRowsForStats().filter(t=>t.type==="expense"))
+    .find(group=>group.key===accountKey);
+  if(!matching)return;
+  openStatsDetail("expense",accountKey,matching.name,"account");
+}
+function openStatsDetail(type,target,title,scope){
+  const rows=categoryDetailRows(type,target,scope);
   categoryDetailCurrentType=type;
-  categoryDetailCurrentCategory=category;
-  categoryDetailGrouped=false;
+  categoryDetailCurrentCategory=target;
+  categoryDetailCurrentScope=scope;
+  categoryDetailCurrentTitle=title;
+  categoryDetailView="transactions";
   categoryDetailModal.classList.toggle("expenseDetail",type==="expense");
   categoryDetailModal.classList.toggle("incomeDetail",type==="income");
   const total=rows.reduce((s,t)=>s+transactionAmountCAD(t),0);
-  categoryDetailTitle.textContent=category;
+  categoryDetailTitle.textContent=title;
   categoryDetailPeriod.textContent=statsCurrentMode==="month"?monthLabel(statsMonth):String(statsYear);
   categoryDetailTotal.textContent=(type==="expense"?"−":"+")+fmt(total);
   categoryDetailTotal.style.color=type==="expense"?"var(--red)":"var(--green)";
@@ -8278,6 +8388,7 @@ function renderStats(){
   const incomeRows=rows.filter(t=>t.type==="income");
   statsExpenseCount.textContent=`${expenseRows.length} transaction${expenseRows.length===1?"":"s"}`;
   statsIncomeCount.textContent=`${incomeRows.length} transaction${incomeRows.length===1?"":"s"}`;
+  renderExpenseByAccount(expenseRows);
   renderCategoryStats(statsExpenseCategories,rows,"expense");
   renderCategoryStats(statsIncomeCategories,rows,"income");
 
@@ -8706,7 +8817,8 @@ if(txTransferDateMirror)txTransferDateMirror.addEventListener("change",()=>{
 });
 if(txTransferNoteMirror)txTransferNoteMirror.addEventListener("input",()=>{txNote.value=txTransferNoteMirror.value});
 if(categoryDetailViewTabs)categoryDetailViewTabs.querySelectorAll("[data-category-view]").forEach(btn=>btn.onclick=()=>{
-  categoryDetailGrouped=btn.dataset.categoryView==="notes";
+  if(btn.hidden)return;
+  categoryDetailView=btn.dataset.categoryView;
   renderCurrentCategoryDetailBody();
 });
 if(closeCategoryDetail)closeCategoryDetail.onclick=closeCategoryDetailFn;
