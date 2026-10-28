@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.12: align intraday trade reconciliation to the actual quote session (including overnight) -->
+<!-- 5.25.13: keep Stats month labels anchored to the chart when category details scroll -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -2079,6 +2079,7 @@ body.manualDetailOpen{padding-bottom:0!important}
   justify-content:flex-end;
   align-items:center;
   gap:5px;
+  position:relative; /* anchor month labels to their bars, not the fixed modal */
 }
 .categoryDetailBar{
   width:100%;
@@ -2089,7 +2090,11 @@ body.manualDetailOpen{padding-bottom:0!important}
 }
 .categoryDetailBarLabel{
   position:absolute;
-  transform:translateY(19px);
+  left:50%;
+  bottom:-17px;
+  transform:translateX(-50%);
+  white-space:nowrap;
+  pointer-events:none;
   font-size:8px;
   color:var(--muted);
   font-weight:800;
@@ -4032,7 +4037,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.12 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.13 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -5574,7 +5579,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.12",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.13",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
