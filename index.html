@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- 5.25.15: Stats expense-by-account breakdown with credit-card totals and drilldown -->
+<!-- 5.25.17: Stats expense-by-account breakdown with credit-card totals and drilldown -->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <!-- Cash Balance Save Fix 5.20.10: based on CIBC NAV Daily Chart -->
@@ -3326,6 +3326,35 @@ body.wsReturnOpen nav.bottom{display:none!important}
   white-space:nowrap;
 }
 #homeView .portfolioMetaRow #marketStatusText{white-space:nowrap}
+
+/* v5.25.17 – Investment capital movements. Keeps the existing visual language. */
+.fundingActions{display:flex;flex-wrap:wrap;gap:8px;margin:11px 0 14px}
+.fundingActions button{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:14px;padding:11px 13px;font:inherit;font-size:13px;font-weight:800;min-height:43px;cursor:pointer;flex:1 1 115px}
+.fundingActions button[data-fund-action="withdraw"]{color:#b53a49;border-color:#e7c6cb;background:#fff8f8}
+.fundingActions button[data-fund-action="deposit"]{color:#0c967b;border-color:#b5e4d7;background:#f7fffc}
+.fundingActions button:active{transform:scale(.985)}
+.investmentFundingQuick{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:0 20px 10px}
+.investmentFundingQuick button{font:inherit;border:1px solid var(--line);border-radius:999px;padding:8px 14px;background:#fff;font-size:12px;font-weight:750;min-height:36px;color:var(--text)}
+.fundingHistoryCard{border:1px solid var(--line);border-radius:19px;background:#fff;padding:15px;margin:10px 0 18px}
+.fundingHistoryTitle{font-size:15px;font-weight:850;margin-bottom:8px}
+.fundingHistoryRow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.fundingHistoryRow:last-child{border-bottom:0}
+.fundingHistoryName{font-size:13px;font-weight:780;line-height:1.35}
+.fundingHistoryMeta{font-size:11px;color:var(--muted);line-height:1.4;margin-top:3px;overflow-wrap:anywhere}
+.fundingHistoryAmount{font-size:13px;font-weight:830;white-space:nowrap}
+.fundingHistoryAmount.negative{color:#c34f5b}
+.fundingHistoryAmount.positive{color:#169d87}
+.fundingHistoryAmount.transfer{color:var(--muted)}
+.fundingHistoryMore[hidden],.fundingModal [hidden]{display:none!important}
+.fundingHistoryMore{display:block;margin:10px auto 0;border:1px solid var(--line);border-radius:12px;background:#fff;padding:9px 15px;font:inherit;font-size:12px;font-weight:750;color:var(--text)}
+.fundingHistoryNote{font-size:11px;line-height:1.5;color:var(--muted);margin-top:8px}
+.fundingModal{z-index:65}
+.fundingModal .field{margin-bottom:12px}
+.fundingModal select,.fundingModal input{width:100%;max-width:100%;box-sizing:border-box}
+.fundingModal .fundingWhen{color:var(--muted);font-size:12px;margin:4px 0 14px}
+.fundingModal .fundingError{color:#b83f4b;font-size:12px;min-height:16px;margin:8px 0 0}
+.fundingModal .fundingWarning{font-size:12px;color:var(--muted);line-height:1.5;margin:12px 0 0}
+@media(max-width:360px){.fundingActions{gap:6px}.fundingActions button{font-size:12px;padding:10px 7px}.investmentFundingQuick{padding:0 16px 8px}}
 </style>
 
 <meta name="theme-color" content="#f6f6f4"/>
@@ -3365,6 +3394,8 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button data-account="questrade_cash">Questrade Cash</button>
       <button data-account="cibc_mutual_fund">CIBC Mutual Fund</button>
     </div>
+
+    <div class="investmentFundingQuick"><button type="button" id="investmentManageFunds">Manage Funds</button></div>
 
     <div class="seg" id="portfolioRanges">
       <button>1D</button><button>1W</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button class="active">ALL</button>
@@ -3714,7 +3745,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
         <div class="cibcFundCurrency">CAD</div>
       </div>
       <div class="cibcFundGain" id="cibcFundGain">+$0.00 (+0.00%)</div>
-      <div class="cibcFundNote">3 CIBC Class A mutual funds · purchased in 2024</div>
+      <div class="cibcFundNote">3 CIBC Class A mutual funds · purchased in 2024<span id="cibcFundCashNote"></span></div>
       <div class="cibcFundNavStatus" id="cibcFundNavStatus">Daily NAV · checking latest price…</div>
     </div>
 
@@ -3963,6 +3994,21 @@ body.wsReturnOpen nav.bottom{display:none!important}
   </div>
 </div>
 
+
+<div class="modal fundingModal" id="fundingModal" aria-label="Record investment funds movement">
+  <div class="sheet">
+    <div class="sheetHead"><button type="button" class="close" id="closeFundingModal" aria-label="Close">×</button><h2 id="fundingModalTitle">Add Funds</h2><div class="sheetHeadSpacer" aria-hidden="true"></div></div>
+    <div class="field"><label for="fundingAccount">Investment Account</label><select id="fundingAccount"></select></div>
+    <div class="field" id="fundingToWrap" hidden><label for="fundingToAccount">Transfer To</label><select id="fundingToAccount"></select></div>
+    <div class="field"><label for="fundingAmount">Amount (CAD)</label><input id="fundingAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00"/></div>
+    <div class="field"><label for="fundingNote">Note (optional)</label><input id="fundingNote" maxlength="160" autocomplete="off" placeholder="e.g. bank transfer"/></div>
+    <div class="fundingWhen" id="fundingWhen">Recorded using the time you tap Save.</div>
+    <button type="button" class="primary" id="saveFundingMovement">Save Funding Movement</button>
+    <div class="fundingError" id="fundingError" role="status" aria-live="polite"></div>
+    <p class="fundingWarning">For CAD cash movements only. Add / Withdraw updates Cash and Net Deposits together. Transfer moves funds between investment accounts without changing the All Accounts total. Stock trades do not change Net Deposits.</p>
+  </div>
+</div>
+
 <div class="modal" id="settingsModal">
   <div class="sheet">
     <div class="settingsStickyHeader">
@@ -4018,7 +4064,27 @@ body.wsReturnOpen nav.bottom{display:none!important}
         </div>
       </div>
     </div>
-    <div class="settingsNote">Investment Value includes each account's cash. Account-level Total Return uses Investment Value − Net Deposits when Net Deposits is entered.</div>
+    <div class="accountSettingsBlock">
+      <div class="accountSettingsTitle">CIBC Mutual Fund</div>
+      <div class="accountSettingsSub">Tracked mutual-fund units remain unchanged. Uninvested CAD cash and contributed capital are recorded separately.</div>
+      <div class="settingsGrid">
+        <div class="field"><label for="cibcCashInput">Cash Balance (CAD)</label><input id="cibcCashInput" type="text" inputmode="decimal" autocomplete="off" aria-describedby="investmentSettingsStatus"/></div>
+        <div class="field"><label for="cibcNetDepositsInput">Net Deposits (CAD)</label><input id="cibcNetDepositsInput" type="text" inputmode="decimal" autocomplete="off" aria-describedby="investmentSettingsStatus"/></div>
+      </div>
+    </div>
+    <div class="settingsNote">Cash and Net Deposits are saved separately. Buying or selling shares does not move Cash automatically. For real contributions use Add Funds, not manual cash edits.</div>
+    <div class="settingsSectionTitle">Funding & Net Deposits History</div>
+    <div class="fundingActions" id="fundingSettingsActions">
+      <button type="button" data-fund-action="deposit">＋ Add Funds</button>
+      <button type="button" data-fund-action="withdraw">− Withdraw Funds</button>
+      <button type="button" data-fund-action="transfer">⇄ Transfer</button>
+    </div>
+    <div class="fundingHistoryCard">
+      <div class="fundingHistoryTitle">Recent Capital Movements</div>
+      <div id="fundingHistoryRows"><div class="fundingHistoryNote">No funding movements recorded yet.</div></div>
+      <button type="button" id="fundingHistoryMore" class="fundingHistoryMore" hidden>Show more</button>
+      <div class="fundingHistoryNote" id="fundingHistoryNotice">Your existing Net Deposits will be treated as an opening balance. Earlier capital movements cannot be reconstructed automatically.</div>
+    </div>
 
     <div class="settingsSectionTitle">Cloud Sync</div>
     <div class="accountSettingsBlock cloudSyncBlock">
@@ -4052,7 +4118,7 @@ body.wsReturnOpen nav.bottom{display:none!important}
       <button class="ghostBtn" id="refreshData">Refresh Now</button>
     </div>
     <div class="settingsNote" id="fxStatus">USD/CAD: demo 1.3900</div>
-    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.15 · Sell Trades + Unified Dividends</div>
+    <div class="settingsNote" id="uiBuildVersion">UI version 5.25.17 · Sell Trades + Unified Dividends</div>
   </div>
 </div>
 
@@ -4306,6 +4372,8 @@ var questradeCashInput=document.getElementById("questradeCashInput");
 var questradeNetDepositsInput=document.getElementById("questradeNetDepositsInput");
 var questradeCashAccountCashInput=document.getElementById("questradeCashAccountCashInput");
 var questradeCashAccountNetDepositsInput=document.getElementById("questradeCashAccountNetDepositsInput");
+var cibcCashInput=document.getElementById("cibcCashInput");
+var cibcNetDepositsInput=document.getElementById("cibcNetDepositsInput");
 var netWorthView=document.getElementById("netWorthView");
 var transactionsView=document.getElementById("transactionsView");
 var statsView=document.getElementById("statsView");
@@ -4456,6 +4524,7 @@ const PORTFOLIO_DATA_RESET_VERSION = "v2.6-clean-2026-10-11";
 const CHART_ZONE="America/New_York";
 const INVESTMENT_OBSERVATIONS_KEY="portfolioAccountObservationsV521";
 const INVESTMENT_CASH_HISTORY_KEY="portfolioCashHistoryV521";
+const INVESTMENT_FUNDING_HISTORY_KEY="portfolioFundingHistoryV52517";
 const chartControllers=new WeakMap();
 let chartPendingPaint=false;
 let quoteRefreshPromise=null;
@@ -4765,12 +4834,12 @@ function readLocalJSON(key,fallback){try{return JSON.parse(localStorage.getItem(
 function writeLocalJSON(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch(_){return false}}
 function recordCashAnchor(){
   const histories=readLocalJSON(INVESTMENT_CASH_HISTORY_KEY,{}),now=Date.now()/1000;
-  for(const a of INVESTMENT_ACCOUNTS){if(a.kind==="mutual_fund")continue;const value=cashForAccount(a.id);const rows=histories[a.id]||(histories[a.id]=[]);if(!rows.length||rows.at(-1).value!==value)rows.push({time:now,date:chartDateKey(now),value});}
+  for(const a of INVESTMENT_ACCOUNTS){const value=cashForAccount(a.id);const rows=histories[a.id]||(histories[a.id]=[]);if(!rows.length||rows.at(-1).value!==value)rows.push({time:now,date:chartDateKey(now),value});}
   writeLocalJSON(INVESTMENT_CASH_HISTORY_KEY,histories);
 }
 function accountCashAt(accountId,t){
   const histories=readLocalJSON(INVESTMENT_CASH_HISTORY_KEY,{});
-  const ids=accountId==="all"?INVESTMENT_ACCOUNTS.filter(a=>a.kind!=="mutual_fund").map(a=>a.id):[accountId];
+  const ids=accountId==="all"?INVESTMENT_ACCOUNTS.map(a=>a.id):[accountId];
   let value=0,estimated=false;
   for(const id of ids){
     const rows=(histories[id]||[]).filter(p=>chartFinite(p.time)&&chartFinite(p.value))
@@ -5005,7 +5074,7 @@ function intradaySharesWithSales(ticker,date,accountId,time,tradeDay){
 }
 function cifNavRows(range){
   const dates=[...new Set(CIBC_MUTUAL_FUNDS.flatMap(f=>(cibcNavHistory[f.ticker]||[]).map(r=>r.date)))].sort();
-  const rows=dates.map(date=>{let value=0;for(const f of CIBC_MUTUAL_FUNDS){const row=(cibcNavHistory[f.ticker]||[]).find(r=>r.date===date);if(!row||!(row.price>0))return null;value+=row.price*f.units;}return {date,time:chartDayTime(date),value};}).filter(Boolean);
+  const rows=dates.map(date=>{let value=0;for(const f of CIBC_MUTUAL_FUNDS){const row=(cibcNavHistory[f.ticker]||[]).find(r=>r.date===date);if(!row||!(row.price>0))return null;value+=row.price*f.units;}return {date,time:chartDayTime(date),value:value+accountCashAt("cibc_mutual_fund",chartDayEnd(date)).value};}).filter(Boolean);
   return range==="1D"?rows.slice(-1):chartRangeRows(rows,range);
 }
 function historyQuoteKey(t,range,interval){return `${t}|${range}|${interval}`}
@@ -5147,14 +5216,30 @@ function setPortfolioChartNote(text){
   if(!el){el=document.createElement('div');el.id='portfolioChartNote';el.className='unifiedChartNote';lineChart.insertAdjacentElement('afterend',el);}
   el.textContent=text||"";
 }
+function investmentScrubDifference(accountId,point,grain="daily"){
+  if(!chartFinite(point?.value))return null;
+  const deposits=investmentDepositsAt(accountId,point,grain);
+  return chartFinite(deposits)?Number(point.value)-Number(deposits):null;
+}
+function investmentScrubDifferenceText(accountId,point,grain){
+  const amount=investmentScrubDifference(accountId,point,grain);
+  return amount===null?"—":signedMoney(amount);
+}
+function investmentScrubDifferenceColor(accountId,point,grain){
+  const amount=investmentScrubDifference(accountId,point,grain);
+  return amount===null?"var(--muted)":amount>0?"var(--teal)":amount<0?"var(--red)":"var(--muted)";
+}
 function renderLineChart(data,total,options={}){
   const accountId=selectedPortfolioAccount,range=currentPortfolioRange;
   const gain=portfolioGain.textContent,gainColor=portfolioGain.style.color;
-  drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",onSelect(p){
-    portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=(p.estimated?"Est. ":"")+chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
-  },onReset(){
-    portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
-  }});
+  drawValueChart(lineChart,data,{...options,scope:accountId+"|"+range,grain:options.grain||(range==="1D"?"intraday":"daily"),label:accountName(accountId)+" account value",
+    scrubValueFormatter:p=>investmentScrubDifferenceText(accountId,p,options.grain||(range==="1D"?"intraday":"daily")),
+    scrubValueColor:p=>investmentScrubDifferenceColor(accountId,p,options.grain||(range==="1D"?"intraday":"daily")),
+    onSelect(p){
+      portfolioValue.textContent=fmt(p.value);portfolioGain.textContent=(p.estimated?"Est. ":"")+chartLabel(p,options.grain||(range==="1D"?"intraday":"daily"));portfolioGain.style.setProperty("color","var(--muted)","important");
+    },onReset(){
+      portfolioValue.textContent=fmt(portfolioSummary(accountId).accountValue);portfolioGain.textContent=gain;portfolioGain.style.setProperty("color",gainColor,"important");
+    }});
 }
 function setPortfolioPeriodGain(value,range,label){
   portfolioGain.textContent=chartFinite(value)?`${signedMoney(value)} ${label||portfolioReturnPeriodLabel(range)}`:"\u2014 previous close unavailable";
@@ -5397,9 +5482,9 @@ function renderManualAccountChart(){
 const CLOUD_BASELINE_KEY="portfolioCloudBaselineV521";
 const CLOUD_EDIT_BASE_KEY="portfolioCloudEditBaseV521";
 const CLOUD_OPTIONAL_KEYS=new Set(["cibcMutualFundNavHistoryV1",INVESTMENT_CASH_HISTORY_KEY,INVESTMENT_OBSERVATIONS_KEY]);
-const CLOUD_SCALARS=["portfolioAccountCashCAD","portfolioNetDepositsCAD","questradeAccountCashCAD","questradeNetDepositsCAD","questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD"];
+const CLOUD_SCALARS=["portfolioAccountCashCAD","portfolioNetDepositsCAD","questradeAccountCashCAD","questradeNetDepositsCAD","questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD","cibcAccountCashCAD","cibcAccountNetDepositsCAD"];
 const SELL_TRADES_STORAGE_KEY="portfolioSellTradesV525";
-const CLOUD_FINANCIAL_KEYS=["incomeTrackerLots",SELL_TRADES_STORAGE_KEY,"netWorthManualAccountsV58","personalLedgerTransactionsV513",...CLOUD_SCALARS];
+const CLOUD_FINANCIAL_KEYS=["incomeTrackerLots",SELL_TRADES_STORAGE_KEY,"netWorthManualAccountsV58","personalLedgerTransactionsV513",INVESTMENT_FUNDING_HISTORY_KEY,...CLOUD_SCALARS];
 function rememberCloudEditBase(key){
   const bases=readLocalJSON(CLOUD_EDIT_BASE_KEY,{});
   if(!Object.prototype.hasOwnProperty.call(bases,key)){bases[key]=localStorage.getItem(key);writeLocalJSON(CLOUD_EDIT_BASE_KEY,bases);}
@@ -5412,6 +5497,20 @@ function mergeCloudStorage(base,local,remote,{reviewScalars=false}={}){
     const l=local[key]??null,r=remote[key]??null;
     if(cloudEqual(l,r)){if(l!==null)out[key]=l;continue;}
     // Observed dates can be combined without rewriting trades or account balances.
+    if(key===INVESTMENT_FUNDING_HISTORY_KEY){
+      // Merge by stable transaction ID only when both devices share the same opening baseline.
+      // Conflicting opening balances must be reviewed with the accompanying scalar changes.
+      const a=readJSONValue(l,null),b=readJSONValue(r,null);
+      if(!a){if(r!==null)out[key]=r;continue;}
+      if(!b){out[key]=l;continue;}
+      if(!cloudEqual(JSON.stringify(a.baseline||{}),JSON.stringify(b.baseline||{}))){conflicts.push(key);continue;}
+      const all=new Map();
+      for(const entry of [...(Array.isArray(b.events)?b.events:[]),...(Array.isArray(a.events)?a.events:[])]){
+        if(entry?.id)all.set(entry.id,entry);
+      }
+      out[key]=JSON.stringify({...b,events:[...all.values()].sort((x,y)=>String(x.occurredAt).localeCompare(String(y.occurredAt)))});
+      continue;
+    }
     if(key==="netWorthHistoryV58"){
       const dates=new Map();for(const p of readJSONValue(l,[]))if(p?.date)dates.set(p.date,p);
       for(const p of readJSONValue(r,[]))if(p?.date)dates.set(p.date,p);
@@ -5454,6 +5553,7 @@ function hydrateCloudData(storage){
     accountCash=loadNumberSetting("portfolioAccountCashCAD",accountCash);netDeposits=loadNumberSetting("portfolioNetDepositsCAD",netDeposits);
     questradeCash=loadNumberSetting("questradeAccountCashCAD",questradeCash);questradeNetDeposits=loadNumberSetting("questradeNetDepositsCAD",questradeNetDeposits);
     questradeCashAccountCash=loadNumberSetting("questradeCashAccountCashCAD",questradeCashAccountCash);questradeCashAccountNetDeposits=loadNumberSetting("questradeCashAccountNetDepositsCAD",questradeCashAccountNetDeposits);
+    cibcAccountCash=loadNumberSetting("cibcAccountCashCAD",cibcAccountCash);cibcAccountNetDeposits=loadNumberSetting("cibcAccountNetDepositsCAD",cibcAccountNetDeposits);
     lots=readJSONValue(storage.incomeTrackerLots,lots);
     sellTrades=loadSellTradesSafe();
     manualAccounts=loadManualAccounts();ledgerTransactions=loadLedgerTransactions();netWorthHistory=loadNetWorthHistory();
@@ -5530,6 +5630,7 @@ const CLOUD_SYNC_KEYS=[
   "portfolioAccountCashCAD","portfolioNetDepositsCAD",
   "questradeAccountCashCAD","questradeNetDepositsCAD",
   "questradeCashAccountCashCAD","questradeCashAccountNetDepositsCAD",
+  "cibcAccountCashCAD","cibcAccountNetDepositsCAD",INVESTMENT_FUNDING_HISTORY_KEY,
   "netWorthManualAccountsV58","netWorthHistoryV58","personalLedgerTransactionsV513",
   "miao2026HistoryImportedV514","multiAccountMigrationV58","questradeHistoryStartV584",
   "questradeCurrentHoldingsSeedV581","cibcMutualFundMigrationV511","cibcManualAccountBackupV511",
@@ -5614,7 +5715,7 @@ function cloudBuildPayload(){
   for(const key of CLOUD_SYNC_KEYS){
     try{const value=localStorage.getItem(key);if(value!==null)storage[key]=value}catch(e){}
   }
-  return {schemaVersion:2,appVersion:"5.25.15",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
+  return {schemaVersion:2,appVersion:"5.25.17",exportedAt:new Date().toISOString(),storage,cloudModel:cloudBuildModel()};
 }
 async function cloudRequest(path,options={}){
   const token=cloudSyncToken();
@@ -6008,6 +6109,8 @@ let questradeCash = loadNumberSetting("questradeAccountCashCAD",0);
 let questradeNetDeposits = loadNumberSetting("questradeNetDepositsCAD",0);
 let questradeCashAccountCash = loadNumberSetting("questradeCashAccountCashCAD",2976.76);
 let questradeCashAccountNetDeposits = loadNumberSetting("questradeCashAccountNetDepositsCAD",3000);
+let cibcAccountCash = loadNumberSetting("cibcAccountCashCAD",0);
+let cibcAccountNetDeposits = loadNumberSetting("cibcAccountNetDepositsCAD",CIBC_MUTUAL_FUNDS.reduce((sum,f)=>sum+(Number(f.bookValue)||0),0));
 function syncDateDisplay(){
   if(fDateDisplay)fDateDisplay.textContent=formatQuickDateLabel(fDate.value);
 }
@@ -6060,15 +6163,172 @@ function cashForAccount(id){
   if(id==="wealthsimple_tfsa")return Number(accountCash||0);
   if(id==="questrade_tfsa")return Number(questradeCash||0);
   if(id==="questrade_cash")return Number(questradeCashAccountCash||0);
-  if(id==="cibc_mutual_fund")return 0;
-  return Number(accountCash||0)+Number(questradeCash||0)+Number(questradeCashAccountCash||0);
+  if(id==="cibc_mutual_fund")return Number(cibcAccountCash||0);
+  return Number(accountCash||0)+Number(questradeCash||0)+Number(questradeCashAccountCash||0)+Number(cibcAccountCash||0);
 }
 function depositsForAccount(id){
   if(id==="wealthsimple_tfsa")return Number(netDeposits||0);
   if(id==="questrade_tfsa")return Number(questradeNetDeposits||0);
   if(id==="questrade_cash")return Number(questradeCashAccountNetDeposits||0);
-  if(id==="cibc_mutual_fund")return Number(cibcMutualFundSummary().bookValue||0);
-  return Number(netDeposits||0)+Number(questradeNetDeposits||0)+Number(questradeCashAccountNetDeposits||0)+Number(cibcMutualFundSummary().bookValue||0);
+  if(id==="cibc_mutual_fund")return Number(cibcAccountNetDeposits||0);
+  return Number(netDeposits||0)+Number(questradeNetDeposits||0)+Number(questradeCashAccountNetDeposits||0)+Number(cibcAccountNetDeposits||0);
+}
+// Capital movements are an independent, immutable dated ledger.
+// The first funding action captures CURRENT account deposits as an opening baseline;
+// it does not invent previous transaction dates. Earlier chart points require an
+// exact-date recorded basis observation, otherwise the tooltip is unavailable.
+const FUNDING_ACCOUNTS={
+  wealthsimple_tfsa:{cashKey:"portfolioAccountCashCAD",depositKey:"portfolioNetDepositsCAD",getCash:()=>accountCash,getDeposit:()=>netDeposits,setCash:v=>{accountCash=v},setDeposit:v=>{netDeposits=v}},
+  questrade_tfsa:{cashKey:"questradeAccountCashCAD",depositKey:"questradeNetDepositsCAD",getCash:()=>questradeCash,getDeposit:()=>questradeNetDeposits,setCash:v=>{questradeCash=v},setDeposit:v=>{questradeNetDeposits=v}},
+  questrade_cash:{cashKey:"questradeCashAccountCashCAD",depositKey:"questradeCashAccountNetDepositsCAD",getCash:()=>questradeCashAccountCash,getDeposit:()=>questradeCashAccountNetDeposits,setCash:v=>{questradeCashAccountCash=v},setDeposit:v=>{questradeCashAccountNetDeposits=v}},
+  cibc_mutual_fund:{cashKey:"cibcAccountCashCAD",depositKey:"cibcAccountNetDepositsCAD",getCash:()=>cibcAccountCash,getDeposit:()=>cibcAccountNetDeposits,setCash:v=>{cibcAccountCash=v},setDeposit:v=>{cibcAccountNetDeposits=v}}
+};
+const FUNDING_FIELD_ACCOUNT=new Map(Object.entries(FUNDING_ACCOUNTS).flatMap(([id,c])=>[[c.cashKey,id],[c.depositKey,id]]));
+function fundingId(){return globalThis.crypto?.randomUUID?.()||`funding_${Date.now()}_${Math.random().toString(36).slice(2)}`}
+function fundingExisting(){
+  const value=readLocalJSON(INVESTMENT_FUNDING_HISTORY_KEY,null);
+  return value&&Number(value.version)===1&&value.baseline&&typeof value.baseline==="object"&&Array.isArray(value.events)?value:null;
+}
+function fundingInitial(openingAt=new Date().toISOString()){
+  const occurredAt=openingAt,date=chartDateKey(Date.parse(occurredAt)/1000);
+  const baseline={};for(const a of INVESTMENT_ACCOUNTS)baseline[a.id]={value:Math.round(depositsForAccount(a.id)*100)/100,date,occurredAt};
+  return {version:1,openedAt:occurredAt,baseline,events:[]};
+}
+function fundingWithEvents(events){
+  const initial=fundingExisting()||fundingInitial(events[0]?.occurredAt||new Date().toISOString());
+  return {...initial,events:[...initial.events,...events].sort((a,b)=>String(a.occurredAt).localeCompare(String(b.occurredAt)))};
+}
+function historicalRecordedBasis(id,point){
+  if(!point?.date)return null;
+  const entry=readLocalJSON(INVESTMENT_OBSERVATIONS_KEY,{})[id];
+  const match=(entry?.daily||[]).find(p=>p.date===point.date&&chartFinite(p.basis));
+  return match?Number(match.basis):null;
+}
+function investmentDepositsAt(id,point,grain="daily"){
+  const history=fundingExisting();
+  // A daily snapshot cannot establish the net deposits at an earlier intraday minute.
+  if(!history)return grain==="daily"?historicalRecordedBasis(id,point):null;
+  const selected= id==="all"?INVESTMENT_ACCOUNTS.map(a=>a.id):[id];
+  let total=0;
+  const pointTime=grain==="intraday"&&chartFinite(point?.time)?Number(point.time)*1000:null;
+  const date=String(point?.date||"");
+  for(const accountId of selected){
+    const baseline=history.baseline[accountId];
+    if(!baseline||!chartFinite(baseline.value))return historicalRecordedBasis(id,point);
+    if(pointTime!==null){
+      if(pointTime<Date.parse(baseline.occurredAt))return null;
+    }else if(date<baseline.date)return historicalRecordedBasis(id,point);
+    let value=Number(baseline.value);
+    for(const entry of history.events){
+      const delta=Number(entry?.deltas?.[accountId]||0);
+      if(!delta)continue;
+      const t=Date.parse(entry.occurredAt);
+      if(!Number.isFinite(t))continue;
+      const qualifies=pointTime!==null?t<=pointTime:chartDateKey(t/1000)<=date;
+      if(qualifies)value+=delta;
+    }
+    total+=value;
+  }
+  return Math.round(total*100)/100;
+}
+function fundingSimpleAmount(input){
+  const v=parseInvestmentSettingsAmount(input);
+  if(!(v>0)||v>100000000)throw Error("Enter a positive CAD amount.");
+  return v;
+}
+function fundingApplyChange({type,accountId,toId,amount,note=""}){
+  if(!["deposit","withdraw","transfer"].includes(type))throw Error("Choose a funding action.");
+  if(!FUNDING_ACCOUNTS[accountId])throw Error("Choose an investment account.");
+  if(type==="transfer"&&(!FUNDING_ACCOUNTS[toId]||toId===accountId))throw Error("Choose a different destination account.");
+  amount=fundingSimpleAmount(amount);
+  const cent=n=>Math.round((Number(n)||0)*100);
+  const deltaCent=type==="deposit"?cent(amount):-cent(amount);
+  const changes={[accountId]:deltaCent};
+  if(type==="transfer")changes[toId]=cent(amount);
+  const proposed=[];
+  for(const [id,delta] of Object.entries(changes)){
+    const cfg=FUNDING_ACCOUNTS[id];
+    const cash=(cent(cfg.getCash())+delta)/100,deposit=(cent(cfg.getDeposit())+delta)/100;
+    if(cash<0)throw Error(`${accountName(id)} does not have enough recorded CAD cash. Update its Cash Balance first if a sale has settled.`);
+    proposed.push({id,cfg,cash,deposit});
+  }
+  const occurredAt=new Date().toISOString();
+  const entry={id:fundingId(),type,occurredAt,amount,note:String(note||"").trim().slice(0,160),
+    fromId:accountId,toId:type==="transfer"?toId:null,deltas:Object.fromEntries(Object.entries(changes).map(([k,v])=>[k,v/100]))};
+  // Prepare before mutating balances, so the opening capital base is accurate.
+  const next=fundingWithEvents([entry]);
+  const backups=[];
+  try{
+    const writes=[];
+    for(const item of proposed){writes.push([item.cfg.cashKey,String(item.cash)],[item.cfg.depositKey,String(item.deposit)]);}
+    writes.push([INVESTMENT_FUNDING_HISTORY_KEY,JSON.stringify(next)]);
+    for(const [key,value] of writes){
+      backups.push([key,localStorage.getItem(key)]);rememberCloudEditBase(key);localStorage.setItem(key,value);
+    }
+    localStorage.setItem(CLOUD_SYNC_DIRTY_KEY,"1");
+  }catch(e){
+    for(const [key,value] of backups.reverse()){try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value)}catch(_){} }
+    throw Error("Unable to save the funding transaction. No balances were changed.");
+  }
+  for(const item of proposed){item.cfg.setCash(item.cash);item.cfg.setDeposit(item.deposit)}
+  recordCashAnchor();recordAccountObservation();
+  chartCache.clear();portfolioChartRequestSeq++;
+  if(!chartIsScrubbing()){
+    renderHome();renderNetWorth();
+    loadPortfolioHistory(currentPortfolioRange).catch(e=>console.warn("Funding chart reload",e));
+  }
+  renderFundingHistory();
+  cloudScheduleSync();
+  return entry;
+}
+let fundingHistoryLimit=12;
+function renderFundingHistory(){
+  const root=document.getElementById("fundingHistoryRows"),notice=document.getElementById("fundingHistoryNotice");
+  if(!root)return;
+  const history=fundingExisting();
+  if(notice)notice.textContent=history
+    ?`Opening Net Deposits recorded ${new Date(history.openedAt).toLocaleString()}. Earlier dates use only exact recorded baselines; otherwise performance shows —.`
+    :"Existing Net Deposits are kept unchanged. The first funding action records today's opening capital baseline; earlier contributions are not guessed.";
+  const events=(history?.events||[]).slice().reverse().slice(0,fundingHistoryLimit);
+  const more=document.getElementById("fundingHistoryMore");
+  if(more){more.hidden=(history?.events||[]).length<=fundingHistoryLimit;more.onclick=()=>{fundingHistoryLimit+=20;renderFundingHistory()};}
+  root.innerHTML=events.length?events.map(e=>{
+    const from=accountName(e.fromId),to=e.toId?accountName(e.toId):"";
+    const title=e.type==="transfer"?`${from} → ${to}`:e.type==="deposit"?`Add Funds · ${from}`:e.type==="withdraw"?`Withdraw Funds · ${from}`:`Capital adjustment · ${from}`;
+    const amount=e.type==="adjustment"?Number(e?.deltas?.[e.fromId]||0):e.type==="withdraw"?-Number(e.amount):Number(e.amount);
+    return `<div class="fundingHistoryRow"><div><div class="fundingHistoryName">${returnHtmlSafe(title)}</div><div class="fundingHistoryMeta">${returnHtmlSafe(new Date(e.occurredAt).toLocaleString())}${e.note?` · ${returnHtmlSafe(e.note)}`:""}</div></div><strong class="fundingHistoryAmount ${e.type==="transfer"?"transfer":amount<0?"negative":"positive"}">${e.type==="transfer"?"":amount<0?"−":"+"}${fmt(Math.abs(amount))}</strong></div>`;
+  }).join(""):'<div class="fundingHistoryNote">No capital movements recorded yet.</div>';
+}
+function openFundingModal(type="deposit"){
+  if(settingsModal?.classList.contains("show")&&!saveInvestmentAccountSettings({focusInvalid:true}))return;
+  const modal=document.getElementById("fundingModal"),from=document.getElementById("fundingAccount"),to=document.getElementById("fundingToAccount");
+  if(!modal||!from||!to)return;
+  modal.dataset.type=["deposit","withdraw","transfer"].includes(type)?type:"deposit";
+  document.getElementById("fundingModalTitle").textContent={deposit:"Add Funds",withdraw:"Withdraw Funds",transfer:"Transfer Funds"}[modal.dataset.type];
+  const options=INVESTMENT_ACCOUNTS.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
+  from.innerHTML=options;to.innerHTML=options;
+  from.value=selectedPortfolioAccount==="all"?"wealthsimple_tfsa":selectedPortfolioAccount;
+  to.value=INVESTMENT_ACCOUNTS.find(a=>a.id!==from.value)?.id||"";
+  document.getElementById("fundingToWrap").hidden=modal.dataset.type!=="transfer";
+  document.getElementById("fundingAmount").value="";document.getElementById("fundingNote").value="";
+  document.getElementById("fundingError").textContent="";
+  document.getElementById("fundingWhen").textContent="Recorded at the current date and time when you tap Save.";
+  modal.classList.add("show");
+  const sheet=modal.querySelector(".sheet");if(sheet)sheet.scrollTop=0;
+  document.getElementById("fundingAmount").focus();
+}
+function closeFundingModal(){document.getElementById("fundingModal")?.classList.remove("show")}
+function saveFundingFromModal(){
+  const modal=document.getElementById("fundingModal");if(!modal?.classList.contains("show"))return;
+  const error=document.getElementById("fundingError");error.textContent="";
+  try{
+    const entry=fundingApplyChange({type:modal.dataset.type,accountId:document.getElementById("fundingAccount").value,
+      toId:document.getElementById("fundingToAccount").value,amount:document.getElementById("fundingAmount").value,note:document.getElementById("fundingNote").value});
+    closeFundingModal();
+    for(const f of investmentSettingsFields)if(f.el)f.el.value=Number(f.get()||0).toFixed(2);
+    settingsLastSaved=true;updateInvestmentSettingsStatus();
+    return entry;
+  }catch(e){error.textContent=String(e.message||e)}
 }
 function lotsForAccount(id="all"){
   return id==="all"?lots:lots.filter(l=>(l.accountId||DEFAULT_INVESTMENT_ACCOUNT)===id);
@@ -6549,12 +6809,12 @@ function portfolioSummary(accountId="all"){
   if(accountId==="all"){
     total=INVESTMENT_ACCOUNTS.reduce((sum,a)=>sum+portfolioSummary(a.id).total,0);
   }else if(accountId==="cibc_mutual_fund"){
-    total=capital;
+    total=accountValue-depositsForAccount(accountId);
   }else{
     const dep=depositsForAccount(accountId);
     // With net deposits, sale proceeds are already included once cash is reconciled.
     // Without net deposits, realized gains must be included in the fallback return.
-    total=dep>0?accountValue-dep:capital+divAll+realizedTotalForAccount(accountId);
+    total=Number.isFinite(dep)?accountValue-dep:capital+divAll+realizedTotalForAccount(accountId);
   }
   const dep=depositsForAccount(accountId);
   const totalPct=dep>0?total/dep*100:(bv?total/bv*100:0);
@@ -7112,7 +7372,9 @@ const investmentSettingsFields=[
   {el:questradeCashInput,key:"questradeAccountCashCAD",label:"Questrade TFSA Cash Balance",get:()=>questradeCash,set:v=>{questradeCash=v}},
   {el:questradeNetDepositsInput,key:"questradeNetDepositsCAD",label:"Questrade TFSA Net Deposits",get:()=>questradeNetDeposits,set:v=>{questradeNetDeposits=v}},
   {el:questradeCashAccountCashInput,key:"questradeCashAccountCashCAD",label:"Questrade Cash Balance",get:()=>questradeCashAccountCash,set:v=>{questradeCashAccountCash=v}},
-  {el:questradeCashAccountNetDepositsInput,key:"questradeCashAccountNetDepositsCAD",label:"Questrade Cash Net Deposits",get:()=>questradeCashAccountNetDeposits,set:v=>{questradeCashAccountNetDeposits=v}}
+  {el:questradeCashAccountNetDepositsInput,key:"questradeCashAccountNetDepositsCAD",label:"Questrade Cash Net Deposits",get:()=>questradeCashAccountNetDeposits,set:v=>{questradeCashAccountNetDeposits=v}},
+  {el:cibcCashInput,key:"cibcAccountCashCAD",label:"CIBC Cash Balance",get:()=>cibcAccountCash,set:v=>{cibcAccountCash=v}},
+  {el:cibcNetDepositsInput,key:"cibcAccountNetDepositsCAD",label:"CIBC Net Deposits",get:()=>cibcAccountNetDeposits,set:v=>{cibcAccountNetDeposits=v}}
 ];
 function updateInvestmentSettingsStatus(){
   const el=document.getElementById("investmentSettingsStatus");
@@ -7129,16 +7391,16 @@ function updateInvestmentSettingsStatus(){
   el.dataset.state="";
   el.textContent="Balances save when you finish editing.";
 }
-function parseInvestmentSettingsAmount(raw){
+function parseInvestmentSettingsAmount(raw,{allowNegative=false}={}){
   let text=String(raw??"").trim().replace(/^(?:CAD\s*)?(?:C?\$\s*)?/i,"").trim();
   if(!text)throw new Error("Enter an amount, or 0.");
   // Accept grouped CAD amounts and a decimal comma, but not malformed grouping.
   if(/^\d+,\d{1,2}$/.test(text))text=text.replace(",",".");
-  if(!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{0,2})?$/.test(text)){
-    throw new Error("Use a non-negative amount with up to 2 decimal places.");
+  if(!new RegExp(`^${allowNegative?"-?":""}(?:\\d+|\\d{1,3}(?:,\\d{3})+)(?:\\.\\d{0,2})?$`).test(text)){
+    throw new Error("Use an amount with up to 2 decimal places.");
   }
   const value=Number(text.replaceAll(",",""));
-  if(!Number.isFinite(value)||value<0||!Number.isSafeInteger(Math.round(value*100))){
+  if(!Number.isFinite(value)||(!allowNegative&&value<0)||!Number.isSafeInteger(Math.round(value*100))){
     throw new Error("Enter a valid amount.");
   }
   return Math.round(value*100)/100;
@@ -7150,7 +7412,7 @@ function saveInvestmentAccountSettings({focusInvalid=false}={}){
   for(const field of investmentSettingsFields){
     if(!field.el)continue;
     try{
-      const value=parseInvestmentSettingsAmount(field.el.value);
+      const value=parseInvestmentSettingsAmount(field.el.value,{allowNegative:Boolean(FUNDING_FIELD_ACCOUNT.get(field.key)&&field.key===FUNDING_ACCOUNTS[FUNDING_FIELD_ACCOUNT.get(field.key)].depositKey)});
       field.el.removeAttribute("aria-invalid");
       parsed.push({field,value});
     }catch(e){
@@ -7165,9 +7427,24 @@ function saveInvestmentAccountSettings({focusInvalid=false}={}){
     if(focusInvalid)invalid.field.el.focus();
     return false;
   }
-  const changed=parsed.filter(({field,value})=>Number(field.get())!==value);
+  const changed=parsed.filter(({field,value})=>Math.round(Number(field.get())*100)!==Math.round(value*100));
+  const depositAdjustments={};
+  for(const {field,value} of changed){
+    const accountId=FUNDING_FIELD_ACCOUNT.get(field.key);
+    if(accountId&&field.key===FUNDING_ACCOUNTS[accountId].depositKey)
+      depositAdjustments[accountId]=Math.round((value-Number(field.get()))*100)/100;
+  }
+  const fundingAdjusted=Object.keys(depositAdjustments).length>0;
+  const nextFunding=fundingAdjusted?fundingWithEvents(Object.entries(depositAdjustments).map(([accountId,delta])=>({
+    id:fundingId(),type:"adjustment",occurredAt:new Date().toISOString(),amount:Math.abs(delta),fromId:accountId,toId:null,deltas:{[accountId]:delta},note:"Manual Net Deposits correction"
+  }))):null;
   const previous=[];
   try{
+    if(fundingAdjusted){
+      previous.push({key:INVESTMENT_FUNDING_HISTORY_KEY,value:localStorage.getItem(INVESTMENT_FUNDING_HISTORY_KEY)});
+      rememberCloudEditBase(INVESTMENT_FUNDING_HISTORY_KEY);
+      localStorage.setItem(INVESTMENT_FUNDING_HISTORY_KEY,JSON.stringify(nextFunding));
+    }
     for(const {field,value} of changed){
       previous.push({key:field.key,value:localStorage.getItem(field.key)});
       rememberCloudEditBase(field.key);
@@ -7187,6 +7464,7 @@ function saveInvestmentAccountSettings({focusInvalid=false}={}){
   investmentSettingsDirty=false;
   if(changed.length){
     settingsLastSaved=true;
+    if(fundingAdjusted)renderFundingHistory();
     recordCashAnchor();recordAccountObservation();
     cloudLocalEditSerial++;
     chartCache.clear();
@@ -7225,6 +7503,7 @@ function openSettings(){
   for(const field of investmentSettingsFields){
     if(field.el){field.el.value=Number(field.get()||0).toFixed(2);field.el.removeAttribute("aria-invalid")}
   }
+  renderFundingHistory();
   investmentSettingsDirty=false;
   settingsSaveError="";
   settingsLastSaved=false;
@@ -7268,6 +7547,15 @@ for(const field of investmentSettingsFields){
     if(event.key==="Enter"){event.preventDefault();if(saveInvestmentAccountSettings({focusInvalid:true}))field.el.blur()}
   });
 }
+document.querySelectorAll("[data-fund-action]").forEach(b=>b.onclick=()=>openFundingModal(b.dataset.fundAction));
+const manageFundsBtn=document.getElementById("investmentManageFunds");
+if(manageFundsBtn)manageFundsBtn.onclick=()=>openFundingModal("deposit");
+const fundingCloseBtn=document.getElementById("closeFundingModal");
+if(fundingCloseBtn)fundingCloseBtn.onclick=closeFundingModal;
+const fundingSaveBtn=document.getElementById("saveFundingMovement");
+if(fundingSaveBtn)fundingSaveBtn.onclick=saveFundingFromModal;
+const fundingModalEl=document.getElementById("fundingModal");
+if(fundingModalEl)fundingModalEl.onclick=e=>{if(e.target===fundingModalEl)closeFundingModal()};
 if(settingsBtn)settingsBtn.onclick=openSettings;
 if(navSettings)navSettings.onclick=openSettings;
 if(closeSettings)closeSettings.onclick=closeSettingsFn;
@@ -8604,7 +8892,9 @@ function cibcNavBusinessDaysSince(date){
 }
 function renderCibcFundDetail(){
   const s=cibcMutualFundSummary();
-  cibcFundBalance.textContent=fmt(s.marketValue);
+  cibcFundBalance.textContent=fmt(portfolioSummary("cibc_mutual_fund").accountValue);
+  const cashEl=document.getElementById("cibcFundCashNote");
+  if(cashEl)cashEl.textContent=` · Uninvested cash: ${fmt(cibcAccountCash)}`;
   cibcFundGain.textContent=`${signedMoney(s.gain)} (${s.gainPct>=0?"+":""}${s.gainPct.toFixed(2)}%)`;
   cibcFundGain.style.color=s.gain>=0?"var(--teal)":"var(--red)";
   cibcFundBook.textContent=fmt(s.bookValue);
